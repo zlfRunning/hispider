@@ -227,6 +227,7 @@ void cb_serv_task_handler(void *arg)
     if(taskid >= 0)
     {
         linktable->urlhandler(linktable, taskid);
+        DEBUG_LOGGER(daemon_logger, "Completed task:%d", taskid);
         //fprintf(stdout, "%d:task:%d\n", __LINE__, taskid);
     }
 }
@@ -253,7 +254,7 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
                 "Content-Length: %d\r\n\r\n", m);
         conn->push_chunk(conn, header, n);
         conn->push_chunk(conn, buf, m);
-        //conn->close(conn);
+        conn->over(conn);
     }
     return ;
 }
