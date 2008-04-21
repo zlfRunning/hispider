@@ -15,6 +15,22 @@
 #define DEFAULT_CONTENT_LENGTH 1048576
 #define SBASE_LOG "/tmp/sbase.log"
 #define TRANSPORT_LOG "/tmp/transport.log"
+static const char *__html__body__  = 
+"<HTML><HEAD>\n"
+"<TITLE>Hispider Running Status</TITLE>\n"
+"<meta http-equiv='refresh' content='2; URL=/'>\n</HEAD>\n"
+"<BODY bgcolor='#000000' align=left ><hr>\n"
+"<font color=red size=72 >\n"
+"<li>URL Totoal:%d</li>\n"
+"<li>URL Current :%d</li>\n"
+"<li>URL Handled:%d</li>\n"
+"<li>Doc Total:%d</li>\n"
+"<li>Doc Current:%d</li>\n"
+"<li>Doc Handled:%d</li>\n"
+"<li>Doc Size:%lld</li>\n"
+"<li>Doc Zsize:%lld</li>\n"
+"<li>DNS count:%d</li>\n"
+"</font><hr></BODY></HTML>";
 
 static SBASE *sbase = NULL;
 SERVICE *transport = NULL;
@@ -215,8 +231,23 @@ int cb_serv_packet_reader(CONN *conn, BUFFER *buffer)
 
 void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
 {
+    char header[HTTP_BUF_SIZE];
+    char buf[HTTP_BUF_SIZE];
+    char *p = buf;
+    int n = 0, m = 0;
+
     if(conn)
     {
+        m = sprintf(p, __html__body__, linktable->url_total, 
+                linktable->urlno, linktable->urlok_total, 
+                linktable->doc_total, linktable->docno,
+                linktable->docok_total, linktable->size, 
+                linktable->zsize, linktable->dnscount);
+        n = sprintf(header, "HTTP/1.0 200 OK \r\nContent-Type: text/html\r\n"
+                "Content-Length: %d\r\n\r\n", m);
+        conn->push_chunk(conn, header, n);
+        conn->push_chunk(conn, buf, m);
+        //conn->close(conn);
     }
     return ;
 }

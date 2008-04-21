@@ -447,6 +447,7 @@ int linktable_update_request(LINKTABLE *linktable, int id, int status)
             if((lseek(linktable->fdmd5, req->id * sizeof(LINK), SEEK_SET)) < 0
                     || write(linktable->fdmd5, &status, sizeof(int)) <= 0) goto err_end;
         }
+        if(status  == LINK_STATUS_OVER) linktable->urlok_total++;
         ret = 0;
         goto end;
 err_end: ret = -1;
@@ -631,14 +632,15 @@ int linktable_add_content(LINKTABLE *linktable, void *response,
                 && lseek(linktable->fdmeta, 0, SEEK_END) >= 0
                 && write(linktable->fdmeta, &urlmeta, sizeof(URLMETA)) > 0)
             {
-                linktable->doc_total++;
-                linktable->ok_total++;
+                linktable->docok_total++;
                 linktable->size += ncontent;
+                linktable->zsize += n;
                 ret = 0;
             }
             if(zdata) free(zdata);
             if(data) free(data);
         }
+        linktable->doc_total++;
 err_end:
         MUTEX_UNLOCK(linktable->mutex);
     }
@@ -649,7 +651,7 @@ int linktable_resume(LINKTABLE *linktable)
 {
     LINK link;
     URLMETA urlmeta;
-    int i = 0, urlid = -1;
+    int i = 0, id = -1;
     long n = 0;
     char *p = NULL, md5str[MD5_LEN * 2 +1];
 
@@ -664,26 +666,26 @@ int linktable_resume(LINKTABLE *linktable)
             for(i = 0; i < MD5_LEN; i++)
                 p += sprintf(p, "%02x", link.md5[i]);
             TABLE_ADD(linktable->md5table, md5str, (long *)n);
-            if(link.status == LINK_STATUS_INIT && urlid == -1)
+            if(link.status == LINK_STATUS_INIT && id == -1)
             {
-                urlid = linktable->urlno = n;
+                id = linktable->urlno = n;
             }
-            if(link.status == LINK_STATUS_OVER)
-                linktable->ok_total++;
+            if(link.status == LINK_STATUS_OVER) linktable->urlok_total++;
             linktable->url_total++;
             n++;
         }
         if(linktable->fdmeta <= 0 && (linktable->fdmeta
                     = open(linktable->metafile, O_CREAT|O_RDWR, 0644)) < 0) return -1;
         lseek(linktable->fdmeta, 0, SEEK_SET);
-        urlid = -1;
+        id = -1;
         n = 0 ;
         while(read(linktable->fdmeta, &urlmeta, sizeof(URLMETA)) > 0)
         {
-            if(urlmeta.status == URL_STATUS_INIT && urlid == -1)
+            if(urlmeta.status == URL_STATUS_INIT && id == -1)
             {
-                urlid = linktable->docno = n;
+                id = linktable->docno = n;
             }
+            if(urlmeta.status == URL_STATUS_OVER) linktable->docok_total++;
             linktable->doc_total++;
         }
 
