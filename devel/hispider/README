@@ -1,7 +1,19 @@
+Home page : http://hispider.google.com/p/
+
+
 Install required
 libevbase >= 0.0.11 libsbase >= 0.2.5
 
 download from  http://code.google.com/p/sbase/downloads/
     OR http://sbase.googlecode.com/svn/trunk
 
+Install
+    tar -zxf hispider-$ver.tar.gz
+    cd hispider-$ver
+    ./confgiure --prefix=/$prefix
+    make
+    make install
+
+Usage
+ $prefix/hispider -c $prefix/etc/hispider.ini
 

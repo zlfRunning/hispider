@@ -363,6 +363,10 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
                         open(linktable->md5file, O_CREAT|O_RDWR, 0644)) < 0)) goto err_end;
         for(i = 0; i < linktable->nrequest; i++)
         {
+            //fprintf(stdout, "%d %d::%d %08x urlno:%d url_total:%d \n", 
+            //        __LINE__, i, linktable->requests[i].status, linktable->requests[i].handler,
+            //        linktable->urlno, linktable->url_total);
+
             if(reqid == -1 && linktable->requests[i].status == LINK_STATUS_WAIT)
             {
                 reqid = i;
@@ -415,8 +419,6 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
                             linktable->requests[i].status = LINK_STATUS_WORKING;
                             (*req) = &(linktable->requests[i]);
                         }
-                        //fprintf(stdout, "%d urlno:%d url_total:%d\n", 
-                        //__LINE__, linktable->urlno, linktable->url_total);
                         break;
                     }
                 }
@@ -439,14 +441,19 @@ int linktable_update_request(LINKTABLE *linktable, int id, int status)
         MUTEX_LOCK(linktable->mutex);
         req = &(linktable->requests[id]);
         req->status = status;
-        if(linktable->fdmd5 <= 0 && (linktable->fdmd5
-                    = open(linktable->md5file, O_CREAT|O_RDWR, 0644)) < 0) goto err_end;
-        if((lseek(linktable->fdmd5, req->id * sizeof(LINK), SEEK_SET)) < 0
-                || write(linktable->fdmd5, &status, sizeof(int)) <= 0) goto err_end;
+        if(status != LINK_STATUS_WAIT && status != LINK_STATUS_WORKING)
+        {
+            if(linktable->fdmd5 <= 0 && (linktable->fdmd5
+                        = open(linktable->md5file, O_CREAT|O_RDWR, 0644)) < 0) goto err_end;
+            if((lseek(linktable->fdmd5, req->id * sizeof(LINK), SEEK_SET)) < 0
+                    || write(linktable->fdmd5, &status, sizeof(int)) <= 0) goto err_end;
+        }
         ret = 0;
         goto end;
 err_end: ret = -1;
 end:
+         DEBUG_LOGGER(linktable->logger, "Update status[%d] on request[%d] to %s:%d",
+                 status, id, req->ip, req->port);
          MUTEX_UNLOCK(linktable->mutex);
 
     }

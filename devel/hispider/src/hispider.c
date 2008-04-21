@@ -35,6 +35,8 @@ void cb_transport_error_handler(CONN *conn)
     int c_id = 0;
     if(conn)
     {
+        DEBUG_LOGGER(daemon_logger, "Connection[%s:%d] notified error via %d\n",
+                conn->ip, conn->port, conn->fd);
         if((c_id = conn->c_id) >= 0 && c_id < linktable->nrequest 
                 && linktable->requests && linktable->requests[c_id].handler == conn)
         {
@@ -83,6 +85,7 @@ void cb_transport_packet_handler(CONN *conn, BUFFER *packet)
         }
         else
         {
+            linktable->update_request(linktable, conn->c_id, LINK_STATUS_DISCARD);
             conn->over_cstate(conn);
             conn->close(conn);
         }
@@ -142,9 +145,6 @@ void cb_transport_transaction_handler(CONN *conn, int tid)
         if(tid >= 0 && tid < linktable->nrequest
                 && linktable->requests && linktable->requests[tid].handler == conn)
         {
-            conn->c_id = tid; 
-            conn->start_cstate(conn);  
-            conn->set_timeout(conn, global_timeout_times);
             request = &(linktable->requests[tid]);
             n = sprintf(buf, "GET %s HTTP/1.0\r\nHOST: %s\r\nUser-Agent: Mozilla\r\n\r\n",
                     request->path, request->host);
@@ -184,6 +184,9 @@ void cb_serv_heartbeat_handler(void *arg)
                 DEBUG_LOGGER(daemon_logger, "Got conenction to %s:%d via %d on %08x newtranc:%08x", 
                         request->ip, request->port, c_conn->fd, c_conn, transport->newtransaction);
                 request->handler = c_conn;
+                c_conn->c_id = tid; 
+                c_conn->start_cstate(c_conn);  
+                c_conn->set_timeout(c_conn, global_timeout_times);
                 transport->newtransaction(transport, c_conn, tid);
             }
             else

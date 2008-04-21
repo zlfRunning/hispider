@@ -33,8 +33,8 @@
 #define LINK_STATUS_WORKING     0x04
 #define LINK_STATUS_TIMEOUT     0x08
 #define LINK_STATUS_DISCARD     0X10
-#define LINK_STATUS_ERROR       0x12
-#define LINK_STATUS_OVER        0x14
+#define LINK_STATUS_ERROR       0x20
+#define LINK_STATUS_OVER        0x30
 #ifndef MD5_LEN
 #define MD5_LEN 16
 #endif
