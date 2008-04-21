@@ -76,9 +76,9 @@ int main()
 	{
 		fprintf(stdout, "nzdata:%d %s\n", nzdata, zdata);
 		memset(odata, 0, BUF_SIZE);
-		if(zdecompress(zdata, ndata, odata, &nodata) == 0)
+		if(zdecompress(zdata, nzdata, odata, &nodata) == 0)
 		{
-			fprintf(stdout, "%d %s\n", nodata, odata);
+			fprintf(stdout, "%d %d %s\n", ndata, nodata, odata);
 		}
 	}
 }

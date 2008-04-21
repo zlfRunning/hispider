@@ -22,7 +22,6 @@ SERVICE *serv = NULL;
 static dictionary *dict = NULL;
 static LOGGER *daemon_logger = NULL;
 static long long global_timeout_times = 60000000ll;
-static long long nheartbeat = 0;
 static LINKTABLE *linktable = NULL;
 
 //daemon task handler 
@@ -166,15 +165,6 @@ void cb_serv_heartbeat_handler(void *arg)
 
     if(serv && transport && linktable)
     {
-        //state
-        //DEBUG_LOGGER(daemon_logger, "%d::linktable->nleft:%d\n", __LINE__, linktable->qleft);
-        //TIMER_INIT(timer);
-        //linktable->state(linktable);
-        //DEBUG_LOGGER(daemon_logger, "%d::linktable->nleft:%d\n", __LINE__, linktable->qleft);
-        //DEBUG_LOGGER(daemon_logger,"linktable->nleft:%d\n", linktable->qleft);
-        //TIMER_SAMPLE(timer);
-        //DEBUG_LOGGER(daemon_logger,"linktable->state() usec_used:%lld\n", PT_USEC_USED(timer));
-        //TIMER_CLEAN(timer);
         //request
         while((tid = linktable->get_request(linktable, &request)) != -1)
         {
@@ -197,16 +187,13 @@ void cb_serv_heartbeat_handler(void *arg)
                 break;
             }
         }
+        //task
         while((taskid = linktable->get_urltask(linktable)) != -1)
         {
             serv->newtask(serv, (void *)&cb_serv_task_handler, (void *)taskid);
+            DEBUG_LOGGER(daemon_logger, "linktable->docno:%d doc_total:%d", 
+                    linktable->docno, linktable->doc_total);
         }
-        DEBUG_LOGGER(daemon_logger, "linktable->docno:%d doc_total:%d", 
-                linktable->docno, linktable->doc_total);
-        //fprintf(stdout, "%d::nrequest:%d\n", __LINE__, linktable->qleft);
-        //check timeout
-        //DEBUG_LOGGER(daemon_logger, "Heartbeat:%ll connections:%d", 
-        //        nheartbeat++, transport->running_connections);
     }
     return  ;
 }
@@ -471,6 +458,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
         fprintf(stderr, "Initialize linktable failed, %s\n", strerror(errno));
         return -1;
     }
+    linktable->iszlib = iniparser_getint(dict, "DAEMON:iszlib", 1);
     linktable->set_logger(linktable, NULL, daemon_logger);
     linktable->set_md5file(linktable, md5file);
     linktable->set_urlfile(linktable, urlfile);

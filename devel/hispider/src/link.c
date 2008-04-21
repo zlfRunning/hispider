@@ -363,9 +363,9 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
                         open(linktable->md5file, O_CREAT|O_RDWR, 0644)) < 0)) goto err_end;
         for(i = 0; i < linktable->nrequest; i++)
         {
-            DEBUG_LOGGER(linktable->logger, "i:%d status:%d handler:%08x urlno:%d url_total:%d", 
-                    i, linktable->requests[i].status, linktable->requests[i].handler,
-                    linktable->urlno, linktable->url_total);
+            //DEBUG_LOGGER(linktable->logger, "i:%d status:%d handler:%08x urlno:%d url_total:%d", 
+            //        i, linktable->requests[i].status, linktable->requests[i].handler,
+            //        linktable->urlno, linktable->url_total);
             if(reqid == -1 && linktable->requests[i].status == LINK_STATUS_WAIT)
             {
                 reqid = i;
@@ -510,27 +510,44 @@ err_end:
 void linktable_urlhandler(LINKTABLE *linktable, long taskid)
 {
     URLMETA *urlmeta = NULL;
-    char *data = NULL, *host = NULL, *path = NULL, *p = NULL, *end = NULL;
+    char *data = NULL, *ps = NULL, *host = NULL, *path = NULL, *p = NULL, *end = NULL;
+    uLong ndata = 0, n = 0; 
     int status = URL_STATUS_ERROR;
+    int i = 0;
 
     if(linktable && linktable->tasks)
     {
         if(linktable->fddoc <= 0 && (linktable->fddoc =
                     open(linktable->docfile, O_CREAT|O_RDWR, 0644)) < 0) goto err_end;
         urlmeta = &(linktable->tasks[taskid]); 
-        if(urlmeta->size > 0 && (data = (char *)calloc(1, urlmeta->size)))
+        n = ndata = urlmeta->size;   
+        if(urlmeta->zsize > 0) n = urlmeta->zsize ;
+        if(n > 0 && (data = (char *)calloc(1, n)))
         {
             if(lseek(linktable->fddoc, urlmeta->offset, SEEK_SET) >= 0 
-                    &&  read(linktable->fddoc, data, urlmeta->size) > 0)
+                    &&  read(linktable->fddoc, data, n) > 0)
             {
+                if(urlmeta->zsize > 0 && (ps = (char *)calloc(1, ndata))
+                        && zdecompress(data, n, ps, &ndata) == 0)
+                {
+                    /*
+                    fprintf(stdout, "nzdata:%d:%d %s\n", n, ndata, ps);
+                    for(i = 0; i < n; i++)
+                        fprintf(stdout, "%d", (unsigned char *)data[i]);
+                    */
+                    free(data);
+                    data = ps;
+                    ps = NULL;
+                }
                 end = data + urlmeta->size;
                 host = data + urlmeta->hostoff;
                 path = data + urlmeta->pathoff;
                 p = data + urlmeta->htmloff;
                 linktable->parse(linktable, host, path, p, end);
                 status = URL_STATUS_OVER;
+                if(ps) free(ps);
             }
-            free(data);
+            if(data) free(data);
         }
 err_end:
         urlmeta->status = status;
@@ -553,7 +570,7 @@ int linktable_add_content(LINKTABLE *linktable, void *response,
     int i = 0, ret = -1;
     long long offset = 0;
     int nhost = 0, npath = 0;
-    char buf[LBUF_SIZE], *p = NULL;
+    char buf[LBUF_SIZE], *p = NULL, *data = NULL, *zdata = NULL;
     uLong n = 0, nzdata = 0;
     URLMETA urlmeta;
     HTTP_RESPONSE *http_response = (HTTP_RESPONSE *)response;
@@ -584,23 +601,45 @@ int linktable_add_content(LINKTABLE *linktable, void *response,
         urlmeta.pathoff =  urlmeta.hostoff + nhost;
         urlmeta.htmloff = urlmeta.pathoff + npath;
         urlmeta.size = urlmeta.htmloff + ncontent;
-        if((urlmeta.offset = lseek(linktable->fddoc, 0, SEEK_END)) < 0
-            || write(linktable->fddoc, buf, urlmeta.hostoff) <= 0 
-            || write(linktable->fddoc, host, nhost) <= 0 
-            || write(linktable->fddoc, path, npath) <= 0 
-            || write(linktable->fddoc, content, ncontent) <= 0
-            || lseek(linktable->fdmeta, 0, SEEK_END) < 0
-            || write(linktable->fdmeta, &urlmeta, sizeof(URLMETA)) <= 0)
+        //fprintf(stdout, "offhost:%d offpath:%d\n", urlmeta.hostoff, urlmeta.pathoff);
+        if((p = data = (char *)calloc(1, urlmeta.size)))
         {
-            goto err_end;
+            memcpy(p, buf, urlmeta.hostoff);
+            p += urlmeta.hostoff;
+            memcpy(p, host, nhost);
+            p += nhost;
+            memcpy(p, path, npath);
+            p += npath;
+            memcpy(p, content, ncontent);
+            nzdata = n  = urlmeta.size;
+            p = data;
+            if(linktable->iszlib && (zdata = calloc(1, urlmeta.size))
+                    && zcompress(data, n, zdata, &nzdata) == 0)
+            {
+                /*
+                n = urlmeta.size;
+                memset(data, 0, n);
+                zdecompress(zdata, nzdata, data, &n);
+                fprintf(stdout, "data:%d:%d %s\n", n, urlmeta.size, data);
+                */
+                p = zdata;
+                n = nzdata;
+                urlmeta.zsize = nzdata;
+            }
+            if((urlmeta.offset = lseek(linktable->fddoc, 0, SEEK_END)) >= 0
+                && write(linktable->fddoc, p, n) > 0 
+                && lseek(linktable->fdmeta, 0, SEEK_END) >= 0
+                && write(linktable->fdmeta, &urlmeta, sizeof(URLMETA)) > 0)
+            {
+                linktable->doc_total++;
+                linktable->ok_total++;
+                linktable->size += ncontent;
+                ret = 0;
+            }
+            if(zdata) free(zdata);
+            if(data) free(data);
         }
-        linktable->doc_total++;
-        linktable->ok_total++;
-        linktable->size += ncontent;
-        ret = 0;
-        goto end;
-err_end: ret = -1;
-end:
+err_end:
         MUTEX_UNLOCK(linktable->mutex);
     }
     return ret;

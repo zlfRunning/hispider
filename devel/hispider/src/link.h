@@ -63,6 +63,7 @@ typedef struct _URLMETA
     int id;
     long long offset;
     int size;
+    int zsize;
     int hostoff;
     int pathoff;
     int htmloff;
@@ -89,6 +90,7 @@ typedef struct _LINKTABLE
     int url_total;
     int ok_total;
     URLMETA *tasks;
+    int  iszlib;
     int  ntask;
     long  doc_total;
     long  docno;
