@@ -363,10 +363,9 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
                         open(linktable->md5file, O_CREAT|O_RDWR, 0644)) < 0)) goto err_end;
         for(i = 0; i < linktable->nrequest; i++)
         {
-            //fprintf(stdout, "%d %d::%d %08x urlno:%d url_total:%d \n", 
-            //        __LINE__, i, linktable->requests[i].status, linktable->requests[i].handler,
-            //        linktable->urlno, linktable->url_total);
-
+            DEBUG_LOGGER(linktable->logger, "i:%d status:%d handler:%08x urlno:%d url_total:%d", 
+                    i, linktable->requests[i].status, linktable->requests[i].handler,
+                    linktable->urlno, linktable->url_total);
             if(reqid == -1 && linktable->requests[i].status == LINK_STATUS_WAIT)
             {
                 reqid = i;

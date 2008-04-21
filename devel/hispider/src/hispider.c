@@ -197,11 +197,12 @@ void cb_serv_heartbeat_handler(void *arg)
                 break;
             }
         }
-        //DEBUG_LOGGER(daemon_logger, "%d::linktable->urlno:%d\n", __LINE__, linktable->urlno);
         while((taskid = linktable->get_urltask(linktable)) != -1)
         {
             serv->newtask(serv, (void *)&cb_serv_task_handler, (void *)taskid);
         }
+        DEBUG_LOGGER(daemon_logger, "linktable->docno:%d doc_total:%d", 
+                linktable->docno, linktable->doc_total);
         //fprintf(stdout, "%d::nrequest:%d\n", __LINE__, linktable->qleft);
         //check timeout
         //DEBUG_LOGGER(daemon_logger, "Heartbeat:%ll connections:%d", 
