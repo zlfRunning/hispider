@@ -16,6 +16,7 @@
 #include "mutex.h"
 #include "logger.h"
 #include "http.h"
+#include "nio.h"
 
 #define PARSE_RESPONSE(p, end, buffer, response)                \
 {                                                               \
@@ -64,8 +65,7 @@ int linktable_set_md5file(LINKTABLE *linktable, char *md5file)
     if(linktable)
     {
         DEBUG_LOGGER(linktable->logger, "Setting md5file %s", md5file);
-        strcpy(linktable->md5file, md5file);
-        linktable->fdmd5 = open(md5file, O_CREAT|O_RDWR, 0644);
+        NIO_SET(linktable->md5io, md5file);
         return 0;
     }
     return -1;
@@ -77,8 +77,7 @@ int linktable_set_urlfile(LINKTABLE *linktable, char *urlfile)
     if(linktable)
     {
         DEBUG_LOGGER(linktable->logger, "Setting urlfile %s", urlfile);
-        strcpy(linktable->urlfile, urlfile);
-        linktable->fdurl = open(urlfile, O_CREAT|O_RDWR, 0644);
+        NIO_SET(linktable->urlio, urlfile);
         return 0;
     }
     return -1;
@@ -90,8 +89,7 @@ int linktable_set_metafile(LINKTABLE *linktable, char *metafile)
     if(linktable)
     {
         DEBUG_LOGGER(linktable->logger, "Setting metafile %s", metafile);
-        strcpy(linktable->metafile, metafile);
-        linktable->fdmeta = open(metafile, O_CREAT|O_RDWR, 0644);
+        NIO_SET(linktable->metaio, metafile);
         return 0;
     }
     return -1;
@@ -103,8 +101,7 @@ int linktable_set_docfile(LINKTABLE *linktable, char *docfile)
     if(linktable)
     {
         DEBUG_LOGGER(linktable->logger, "Setting docfile %s", docfile);
-        strcpy(linktable->docfile, docfile);
-        linktable->fddoc = open(docfile, O_CREAT|O_RDWR, 0644);
+        NIO_SET(linktable->docio, docfile);
         return 0;
     }
     return -1;
@@ -274,7 +271,6 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
 
     if(linktable)
     {
-        MUTEX_LOCK(linktable->mutex);
         memset(&link, 0, sizeof(LINK));
         if((n = sprintf(url, "http://%s%s", host, path)) > 0)
         {
@@ -283,26 +279,14 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
             for(i = 0; i < MD5_LEN; i++)
                 p += sprintf(p, "%02x", link.md5[i]);
             *p = '\0';
-            if(TABLE_GET(linktable->md5table, md5str)) {ret = 0; goto end;}
-            if((linktable->fdmd5 <= 0 && (linktable->fdmd5 = 
-                            open(linktable->md5file, O_CREAT|O_RDWR, 0644)) < 0)
-                    || (linktable->fdurl <= 0 && (linktable->fdurl = 
-                            open(linktable->urlfile, O_CREAT|O_RDWR, 0644)) < 0))
-            {
-                goto err_end;
-                //error msg 
-            }
-            if((offset = lseek(linktable->fdurl, 0, SEEK_END)) < 0
-                    || (write(linktable->fdurl, url, n+1) <= 0))
-            {
-                goto err_end;
-            }
+            if(TABLE_GET(linktable->md5table, md5str)) {ret = 0; goto err_end;}
+            if(NIO_WRITE_END(linktable->urlio, url, n+1) <= 0) goto err_end;
             link.offset = offset; 
             link.nurl = n + 1;
             link.nhost = strlen(host);
             link.npath = strlen(path);
-            if(((offset = lseek(linktable->fdmd5, 0, SEEK_END)) < 0)
-                    || (write(linktable->fdmd5, &link, sizeof(LINK)) <= 0))
+            if(((offset = NIO_SEEK_END(linktable->md5io)) < 0)
+                || (NIO_WRITE(linktable->md5io, &link, sizeof(LINK)) <= 0))
             {
                 fprintf(stderr, "ERR:MD5:%s URL:%s\n", md5str, url);
                 goto err_end;
@@ -310,14 +294,10 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
             n = (offset / sizeof(LINK)) + 1;
             TABLE_ADD(linktable->md5table, md5str, (long *)n);
             linktable->url_total++;
-            ret = 0;
             DEBUG_LOGGER(linktable->logger, "New URL md5[%s] %s", md5str, url);
-            goto end;
+            ret = 0;
         }
-err_end: ret = -1;
-end:
-         MUTEX_UNLOCK(linktable->mutex);
-    }
+err_end:
     return ret;
 }
 
@@ -339,15 +319,10 @@ char *linktable_getip(LINKTABLE *linktable, char *hostname)
             TABLE_ADD(linktable->dnstable, hostname, ip);
         }
 end:
-        DEBUG_LOGGER(linktable->logger, "DNS name[%s] ip[%s]", hostname, ip);
+        if(ip){DEBUG_LOGGER(linktable->logger, "DNS name[%s] ip[%s]", hostname, ip);}
+        else {WARN_LOGGER(linktable->logger, "DNS name[%s] failed", hostname);}
     }
     return ip;
-}
-
-/* get LINK from linktable */
-int linktable_state(LINKTABLE *linktable)
-{
-    return -1;
 }
 
 /* get request */
@@ -355,17 +330,13 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
 {
     char url[HTTP_URL_MAX], *p = NULL, *ps = NULL;
     LINK link;
+    long long offset = 0;
     int i = 0, reqid = -1, n = 0;
     if(linktable)
     {
         MUTEX_LOCK(linktable->mutex);
-        if((linktable->fdmd5 <= 0 && (linktable->fdmd5 =
-                        open(linktable->md5file, O_CREAT|O_RDWR, 0644)) < 0)) goto err_end;
         for(i = 0; i < linktable->nrequest; i++)
         {
-            //DEBUG_LOGGER(linktable->logger, "i:%d status:%d handler:%08x urlno:%d url_total:%d", 
-            //        i, linktable->requests[i].status, linktable->requests[i].handler,
-            //        linktable->urlno, linktable->url_total);
             if(reqid == -1 && linktable->requests[i].status == LINK_STATUS_WAIT)
             {
                 reqid = i;
@@ -376,15 +347,15 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
             if(linktable->requests[i].status != LINK_STATUS_WORKING 
                     && linktable->requests[i].status != LINK_STATUS_WAIT 
                     && linktable->urlno < linktable->url_total
-                    && lseek(linktable->fdmd5, linktable->urlno 
-                        * sizeof(LINK), SEEK_SET) >= 0)
+                    && (offset = NIO_SEEK(linktable->md5io, 
+                            linktable->urlno * sizeof(LINK))) >= 0)
             {
-                while(read(linktable->fdmd5, &link, sizeof(LINK)) > 0)
+                while(NIO_READ(linktable->md5io, &link, sizeof(LINK)) > 0)
                 {
                     linktable->requests[i].id = linktable->urlno++;
                     if(link.nurl > 0 && link.status == LINK_STATUS_INIT
-                            && lseek(linktable->fdurl, link.offset, SEEK_SET) >= 0
-                            && read(linktable->fdurl, &url, link.nurl) > 0)
+                            && NIO_SEEK(linktable->urlio, link.offset) >= 0
+                            && NIO_READ(linktable->urlio, &url, link.nurl) > 0)
                     {
                         p = url;
                         p += strlen("http://");
@@ -406,8 +377,8 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
                         if((p = linktable->getip(linktable, linktable->requests[i].host)) == NULL)
                         {
                             linktable->requests[i].status = LINK_STATUS_ERROR;
-                            lseek(linktable->fdmd5, -1 * sizeof(LINK), SEEK_CUR);
-                            write(linktable->fdmd5, &(linktable->requests[i].status), sizeof(int));
+                            NIO_SWRITE(linktable->md5io, &(linktable->requests[i].status), 
+                                    sizeof(int), offset);
                             continue;
                         }
                         while(*p != '\0') *ps++ = *p++; *ps = '\0';
@@ -442,18 +413,14 @@ int linktable_update_request(LINKTABLE *linktable, int id, int status)
         req->status = status;
         if(status != LINK_STATUS_WAIT && status != LINK_STATUS_WORKING)
         {
-            if(linktable->fdmd5 <= 0 && (linktable->fdmd5
-                        = open(linktable->md5file, O_CREAT|O_RDWR, 0644)) < 0) goto err_end;
-            if((lseek(linktable->fdmd5, req->id * sizeof(LINK), SEEK_SET)) < 0
-                    || write(linktable->fdmd5, &status, sizeof(int)) <= 0) goto err_end;
+            if(NIO_SWRITE(linktable->md5io, &status, sizeof(int), 
+                        (1ll * req->id * sizeof(LINK))) <= 0) goto err_end;
         }
         if(status  == LINK_STATUS_OVER) linktable->urlok_total++;
         ret = 0;
-        goto end;
-err_end: ret = -1;
-end:
          DEBUG_LOGGER(linktable->logger, "Update status[%d] on request[%d] to %s:%d",
                  status, id, req->ip, req->port);
+err_end:
          MUTEX_UNLOCK(linktable->mutex);
 
     }
@@ -465,11 +432,11 @@ long linktable_get_urltask(LINKTABLE *linktable)
     URLMETA urlmeta;
     long taskid = -1;
     int i = 0;
+    long long offset = 0;
+
     if(linktable)
     {
         MUTEX_LOCK(linktable->mutex);
-        if((linktable->fdmeta <= 0 && (linktable->fdmeta =
-                        open(linktable->metafile, O_CREAT|O_RDWR, 0644)) < 0)) goto err_end;
         for(i = 0; i < linktable->ntask; i++)
         {
             if(taskid == -1 && linktable->tasks[i].status == URL_STATUS_WAIT)
@@ -478,12 +445,13 @@ long linktable_get_urltask(LINKTABLE *linktable)
                 linktable->tasks[i].status = URL_STATUS_WORKING;
                 continue;
             }
+            offset = linktable->docno * sizeof(URLMETA);
             if(linktable->tasks[i].status != URL_STATUS_WORKING 
                     && linktable->tasks[i].status != URL_STATUS_WAIT 
                     && linktable->docno < linktable->doc_total
-                    && lseek(linktable->fdmeta, linktable->docno * sizeof(URLMETA), SEEK_SET) >= 0)
+                    && NIO_SEEK(linktable->metaio, offset) >= 0 )
             {
-                while(read(linktable->fdmeta, &(linktable->tasks[i]), sizeof(URLMETA)) > 0)
+                while(NIO_READ(linktable->metaio, &(linktable->tasks[i]), sizeof(URLMETA)) > 0)
                 {
                     linktable->tasks[i].id = linktable->docno++;
                     if(linktable->tasks[i].status == URL_STATUS_INIT)
@@ -494,8 +462,6 @@ long linktable_get_urltask(LINKTABLE *linktable)
                             taskid = i;
                             linktable->tasks[i].status = URL_STATUS_WORKING;
                         }
-                        //fprintf(stdout, "%d taskid:%d docno:%d doctotal:%d\n", 
-                        //        __LINE__, taskid, linktable->docno, linktable->doc_total);
                         break;
                     }
                 }
@@ -511,57 +477,48 @@ err_end:
 void linktable_urlhandler(LINKTABLE *linktable, long taskid)
 {
     URLMETA *urlmeta = NULL;
-    char *data = NULL, *ps = NULL, *host = NULL, *path = NULL, *p = NULL, *end = NULL;
+    char *data = NULL, *zdata = NULL, *host = NULL, 
+         *path = NULL, *p = NULL, *end = NULL;
     uLong ndata = 0, n = 0; 
     int status = URL_STATUS_ERROR;
     int i = 0;
 
     if(linktable && linktable->tasks)
     {
-        if(linktable->fddoc <= 0 && (linktable->fddoc =
-                    open(linktable->docfile, O_CREAT|O_RDWR, 0644)) < 0) goto err_end;
         urlmeta = &(linktable->tasks[taskid]); 
-        n = ndata = urlmeta->size;   
-        if(urlmeta->zsize > 0) n = urlmeta->zsize ;
-        if(n > 0 && (data = (char *)calloc(1, n)))
+        if(urlmeta->zsize > 0 )
         {
-            if(lseek(linktable->fddoc, urlmeta->offset, SEEK_SET) >= 0 
-                    &&  read(linktable->fddoc, data, n) > 0)
-            {
-                if(urlmeta->zsize > 0 && (ps = (char *)calloc(1, ndata))
-                        && zdecompress(data, n, ps, &ndata) == 0)
-                {
-                    /*
-                    fprintf(stdout, "nzdata:%d:%d %s\n", n, ndata, ps);
-                    for(i = 0; i < n; i++)
-                        fprintf(stdout, "%d", (unsigned char *)data[i]);
-                    */
-                    free(data);
-                    data = ps;
-                    ps = NULL;
-                }
-                end = data + urlmeta->size;
-                host = data + urlmeta->hostoff;
-                path = data + urlmeta->pathoff;
-                p = data + urlmeta->htmloff;
-                linktable->parse(linktable, host, path, p, end);
-                status = URL_STATUS_OVER;
-                if(ps) free(ps);
-            }
-            if(data) free(data);
+            if((zdata = (char *)calloc(1, urlmeta->zsize)) == NULL
+                    || NIO_SREAD(linktable->docio, zdata, urlmeta->zsize, urlmeta->offset) <= 0
+                    || (data = (char *)calloc(1, urlmeta->size)) == NULL
+                    || zdecompress(zdata, urlmeta->zsize, data, &ndata) != 0)
+                goto end;
         }
-err_end:
+        else
+        {
+            if((data = (char *)calloc(1, urlmeta->size)) == NULL
+                    || NIO_SREAD(linktable->docio, data, urlmeta->size, urlmeta->offset) <= 0) 
+                goto end;
+        }
+        if(data)
+        {
+            host = data + urlmeta->hostoff;
+            path = data + urlmeta->pathoff;
+            p = data + urlmeta->htmloff;
+            end = data + urlmeta->size;
+            linktable->parse(linktable, host, path, p, end);
+            status = URL_STATUS_OVER;
+        }
+end:
+        MUTEX_LOCK(linktable->mutex);
         urlmeta->status = status;
-        lseek(linktable->fdmeta, urlmeta->id * sizeof(URLMETA), SEEK_SET);
-        write(linktable->fdmeta, &status, sizeof(int));
+        offset = urlmeta->id * sizeof(URLMETA);
+        NIO_SWRITE(linktable->metaio, &status, sizeof(int), offset);
+        MUTEX_UNLOCK(linktable->mutex);
+        if(data) free(data);
+        if(zdata) free(zdata);
     }
     return ;
-}
-
-/* Check timeout */
-int linktable_check_time(LINKTABLE *linktable)
-{
-
 }
 
 /* Add content */
@@ -578,15 +535,6 @@ int linktable_add_content(LINKTABLE *linktable, void *response,
 
     if(linktable && response && host && path && content && ncontent > 0)
     {
-        MUTEX_LOCK(linktable->mutex);
-        if((linktable->fdmeta <= 0 && (linktable->fdmeta =
-                        open(linktable->metafile, O_CREAT|O_RDWR, 0644)) < 0)
-                || (linktable->fddoc <= 0 && (linktable->fddoc =
-                        open(linktable->docfile, O_CREAT|O_RDWR, 0644)) < 0)
-          )
-        {
-            goto err_end;
-        }
         memset(&urlmeta, 0, sizeof(urlmeta));
         p = buf;
         for(i = 0; i < HTTP_HEADER_NUM; i++)
@@ -617,20 +565,12 @@ int linktable_add_content(LINKTABLE *linktable, void *response,
             if(linktable->iszlib && (zdata = calloc(1, urlmeta.size))
                     && zcompress(data, n, zdata, &nzdata) == 0)
             {
-                /*
-                n = urlmeta.size;
-                memset(data, 0, n);
-                zdecompress(zdata, nzdata, data, &n);
-                fprintf(stdout, "data:%d:%d %s\n", n, urlmeta.size, data);
-                */
                 p = zdata;
                 n = nzdata;
                 urlmeta.zsize = nzdata;
             }
-            if((urlmeta.offset = lseek(linktable->fddoc, 0, SEEK_END)) >= 0
-                && write(linktable->fddoc, p, n) > 0 
-                && lseek(linktable->fdmeta, 0, SEEK_END) >= 0
-                && write(linktable->fdmeta, &urlmeta, sizeof(URLMETA)) > 0)
+            if( NIO_APPEND(linktable->docio, p, n) >= 0
+                    && NIO_APPEND(linktable->metaio, &urlmeta, sizeof(URLMETA)) )
             {
                 linktable->docok_total++;
                 linktable->size += ncontent;
@@ -641,8 +581,6 @@ int linktable_add_content(LINKTABLE *linktable, void *response,
             if(data) free(data);
         }
         linktable->doc_total++;
-err_end:
-        MUTEX_UNLOCK(linktable->mutex);
     }
     return ret;
 }
@@ -657,10 +595,9 @@ int linktable_resume(LINKTABLE *linktable)
 
     if(linktable)
     {
-        if(linktable->fdmd5 <= 0 && (linktable->fdmd5 
-                    = open(linktable->md5file, O_CREAT|O_RDWR, 0644)) < 0) return -1;
-        lseek(linktable->fdmd5, 0, SEEK_SET);
-        while(read(linktable->fdmd5, &link, sizeof(LINK)) > 0)
+        //request
+        NIO_SEEK_START(linktable->md5io);
+        while(NIO_READ(linktable->md5io, &link, sizeof(LINK)) > 0)
         {
             p = md5str;
             for(i = 0; i < MD5_LEN; i++)
@@ -674,12 +611,11 @@ int linktable_resume(LINKTABLE *linktable)
             linktable->url_total++;
             n++;
         }
-        if(linktable->fdmeta <= 0 && (linktable->fdmeta
-                    = open(linktable->metafile, O_CREAT|O_RDWR, 0644)) < 0) return -1;
-        lseek(linktable->fdmeta, 0, SEEK_SET);
+        //task
         id = -1;
         n = 0 ;
-        while(read(linktable->fdmeta, &urlmeta, sizeof(URLMETA)) > 0)
+        NIO_SEEK_START(linktable->metaio);
+        while(NIO_READ(linktable->metaio, &urlmeta, sizeof(URLMETA)) > 0)
         {
             if(urlmeta.status == URL_STATUS_INIT && id == -1)
             {
@@ -697,6 +633,10 @@ void linktable_clean(LINKTABLE **linktable)
 {
     if(*linktable)
     {
+        NIO_CLEAN((*linktable)->md5io);
+        NIO_CLEAN((*linktable)->urlio);
+        NIO_CLEAN((*linktable)->metaio);
+        NIO_CLEAN((*linktable)->docio);
         TABLE_DESTROY((*linktable)->md5table);
         TABLE_DESTROY((*linktable)->dnstable);
         MUTEX_DESTROY((*linktable)->mutex);
@@ -724,6 +664,10 @@ LINKTABLE *linktable_init()
     if((linktable = (LINKTABLE *)calloc(1, sizeof(LINKTABLE))))
     {
         MUTEX_INIT(linktable->mutex);
+        NIO_INIT(linktable->md5io);
+        NIO_INIT(linktable->urlio);
+        NIO_INIT(linktable->metaio);
+        NIO_INIT(linktable->docio);
         linktable->md5table         = TABLE_INIT(TABLE_SIZE);
         linktable->dnstable         = TABLE_INIT(TABLE_SIZE);
         linktable->set_logger       = linktable_set_logger;
@@ -731,7 +675,7 @@ LINKTABLE *linktable_init()
         linktable->set_urlfile      = linktable_set_urlfile;
         linktable->set_metafile     = linktable_set_metafile;
         linktable->set_docfile      = linktable_set_docfile;
-        linktable->set_nrequest       = linktable_set_nrequest;
+        linktable->set_nrequest     = linktable_set_nrequest;
         linktable->set_ntask        = linktable_set_ntask;
         linktable->parse            = linktable_parse; 
         linktable->add              = linktable_add; 
@@ -745,10 +689,8 @@ LINKTABLE *linktable_init()
         linktable->resume           = linktable_resume; 
         linktable->clean            = linktable_clean; 
         linktable->set_nrequest(linktable, LINK_NQUEUE_DEFAULT);
+        linktable->set_ntask(linktable, URL_NTASK_DEFAULT);
     }
-    //fprintf(stdout, "%08x:%08x:%08x:%08x:%08x:%08x\n",
-    //       linktable, linktable->set_md5file, linktable->set_urlfile,
-    //                     linktable->parse, linktable->add, linktable->addurl);
     return linktable;
 }
 #ifdef _DEBUG_LINKTABLE

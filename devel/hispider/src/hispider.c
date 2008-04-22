@@ -226,6 +226,7 @@ void cb_serv_task_handler(void *arg)
     long taskid = (long )arg;
     if(taskid >= 0)
     {
+        DEBUG_LOGGER(daemon_logger, "start task:%d", taskid);
         linktable->urlhandler(linktable, taskid);
         DEBUG_LOGGER(daemon_logger, "Completed task:%d", taskid);
         //fprintf(stdout, "%d:task:%d\n", __LINE__, taskid);

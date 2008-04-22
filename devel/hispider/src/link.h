@@ -27,6 +27,7 @@
 #define URL_STATUS_OVER         0x10
 #define LINK_QUEUE_MIN          2
 #define HTTP_IP_MAX             16
+#define URL_NTASK_DEFAULT       128
 #define LINK_NQUEUE_DEFAULT     128
 #define LINK_STATUS_INIT        0x00
 #define LINK_STATUS_WAIT        0x02
@@ -74,14 +75,10 @@ typedef struct _LINKTABLE
     char **dnslist;
     void *dnstable;
     void *md5table;
-    int fdmd5;
-    int fdurl;
-    int fdmeta;
-    int fddoc;
-    char md5file[LFILE_PATH_MAX];
-    char urlfile[LFILE_PATH_MAX];
-    char metafile[LFILE_PATH_MAX];
-    char docfile[LFILE_PATH_MAX];
+    void *md5io;
+    void *urlio;
+    void *metaio;
+    void *docio;
     long long size;
     long long zsize;
     HTTP_REQUEST *requests;
@@ -113,7 +110,6 @@ typedef struct _LINKTABLE
     int     (*set_nrequest)(struct _LINKTABLE *, int nrequest);
     int     (*set_ntask)(struct _LINKTABLE *, int ntask);
     char*   (*getip)(struct _LINKTABLE *, char *host);
-    int     (*state)(struct _LINKTABLE *);
     int     (*get_request)(struct _LINKTABLE *, HTTP_REQUEST **req);
     int     (*update_request)(struct _LINKTABLE *, int sid, int status);
     int     (*add_content)(struct _LINKTABLE *, void *response, char *host, char *path,
