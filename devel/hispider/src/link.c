@@ -266,12 +266,13 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
     int i = 0;
     //uLong n = 0, nzurl = 0;
     long long offset = 0;
-    long n = 0;
+    long n = 0, id = 0;
     int ret = -1;
 
     if(linktable)
     {
         MUTEX_LOCK(linktable->mutex);
+        DEBUG_LOGGER(linktable->logger, "New URL:http://%s%s", host, path);
         memset(&link, 0, sizeof(LINK));
         if((n = sprintf(url, "http://%s%s", host, path)) > 0)
         {
@@ -280,7 +281,12 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
             for(i = 0; i < MD5_LEN; i++)
                 p += sprintf(p, "%02x", link.md5[i]);
             *p = '\0';
-            if(TABLE_GET(linktable->md5table, md5str)) {ret = 0; goto err_end;}
+            if((id = (long )TABLE_GET(linktable->md5table, md5str))) 
+            {
+                DEBUG_LOGGER(linktable->logger, "URL[%d] is exists", id);
+                ret = 0; 
+                goto err_end;
+            }
             if(NIO_APPEND(linktable->urlio, url, n+1) <= 0) goto err_end;
             link.offset = offset; 
             link.nurl = n + 1;
@@ -289,18 +295,18 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
             if(((offset = NIO_SEEK_END(linktable->md5io)) < 0)
                 || (NIO_WRITE(linktable->md5io, &link, sizeof(LINK)) <= 0))
             {
-                fprintf(stderr, "ERR:MD5:%s URL:%s\n", md5str, url);
+                ERROR_LOGGER(linktable->logger, "ERR:MD5:%s URL:%s\n", md5str, url);
                 goto err_end;
             }
-            n = (offset / sizeof(LINK)) + 1;
-            TABLE_ADD(linktable->md5table, md5str, (long *)n);
+            id = (offset / sizeof(LINK)) + 1;
+            TABLE_ADD(linktable->md5table, md5str, (long *)id);
             linktable->url_total++;
-            DEBUG_LOGGER(linktable->logger, "New URL[%d] md5[%s] %s", n, md5str, url);
             ret = 0;
+            DEBUG_LOGGER(linktable->logger, "Added URL[%d] md5[%s] %s", id, md5str, url);
         }
-    }
 err_end:
         MUTEX_UNLOCK(linktable->mutex);
+    }
     return ret;
 }
 
@@ -348,6 +354,8 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
                 (*req) = &(linktable->requests[i]);
                 continue;
             }
+            DEBUG_LOGGER(linktable->logger, "queue[%d] status:%d urlno:%d", 
+                    i, linktable->requests[i].status, linktable->urlno);
             offset = linktable->urlno * sizeof(LINK);
             if(linktable->requests[i].status != LINK_STATUS_WORKING 
                     && linktable->requests[i].status != LINK_STATUS_WAIT 
@@ -360,6 +368,7 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
                     if(link.nurl > 0 && link.status == LINK_STATUS_INIT
                             && NIO_SREAD(linktable->urlio, &url, link.nurl, link.offset) > 0)
                     {
+                        DEBUG_LOGGER(linktable->logger, "READ_URL off:%d nurl:%d url:%s", link.offset, link.nurl, url);
                         p = url;
                         p += strlen("http://");
                         //port
@@ -520,9 +529,9 @@ end:
         urlmeta->status = status;
         offset = urlmeta->id * sizeof(URLMETA);
         NIO_SWRITE(linktable->metaio, &status, sizeof(int), offset);
-        MUTEX_UNLOCK(linktable->mutex);
         if(data) free(data);
         if(zdata) free(zdata);
+        MUTEX_UNLOCK(linktable->mutex);
     }
     return ;
 }

@@ -203,6 +203,7 @@ void cb_serv_heartbeat_handler(void *arg)
 
     if(serv && transport && linktable)
     {
+        DEBUG_LOGGER(daemon_logger, "start heartbeat");
         //request
         while((tid = linktable->get_request(linktable, &request)) != -1)
         {
