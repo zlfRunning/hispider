@@ -154,13 +154,20 @@ int linktable_parse(LINKTABLE *linktable, char *host, char *path, char *content,
                 p += 2;
                 pref = 0;
                 while(p < end && (*p == 0x20 || *p == 0x09)) ++p;
+                fprintf(stdout, "%d %c\n", __LINE__, *p);
                 if(strncasecmp(p, "href", 4) != 0) continue;
                 //fprintf(stdout, "%s\n", p);
                 p += 4;
+                fprintf(stdout, "%d %c\n", __LINE__, *p);
                 while(p < end && (*p == 0x20 || *p == 0x09)) ++p;
+                fprintf(stdout, "%d %c\n", __LINE__, *p);
                 if(*p != '=') continue;
+                fprintf(stdout, "%d %c\n", __LINE__, *p);
+                ++p;
+                fprintf(stdout, "%d %c\n", __LINE__, *p);
                 while(p < end && (*p == 0x20 || *p == 0x09)) ++p;
                 if(*p == '"' || *p == '\''){++p; pref = 1;}
+                fprintf(stdout, "%d %c\n", __LINE__, *p);
                 link = p;
                 if(pref){while(p < end && *p != '\'' && *p != '"')++p;}
                 else {while(p < end && *p != 0x20 && *p != 0x09)++p;}
@@ -209,8 +216,8 @@ int linktable_add(LINKTABLE *linktable, unsigned char *host, unsigned char *path
         {
             ps = lhost;
             p = href + 7;
-            while(p < ehref && *p != '/')
-                *ps++ = *p++;
+            n = HTTP_HOST_MAX;
+            while(p < ehref && *p != '/') {*ps++ = *p++; if(--n <= 0) return 0;} 
             *ps = '\0';
             ps = lpath;
         }
@@ -223,10 +230,12 @@ int linktable_add(LINKTABLE *linktable, unsigned char *host, unsigned char *path
             strcpy((char *)lhost, (char *)host);
             p = path;
             ps = lpath;
-            while(*p != '\0')
+            n = HTTP_PATH_MAX;
+            while(p < ehref)
             {
                 if(*p == '/') last = ps+1;
                 *ps++ = *p++;
+                if(--n <= 0) return 0;
             }
             if(last) ps = last ;
             p = href;
