@@ -54,11 +54,14 @@ LOGGER *logger_init(char *logfile);
 void logger_add(LOGGER *, char *, int, int, char *format,...);
 /* Close log */
 void logger_close(LOGGER **);
-
+#ifdef _DEBUG
 #define DEBUG_LOGGER(log, format...)                                                        \
 {                                                                                           \
     if(log){((LOGGER *)log)->add((LOGGER *)log, __FILE__, __LINE__, __DEBUG__,format);}     \
 }                                                                                       
+#else
+#define DEBUG_LOGGER(log, format...)
+#endif
 #define WARN_LOGGER(log, format...)                                                         \
 {                                                                                           \
     if(log){((LOGGER *)log)->add((LOGGER *)log, __FILE__, __LINE__, __WARN__,format);}      \

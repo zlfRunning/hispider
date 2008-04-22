@@ -53,6 +53,7 @@ void cb_serv_task_handler(void *arg);
 void cb_transport_error_handler(CONN *conn)
 {
     HTTP_REQUEST *request = NULL;
+    HTTP_RESPONSE *http_response = NULL;
     int c_id = 0;
     if(conn)
     {
@@ -62,9 +63,24 @@ void cb_transport_error_handler(CONN *conn)
                 && linktable->requests && linktable->requests[c_id].handler == conn)
         {
             if(conn->packet->size > 0 && conn->cache->size > 0 && conn->chunk->buf->size > 0)
-                return conn->cb_data_handler(conn, conn->packet, conn->chunk, conn->cache);
-            else 
-                linktable->update_request(linktable, c_id, LINK_STATUS_ERROR);
+            {
+                http_response = (HTTP_RESPONSE *)conn->cache->data; 
+                c_id = conn->c_id;
+                if(linktable->requests && linktable->requests[c_id].handler == conn)
+                {
+                    if(http_response->respid == RESP_OK)
+                    {
+                        request = &(linktable->requests[c_id]);
+                        DEBUG_LOGGER(daemon_logger, "Completed request[%s:%d][%s]",
+                                request->ip, request->port, request->path);
+                        linktable->add_content(linktable, http_response, request->host,
+                                request->path, conn->chunk->buf->data, conn->chunk->buf->size);
+                        linktable->update_request(linktable, c_id, LINK_STATUS_OVER);
+                        return ;
+                    }
+                }
+            }
+            linktable->update_request(linktable, c_id, LINK_STATUS_ERROR);
         }
     }
     return ;

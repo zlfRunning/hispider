@@ -271,6 +271,7 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
 
     if(linktable)
     {
+        MUTEX_LOCK(linktable->mutex);
         memset(&link, 0, sizeof(LINK));
         if((n = sprintf(url, "http://%s%s", host, path)) > 0)
         {
@@ -294,11 +295,12 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
             n = (offset / sizeof(LINK)) + 1;
             TABLE_ADD(linktable->md5table, md5str, (long *)n);
             linktable->url_total++;
-            DEBUG_LOGGER(linktable->logger, "New URL md5[%s] %s", md5str, url);
+            DEBUG_LOGGER(linktable->logger, "New URL[%d] md5[%s] %s", n, md5str, url);
             ret = 0;
         }
     }
 err_end:
+        MUTEX_UNLOCK(linktable->mutex);
     return ret;
 }
 
@@ -309,6 +311,7 @@ char *linktable_getip(LINKTABLE *linktable, char *hostname)
     char *ip = NULL;
     if(linktable)
     {
+        DEBUG_LOGGER(linktable->logger, "Ready for [%s]'s ip\n", hostname);
         if((ip = (char *)TABLE_GET(linktable->dnstable, hostname))) goto end;
         if((hp = gethostbyname((const char *)hostname)) == NULL) goto end;
         if((linktable->dnslist = (char **)realloc(linktable->dnslist, 
@@ -488,6 +491,7 @@ void linktable_urlhandler(LINKTABLE *linktable, long taskid)
     if(linktable && linktable->tasks)
     {
         urlmeta = &(linktable->tasks[taskid]); 
+        ndata = urlmeta->size;
         if(urlmeta->zsize > 0 )
         {
             if((zdata = (char *)calloc(1, urlmeta->zsize)) == NULL
