@@ -317,7 +317,7 @@ char *linktable_getip(LINKTABLE *linktable, char *hostname)
     char *ip = NULL;
     if(linktable)
     {
-        DEBUG_LOGGER(linktable->logger, "Ready for [%s]'s ip\n", hostname);
+        DEBUG_LOGGER(linktable->logger, "Ready for [%s]'s ip", hostname);
         if((ip = (char *)TABLE_GET(linktable->dnstable, hostname))) goto end;
         if((hp = gethostbyname((const char *)hostname)) == NULL) goto end;
         if((linktable->dnslist = (char **)realloc(linktable->dnslist, 
@@ -354,8 +354,8 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
                 (*req) = &(linktable->requests[i]);
                 continue;
             }
-            DEBUG_LOGGER(linktable->logger, "queue[%d] status:%d urlno:%d", 
-                    i, linktable->requests[i].status, linktable->urlno);
+            //DEBUG_LOGGER(linktable->logger, "queue[%d] status:%d urlno:%d", 
+            //        i, linktable->requests[i].status, linktable->urlno);
             offset = linktable->urlno * sizeof(LINK);
             if(linktable->requests[i].status != LINK_STATUS_WORKING 
                     && linktable->requests[i].status != LINK_STATUS_WAIT 
@@ -365,10 +365,10 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
                 while(NIO_READ(linktable->md5io, &link, sizeof(LINK)) > 0)
                 {
                     linktable->requests[i].id = linktable->urlno++;
+                    memset(&url, 0, HTTP_URL_MAX);
                     if(link.nurl > 0 && link.status == LINK_STATUS_INIT
-                            && NIO_SREAD(linktable->urlio, &url, link.nurl, link.offset) > 0)
+                            && NIO_SREAD(linktable->urlio, url, link.nurl, link.offset) > 0)
                     {
-                        DEBUG_LOGGER(linktable->logger, "READ_URL off:%d nurl:%d url:%s", link.offset, link.nurl, url);
                         p = url;
                         p += strlen("http://");
                         //port
@@ -389,8 +389,13 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
                         if((p = linktable->getip(linktable, linktable->requests[i].host)) == NULL)
                         {
                             linktable->requests[i].status = LINK_STATUS_ERROR;
-                            NIO_SWRITE(linktable->md5io, &(linktable->requests[i].status), 
-                                    sizeof(int), offset);
+                            if(NIO_SWRITE(linktable->md5io, &(linktable->requests[i].status), 
+                                    sizeof(int), offset) <= 0)
+                            {
+                                ERROR_LOGGER(linktable, "Write status for md5[%d] failed, %s",
+                                        linktable->requests[i].host, strerror(errno));
+                                goto err_end;
+                            }
                             continue;
                         }
                         while(*p != '\0') *ps++ = *p++; *ps = '\0';
@@ -528,7 +533,11 @@ end:
         MUTEX_LOCK(linktable->mutex);
         urlmeta->status = status;
         offset = urlmeta->id * sizeof(URLMETA);
-        NIO_SWRITE(linktable->metaio, &status, sizeof(int), offset);
+        if(NIO_SWRITE(linktable->metaio, &status, sizeof(int), offset) <= 0)
+        {
+            DEBUG_LOGGER(linktable->logger, "Write status for id[%d] failed, %s", 
+                    urlmeta->id, strerror(errno));
+        }
         if(data) free(data);
         if(zdata) free(zdata);
         MUTEX_UNLOCK(linktable->mutex);
@@ -611,7 +620,7 @@ int linktable_resume(LINKTABLE *linktable)
     if(linktable)
     {
         //request
-        NIO_SEEK_START(linktable->md5io);
+        if(NIO_SEEK_START(linktable->md5io) < 0) return;
         while(NIO_READ(linktable->md5io, &link, sizeof(LINK)) > 0)
         {
             p = md5str;
@@ -629,7 +638,7 @@ int linktable_resume(LINKTABLE *linktable)
         //task
         id = -1;
         n = 0 ;
-        NIO_SEEK_START(linktable->metaio);
+        if(NIO_SEEK_START(linktable->metaio) < 0) return;
         while(NIO_READ(linktable->metaio, &urlmeta, sizeof(URLMETA)) > 0)
         {
             if(urlmeta.status == URL_STATUS_INIT && id == -1)
