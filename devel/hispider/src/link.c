@@ -141,46 +141,42 @@ int linktable_parse(LINKTABLE *linktable, char *host, char *path, char *content,
 {
     char *p = NULL, *s = NULL;
     char *link = NULL;
-    int n = 0;
+    int n = 0, pref = 0;
 
     if(linktable && host && path && content && end)	
     {
+        DEBUG_LOGGER(linktable->logger, "Ready for parse page[%s%s] length %d", host, path, (end - content));
         p = content;
         while(p < end)
         {
-            if(*p == '<') s = p;
-            if(s)
+            if(*p == '<' && (*(p+1) == 'a' || *(p+1) == 'A'))
             {
-                ++p;
-                while(p < end && (*p == 0x20 || *p == 0x09))++p;
-                if((*p == 'a' || *p == 'A') && (*(p+1) == 0x20 || *(p+1) == 0x09))
+                p += 2;
+                pref = 0;
+                while(p < end && (*p == 0x20 || *p == 0x09)) ++p;
+                if(strncasecmp(p, "href", 4) != 0) continue;
+                //fprintf(stdout, "%s\n", p);
+                p += 4;
+                while(p < end && (*p == 0x20 || *p == 0x09)) ++p;
+                if(*p != '=') continue;
+                while(p < end && (*p == 0x20 || *p == 0x09)) ++p;
+                if(*p == '"' || *p == '\''){++p; pref = 1;}
+                link = p;
+                if(pref){while(p < end && *p != '\'' && *p != '"')++p;}
+                else {while(p < end && *p != 0x20 && *p != 0x09)++p;}
+                *p = '\0';
+                //fprintf(stdout, "%s\n", p);
+                if((n = (p - link)) > 0)
                 {
-                    while(p < end && *p != '>')
+                    if(*link != '#' && strncasecmp("javascript", link, 10) != 0)
                     {
-                        if(*p == '<') break;
-                        if(strncasecmp(p, "href", 4) == 0)
-                        {
-                            p += 4;
-                            while(p < end && (*p == 0x20 || *p == 0x09  || *p == '=')) ++p;
-                            while(p < end && (*p == '\'' || *p == '"'))++p; 
-                            link = p;
-                            while(p < end && *p != 0x20 && *p != 0x09 
-                                    && *p != '\'' && *p != '"')++p;
-                            *p = '\0';
-                            if((n = (p - link)) > 0)
-                            {
-                                if(*link != '#' && strncasecmp("javascript", link, 10) != 0)
-                                {
-                                    linktable->add(linktable, (unsigned char *)host, 
-                                            (unsigned char *)path,  (unsigned char *)link,
-                                            (unsigned char *)p);
-                                    //fprintf(stdout, "%s\n", link);
-                                }
-                                while(p < end && *p != '>')++p;
-                            }
-                        }
-                        ++p;
+                        DEBUG_LOGGER(linktable->logger, "Ready for adding URL from page[%s%s] %d", host, path, n);
+                        linktable->add(linktable, (unsigned char *)host, 
+                                (unsigned char *)path,  (unsigned char *)link,
+                                (unsigned char *)p);
+                        //fprintf(stdout, "%s\n", link);
                     }
+                    while(p < end && *p != '>')++p;
                 }
             }
             ++p;
@@ -765,7 +761,6 @@ int main(int argc, char **argv)
         buffer = buffer_init();
         while(1)
         {
-            if((++count)%(linktable->nrequest)) linktable->state(linktable);
             if((sid = linktable->get_request(linktable, &request)) != -1)
             {
                 fprintf(stdout, "num:%d http://%s%s %s\n", sid, request->host, 
@@ -844,9 +839,6 @@ int main(int argc, char **argv)
                     {
                         linktable->update_request(linktable, sid, LINK_STATUS_ERROR);
                     }
-                    fprintf(stdout, "total:%d left:%d ok:%d size:%lld zsize:%lld\n", 
-                            linktable->total, linktable->left, 
-                            linktable->ok_total, linktable->size, linktable->zsize);
                 } 
                 else
                 {
