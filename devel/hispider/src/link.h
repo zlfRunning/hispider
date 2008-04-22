@@ -8,7 +8,7 @@
 #define HTTP_HOST_MAX  256
 #endif
 #ifndef HTTP_PATH_MAX
-#define HTTP_PATH_MAX 4096
+#define HTTP_PATH_MAX 3840
 #endif
 #ifndef HTTP_URL_MAX
 #define HTTP_URL_MAX  4096

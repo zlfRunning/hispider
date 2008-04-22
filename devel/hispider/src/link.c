@@ -200,7 +200,7 @@ int linktable_add(LINKTABLE *linktable, unsigned char *host, unsigned char *path
     int n = 0, isneedencode = 0, isquery = 0;
     unsigned char *p = NULL, *ps = NULL, *last = NULL;
 
-    if(linktable && host && path && href)
+    if(linktable && host && path && href && (ehref - href) < HTTP_PATH_MAX)
     {
         p = href;
         if(*p == '/')
