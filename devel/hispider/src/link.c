@@ -280,7 +280,7 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
                 p += sprintf(p, "%02x", link.md5[i]);
             *p = '\0';
             if(TABLE_GET(linktable->md5table, md5str)) {ret = 0; goto err_end;}
-            if(NIO_WRITE_END(linktable->urlio, url, n+1) <= 0) goto err_end;
+            if(NIO_APPEND(linktable->urlio, url, n+1) <= 0) goto err_end;
             link.offset = offset; 
             link.nurl = n + 1;
             link.nhost = strlen(host);
@@ -297,6 +297,7 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
             DEBUG_LOGGER(linktable->logger, "New URL md5[%s] %s", md5str, url);
             ret = 0;
         }
+    }
 err_end:
     return ret;
 }
@@ -344,18 +345,17 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
                 (*req) = &(linktable->requests[i]);
                 continue;
             }
+            offset = linktable->urlno * sizeof(LINK);
             if(linktable->requests[i].status != LINK_STATUS_WORKING 
                     && linktable->requests[i].status != LINK_STATUS_WAIT 
                     && linktable->urlno < linktable->url_total
-                    && (offset = NIO_SEEK(linktable->md5io, 
-                            linktable->urlno * sizeof(LINK))) >= 0)
+                    && (offset = NIO_SEEK(linktable->md5io, offset)) >= 0)
             {
                 while(NIO_READ(linktable->md5io, &link, sizeof(LINK)) > 0)
                 {
                     linktable->requests[i].id = linktable->urlno++;
                     if(link.nurl > 0 && link.status == LINK_STATUS_INIT
-                            && NIO_SEEK(linktable->urlio, link.offset) >= 0
-                            && NIO_READ(linktable->urlio, &url, link.nurl) > 0)
+                            && NIO_SREAD(linktable->urlio, &url, link.nurl, link.offset) > 0)
                     {
                         p = url;
                         p += strlen("http://");
@@ -405,6 +405,7 @@ int linktable_update_request(LINKTABLE *linktable, int id, int status)
 {
     HTTP_REQUEST *req = NULL;
     int ret = -1;
+    long long offset = 0;
 
     if(linktable && id >= 0 && id < linktable->nrequest)
     {
@@ -413,8 +414,8 @@ int linktable_update_request(LINKTABLE *linktable, int id, int status)
         req->status = status;
         if(status != LINK_STATUS_WAIT && status != LINK_STATUS_WORKING)
         {
-            if(NIO_SWRITE(linktable->md5io, &status, sizeof(int), 
-                        (1ll * req->id * sizeof(LINK))) <= 0) goto err_end;
+            offset = req->id * sizeof(LINK);
+            if(NIO_SWRITE(linktable->md5io, &status, sizeof(int), offset) <= 0) goto err_end;
         }
         if(status  == LINK_STATUS_OVER) linktable->urlok_total++;
         ret = 0;
@@ -482,6 +483,7 @@ void linktable_urlhandler(LINKTABLE *linktable, long taskid)
     uLong ndata = 0, n = 0; 
     int status = URL_STATUS_ERROR;
     int i = 0;
+    long long offset;
 
     if(linktable && linktable->tasks)
     {
@@ -569,8 +571,8 @@ int linktable_add_content(LINKTABLE *linktable, void *response,
                 n = nzdata;
                 urlmeta.zsize = nzdata;
             }
-            if( NIO_APPEND(linktable->docio, p, n) >= 0
-                    && NIO_APPEND(linktable->metaio, &urlmeta, sizeof(URLMETA)) )
+            if( NIO_APPEND(linktable->docio, p, n) > 0
+                    && NIO_APPEND(linktable->metaio, &urlmeta, sizeof(URLMETA)) > 0)
             {
                 linktable->docok_total++;
                 linktable->size += ncontent;
@@ -664,10 +666,10 @@ LINKTABLE *linktable_init()
     if((linktable = (LINKTABLE *)calloc(1, sizeof(LINKTABLE))))
     {
         MUTEX_INIT(linktable->mutex);
-        NIO_INIT(linktable->md5io);
-        NIO_INIT(linktable->urlio);
-        NIO_INIT(linktable->metaio);
-        NIO_INIT(linktable->docio);
+        linktable->md5io = NIO_INIT();
+        linktable->urlio = NIO_INIT();
+        linktable->metaio = NIO_INIT();
+        linktable->docio = NIO_INIT();
         linktable->md5table         = TABLE_INIT(TABLE_SIZE);
         linktable->dnstable         = TABLE_INIT(TABLE_SIZE);
         linktable->set_logger       = linktable_set_logger;
