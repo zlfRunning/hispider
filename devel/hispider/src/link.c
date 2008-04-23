@@ -170,7 +170,7 @@ int linktable_parse(LINKTABLE *linktable, char *host, char *path, char *content,
                 fprintf(stdout, "%d %c\n", __LINE__, *p);
                 link = p;
                 if(pref){while(p < end && *p != '\'' && *p != '"')++p;}
-                else {while(p < end && *p != 0x20 && *p != 0x09)++p;}
+                else {while(p < end && *p != 0x20 && *p != 0x09 && *p != '>')++p;}
                 *p = '\0';
                 //fprintf(stdout, "%s\n", p);
                 if((n = (p - link)) > 0)
@@ -183,7 +183,6 @@ int linktable_parse(LINKTABLE *linktable, char *host, char *path, char *content,
                                 (unsigned char *)p);
                         //fprintf(stdout, "%s\n", link);
                     }
-                    while(p < end && *p != '>')++p;
                 }
             }
             ++p;
@@ -725,11 +724,27 @@ LINKTABLE *linktable_init()
 #ifdef _DEBUG_LINKTABLE
 //gen.sh 
 //gcc -o tlink -D_DEBUG_LINKTABLE link.c http.c utils/buffer.c utils/hash.c utils/md5.c utils/zstream.c -I utils/ -lz && ./tlink www.sina.com.cn / &
+#include <pthread.h>
 #include "http.h"
 #include "timer.h"
 #include "buffer.h"
 #include "basedef.h"
 #define BUF_SIZE 8192
+static LINKTABLE *linktable = NULL;
+void* pth_handler(void *arg)
+{
+    int taskid = -1;
+    while(1)
+    {
+        if((taskid = linktable->get_urltask(linktable)) != -1)
+        {
+            fprintf(stdout, "start task:%d", taskid);
+            linktable->urlhandler(linktable, taskid);
+            fprintf(stdout, "Completed task:%d", taskid);
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
     int i = 0, n = 0;
@@ -747,6 +762,7 @@ int main(int argc, char **argv)
     int sid = 0;
     int flag = 0;
     long long count = 0;
+    pthread_t threadid = 0;
 
     if(argc < 3)
     {
@@ -759,15 +775,21 @@ int main(int argc, char **argv)
 
     if(linktable = linktable_init())
     {
-        linktable->set_logger(linktable, "/tmp/ispider.log", NULL);
-        linktable->set_md5file(linktable, "/tmp/ispider.md5");
-        linktable->set_urlfile(linktable, "/tmp/ispider.url");
-        linktable->set_metafile(linktable, "/tmp/ispider.meta");
-        linktable->set_docfile(linktable, "/tmp/ispider.doc");
+        linktable->set_logger(linktable, "/tmp/hispider.log", NULL);
+        linktable->set_md5file(linktable, "/tmp/hispider.md5");
+        linktable->set_urlfile(linktable, "/tmp/hispider.url");
+        linktable->set_metafile(linktable, "/tmp/hispider.meta");
+        linktable->set_docfile(linktable, "/tmp/hispider.doc");
         linktable->set_nrequest(linktable, 64);
+        linktable->set_ntask(linktable, 64);
         linktable->resume(linktable);
         linktable->addurl(linktable, hostname, path);
         buffer = buffer_init();
+        if(pthread_create(&threadid, NULL, &pth_handler, NULL) != 0)
+        {
+            fprintf(stderr, "Create NEW thread failed, %s\n", strerror(errno));
+            _exit(-1);
+        }
         while(1)
         {
             if((sid = linktable->get_request(linktable, &request)) != -1)
@@ -840,9 +862,11 @@ int main(int argc, char **argv)
                         }*/
                         linktable->add_content(linktable, &response, 
                                 request->host, request->path, p, (end - p));
+                        fprintf(stdout, "parser start\n");
                         linktable->parse(linktable, request->host, 
                                 request->path, p, end);
                         linktable->update_request(linktable, sid, LINK_STATUS_OVER);
+                        fprintf(stdout, "parser over\n");
                     }
                     else
                     {
