@@ -8,36 +8,52 @@
 #endif
 typedef struct _NIO
 {
-    int rfd;
-    int wfd;
+    int fd;
     char path[NIO_PATH_MAX]; 
 }NIO;
 #define PF(ptr) ((NIO *)ptr)
-#define PFR(ptr) ((NIO *)ptr)->rfd
-#define PFW(ptr) ((NIO *)ptr)->wfd
+#define PFD(ptr) ((NIO *)ptr)->fd
+#define PPATH(ptr) ((NIO *)ptr)->path
 #define NIO_INIT() ((NIO *)calloc(1, sizeof(NIO)))
-//{if((ptr = (NIO *)calloc(1, sizeof(NIO)))){MUTEX_INIT(PF(ptr)->mutex);}}
 #define NIO_SET(ptr, lpath) ((PF(ptr) && lpath && strcpy(PF(ptr)->path, lpath)) ? 0 : -1) 
-#define NIO_CHECK_READ(ptr) ( (PF(ptr) == NULL  || (PFR(ptr) <= 0  \
-                && (PFR(ptr) = open(PF(ptr)->path, O_CREAT|O_RDONLY, 0644)) <= 0 ) ) ? -1 : 0)
-#define NIO_CHECK_WRITE(ptr) ( (PF(ptr) == NULL  || (PFW(ptr) <= 0  \
-                && (PFW(ptr) = open(PF(ptr)->path, O_CREAT|O_WRONLY, 0644)) <= 0 ) ) ? -1 : 0)
-#define NIO_SEEKR(ptr, off) ( ((NIO_CHECK_READ(ptr)) == 0) ? (lseek(PFR(ptr), off, SEEK_SET)) : -1)
-#define NIO_SEEKW(ptr, off) ( ((NIO_CHECK_WRITE(ptr)) == 0) ? (lseek(PFW(ptr), off, SEEK_SET)) : -1)
-#define NIO_SEEK_REND(ptr) ( ((NIO_CHECK_READ(ptr)) == 0) ?  (lseek(PFR(ptr), 0, SEEK_END)) : -1)
-#define NIO_SEEK_WEND(ptr) ( ((NIO_CHECK_WRITE(ptr)) == 0) ?  (lseek(PFW(ptr), 0, SEEK_END)) : -1)
-#define NIO_SEEK_RSTART(ptr) ( ((NIO_CHECK_READ(ptr)) == 0) ? (lseek(PFR(ptr), 0, SEEK_SET)) : -1)
-#define NIO_SEEK_WSTART(ptr) ( ((NIO_CHECK_WRITE(ptr)) == 0) ? (lseek(PFW(ptr), 0, SEEK_SET)) : -1)
-#define NIO_READ(ptr, ps, n) ( ((NIO_CHECK_READ(ptr)) == 0) ? (read(PFR(ptr), ps, n)) : -1)
-#define NIO_WRITE(ptr, ps, n) ( ((NIO_CHECK_WRITE(ptr)) == 0) ? (write(PFW(ptr), ps, n)) : -1)
-#define NIO_SREAD(ptr, ps, n, off) ( (NIO_CHECK_READ(ptr) == 0) ?    \
-              ( (lseek(PFR(ptr), off, SEEK_SET) >= 0) ?  \
-                (read(PFR(ptr), ps, n)) : -1) : -1) 
-#define NIO_SWRITE(ptr, ps, n, off) ( (NIO_CHECK_WRITE(ptr) == 0) ?    \
-              ( (lseek(PFW(ptr), off, SEEK_SET) >= 0) ?  \
-                (write(PFW(ptr), ps, n)) : -1) : -1) 
-#define NIO_APPEND(ptr, ps, n) ( (NIO_CHECK_WRITE(ptr) == 0) ?    \
-              ( (lseek(PFW(ptr), 0, SEEK_END) >= 0) ?  \
-                (write(PFW(ptr), ps, n)) : -1) : -1) 
-#define NIO_CLEAN(ptr) {if(ptr){close(PFR(ptr)); close(PFW(ptr));free(ptr);ptr = NULL;}}
+#define NIO_OPEN(ptr) ((PF(ptr))?(PFD(ptr) = open(PPATH(ptr), O_CREAT|O_RDWR, 0644)) : -1)
+#define NIO_CHECK(ptr) ((PF(ptr) == NULL || (PFD(ptr) <= 0  \
+            && (PFD(ptr) = NIO_OPEN(ptr)) <= 0 )) ? -1 : 0)
+#define NIO_LOCK(ptr) ((PF(ptr)) ? flock(PFD(ptr), LOCK_EX|LOCK_NB) : -1)
+#define NIO_UNLOCK(ptr) ((PF(ptr)) ? flock(PFD(ptr), LOCK_UN) : -1)
+#define NIO_SEEK(ptr, off) ((PF(ptr))? lseek(PFD(ptr), off, SEEK_SET) : -1)
+#define NIO_SEEK_START(ptr) ((PF(ptr))? lseek(PFD(ptr), 0, SEEK_SET) : -1)
+#define NIO_SEEK_END(ptr) ((PF(ptr))? lseek(PFD(ptr), 0, SEEK_END) : -1)
+#define NIO_READ(ptr, p, n) read(PFD(ptr), p, n)
+#define NIO_WRITE(ptr, p, n) write(PFD(ptr), p, n)
+#define NIO_APPEND(ptr, p, n) ( (PF(ptr)) ?                             \
+        ( ((flock(PFD(ptr), LOCK_EX|LOCK_NB) == 0)?                     \
+         ( (lseek(PFD(ptr), 0, SEEK_END) >= 0) ?                        \
+            (write(PFD(ptr), p, n) | flock(PFD(ptr), LOCK_UN))          \
+            : (flock(PFD(ptr), LOCK_UN) | -1) ) : -1) ) : -1)
+#define NIO_SREAD(ptr, p, n, off) ( (PF(ptr)) ?                         \
+        ( (flock(PFD(ptr), LOCK_EX|LOCK_NB) ?                           \
+         ( (lseek(PFD(ptr), off, SEEK_SET) >= 0) ?                      \
+            (read(PFD(ptr), p, n) | flock(PFD(ptr), LOCK_UN))           \
+            : (flock(PFD(ptr), LOCK_UN) | -1) ) : -1) ) : -1) 
+#define NIO_SWRITE(ptr, p, n, off) ( (PF(ptr)) ?                        \
+        ( (flock(PFD(ptr), LOCK_EX|LOCK_NB) ?                           \
+         ( (lseek(PFD(ptr), off, SEEK_SET) >= 0) ?                      \
+            (write(PFD(ptr), p, n) | flock(PFD(ptr), LOCK_UN))          \
+            : (flock(PFD(ptr), LOCK_UN) | -1) ) : -1) ) : -1) 
+#define NIO_WRITE_END(ptr, p, n)                                        \
+{                                                                       \
+    if(PF(ptr))                                                         \
+    {                                                                   \
+        if(flock(PFD(ptr), LOCK_EX|LOCK_NB) == 0)                       \
+        {                                                               \
+            if((lseek(PFD(ptr), 0, SEEK_END) >= 0))                     \
+            {                                                           \
+                write(PFD(ptr), p, n);                                  \
+            }                                                           \
+            flock(PFD(ptr), LOCK_UN);                                   \
+        }                                                               \
+    }                                                                   \
+}
+#define NIO_CLEAN(ptr) {if(ptr){close(PFD(ptr));free(ptr);ptr = NULL;}}
 #endif

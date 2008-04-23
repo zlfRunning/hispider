@@ -66,6 +66,7 @@ int linktable_set_md5file(LINKTABLE *linktable, char *md5file)
     {
         DEBUG_LOGGER(linktable->logger, "Setting md5file %s", md5file);
         NIO_SET(linktable->md5io, md5file);
+        NIO_CHECK(linktable->md5io);
         return 0;
     }
     return -1;
@@ -78,6 +79,7 @@ int linktable_set_urlfile(LINKTABLE *linktable, char *urlfile)
     {
         DEBUG_LOGGER(linktable->logger, "Setting urlfile %s", urlfile);
         NIO_SET(linktable->urlio, urlfile);
+        NIO_CHECK(linktable->urlio);
         return 0;
     }
     return -1;
@@ -90,6 +92,7 @@ int linktable_set_metafile(LINKTABLE *linktable, char *metafile)
     {
         DEBUG_LOGGER(linktable->logger, "Setting metafile %s", metafile);
         NIO_SET(linktable->metaio, metafile);
+        NIO_CHECK(linktable->metaio);
         return 0;
     }
     return -1;
@@ -102,6 +105,7 @@ int linktable_set_docfile(LINKTABLE *linktable, char *docfile)
     {
         DEBUG_LOGGER(linktable->logger, "Setting docfile %s", docfile);
         NIO_SET(linktable->docio, docfile);
+        NIO_CHECK(linktable->docio);
         return 0;
     }
     return -1;
@@ -284,7 +288,8 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
 
     if(linktable)
     {
-        MUTEX_LOCK(linktable->mutex);
+        NIO_CHECK(linktable->md5io);
+        NIO_CHECK(linktable->urlio);
         DEBUG_LOGGER(linktable->logger, "New URL:http://%s%s", host, path);
         memset(&link, 0, sizeof(LINK));
         if((n = sprintf(url, "http://%s%s", host, path)) > 0)
@@ -300,7 +305,9 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
                 ret = 0; 
                 goto err_end;
             }
+            DEBUG_LOGGER(linktable->logger, "New URL:http://%s%s", host, path);
             if(NIO_APPEND(linktable->urlio, url, n+1) <= 0) goto err_end;
+            DEBUG_LOGGER(linktable->logger, "New URL:http://%s%s", host, path);
             link.offset = linktable->url_total * sizeof(LINK); 
             link.nurl = n + 1;
             link.nhost = strlen(host);
@@ -313,13 +320,14 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
                 goto err_end;
             }
             id = ++(linktable->url_total);
+            MUTEX_LOCK(linktable->mutex);
             TABLE_ADD(linktable->md5table, md5str, (long *)id);
+            MUTEX_UNLOCK(linktable->mutex);
             ret = 0;
             DEBUG_LOGGER(linktable->logger, "Added URL[%d] md5[%s] %s", id, md5str, url);
         }
-err_end:
-        MUTEX_UNLOCK(linktable->mutex);
     }
+err_end:
     return ret;
 }
 
@@ -333,6 +341,7 @@ char *linktable_getip(LINKTABLE *linktable, char *hostname)
         DEBUG_LOGGER(linktable->logger, "Ready for [%s]'s ip", hostname);
         if((ip = (char *)TABLE_GET(linktable->dnstable, hostname))) goto end;
         if((hp = gethostbyname((const char *)hostname)) == NULL) goto end;
+        MUTEX_LOCK(linktable->mutex);
         if((linktable->dnslist = (char **)realloc(linktable->dnslist, 
                         sizeof(char *) * (linktable->dnscount + 1)))
                 && (ip = linktable->dnslist[linktable->dnscount++] 
@@ -341,6 +350,7 @@ char *linktable_getip(LINKTABLE *linktable, char *hostname)
             sprintf(ip, "%s", inet_ntoa(*((struct in_addr *)(hp->h_addr))));
             TABLE_ADD(linktable->dnstable, hostname, ip);
         }
+        MUTEX_UNLOCK(linktable->mutex);
 end:
         if(ip){DEBUG_LOGGER(linktable->logger, "DNS name[%s] ip[%s]", hostname, ip);}
         else {WARN_LOGGER(linktable->logger, "DNS name[%s] failed", hostname);}
@@ -357,7 +367,6 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
     int i = 0, reqid = -1, n = 0;
     if(linktable)
     {
-        MUTEX_LOCK(linktable->mutex);
         for(i = 0; i < linktable->nrequest; i++)
         {
             if(reqid == -1 && linktable->requests[i].status == LINK_STATUS_WAIT)
@@ -373,19 +382,33 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
             ///DEBUG_LOGGER(linktable->logger, "queue[%d] reqid:%d status:%d urlno:%d http://%s%s", 
             //        i, reqid, linktable->requests[i].status, linktable->urlno,
               //      linktable->requests[i].host, linktable->requests[i].path);
-            offset = linktable->urlno * sizeof(LINK);
             if(linktable->requests[i].status != LINK_STATUS_WORKING 
                     && linktable->requests[i].status != LINK_STATUS_WAIT 
-                    && linktable->urlno < linktable->url_total 
-                    && NIO_SEEKR(linktable->md5io, offset) >= 0)
+                    && linktable->urlno < linktable->url_total) 
             {
-                while(NIO_READ(linktable->md5io, &link, sizeof(LINK)) > 0)
+                offset = linktable->urlno * sizeof(LINK);
+                NIO_LOCK(linktable->md5io);
+                if(NIO_SEEK(linktable->md5io, offset) < 0) goto unlock;
+                DEBUG_LOGGER(linktable->logger, "Read from offset:%lld", offset);
+                while((n = NIO_READ(linktable->md5io, &link, sizeof(LINK))) > 0)
                 {
                     linktable->requests[i].id = linktable->urlno++;
+                    DEBUG_LOGGER(linktable->logger, "Read %d bytes nurl:%d status:%d", 
+                            n, link.nurl, link.status);
                     memset(&url, 0, HTTP_URL_MAX);
-                    if(link.nurl > 0 && link.status == LINK_STATUS_INIT
-                            && NIO_SREAD(linktable->urlio, url, link.nurl, link.offset) > 0)
+                    if(link.nurl > 0 && link.status == LINK_STATUS_INIT)
                     {
+                            if(NIO_SREAD(linktable->urlio, url, link.nurl, link.offset) > 0)
+                            {
+                                DEBUG_LOGGER(linktable->logger, "Read %d bytes nurl:%d", 
+                                        n, link.nurl);
+                            }
+                            else
+                            {
+                                ERROR_LOGGER(linktable->logger, "Reading from url failed, %s",
+                                        strerror(errno));
+                                goto unlock;
+                            }
                         p = url;
                         p += strlen("http://");
                         //port
@@ -403,6 +426,8 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
                         while(*p != '\0') *ps++ = *p++; 
                         *ps = '\0';
                         //get ip
+                        DEBUG_LOGGER(linktable->logger, "host:%s path:%s", 
+                                linktable->requests[i].host, linktable->requests[i].path);
                         ps = linktable->requests[i].ip; 
                         if((p = linktable->getip(linktable, linktable->requests[i].host)) == NULL)
                         {
@@ -412,10 +437,12 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
                             {
                                 ERROR_LOGGER(linktable, "Write status for md5[%d] failed, %s",
                                         linktable->requests[i].host, strerror(errno));
-                                goto err_end;
+                                goto unlock;
                             }
                             continue;
                         }
+                        DEBUG_LOGGER(linktable->logger, "host:%s path:%s", 
+                                linktable->requests[i].host, linktable->requests[i].path);
                         while(*p != '\0') *ps++ = *p++; *ps = '\0';
                         linktable->requests[i].status = LINK_STATUS_WAIT;
                         if(reqid == -1) 
@@ -432,6 +459,9 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
                         break;
                     }
                 }
+unlock:
+                DEBUG_LOGGER(linktable->logger, "Read from offset:%lld over", offset);
+                NIO_UNLOCK(linktable->md5io);
             }
         }
 err_end:
@@ -484,28 +514,29 @@ long linktable_get_urltask(LINKTABLE *linktable)
 
     if(linktable)
     {
-        MUTEX_LOCK(linktable->mutex);
         for(i = 0; i < linktable->ntask; i++)
         {
             if(taskid == -1 && linktable->tasks[i].status == URL_STATUS_WAIT)
             {
-             DEBUG_LOGGER(linktable->logger, "task[%d] taskid:%d status:%d docno:%d", 
-                    i, taskid, linktable->tasks[i].status, linktable->docno);
+                DEBUG_LOGGER(linktable->logger, "task[%d] taskid:%d status:%d docno:%d", 
+                        i, taskid, linktable->tasks[i].status, linktable->docno);
                 taskid = i;
                 linktable->tasks[i].status = URL_STATUS_WORKING;
                 continue;
             }
-            offset = linktable->docno * sizeof(URLMETA);
             if(linktable->tasks[i].status != URL_STATUS_WORKING 
                     && linktable->tasks[i].status != URL_STATUS_WAIT 
-                    && linktable->docno < linktable->doc_total
-                    && NIO_SEEKR(linktable->metaio, offset) >= 0)
+                    && linktable->docno < linktable->doc_total)
             {
+                offset = linktable->docno * sizeof(URLMETA);
+                NIO_LOCK(linktable->metaio);
+                if(NIO_SEEK(linktable->metaio, offset) < 0) goto unlock;
                 while((n = NIO_READ(linktable->metaio, &(linktable->tasks[i]), sizeof(URLMETA))) > 0)
                 {
-             DEBUG_LOGGER(linktable->logger, "n:%d task[%d] taskid:%d status:%d docno:%d off:%lld size:%d", 
-                    n, i, taskid, linktable->tasks[i].status, linktable->docno, 
-                    linktable->tasks[i].offset, linktable->tasks[i].zsize);
+                    DEBUG_LOGGER(linktable->logger, 
+                            "n:%d task[%d] taskid:%d status:%d docno:%d off:%lld size:%d", 
+                            n, i, taskid, linktable->tasks[i].status, linktable->docno, 
+                            linktable->tasks[i].offset, linktable->tasks[i].zsize);
                     offset += sizeof(URLMETA);
                     linktable->tasks[i].id = linktable->docno++;
                     if(linktable->tasks[i].status == URL_STATUS_INIT)
@@ -519,6 +550,8 @@ long linktable_get_urltask(LINKTABLE *linktable)
                         break;
                     }
                 }
+unlock:
+                NIO_UNLOCK(linktable->metaio);
             }
         }
         if(taskid != -1)
@@ -527,8 +560,6 @@ long linktable_get_urltask(LINKTABLE *linktable)
                     taskid, linktable->tasks[taskid].offset, linktable->tasks[taskid].zsize,
                     linktable->docno, linktable->doc_total);
         }
-err_end:
-         MUTEX_UNLOCK(linktable->mutex);
     }
     return taskid;
 }
@@ -713,7 +744,8 @@ int linktable_resume(LINKTABLE *linktable)
     if(linktable)
     {
         //request
-        if(NIO_SEEK_RSTART(linktable->md5io) < 0) return;
+        NIO_CHECK(linktable->md5io);
+        if(NIO_SEEK_START(linktable->md5io) < 0) return;
         while(NIO_READ(linktable->md5io, &link, sizeof(LINK)) > 0)
         {
             p = md5str;
@@ -731,7 +763,8 @@ int linktable_resume(LINKTABLE *linktable)
         //task
         id = -1;
         n = 0 ;
-        if(NIO_SEEK_RSTART(linktable->metaio) < 0) return;
+        NIO_CHECK(linktable->metaio);
+        if(NIO_SEEK_START(linktable->metaio) < 0) return;
         while(NIO_READ(linktable->metaio, &urlmeta, sizeof(URLMETA)) > 0)
         {
             if(urlmeta.status == URL_STATUS_INIT && id == -1)
@@ -823,6 +856,7 @@ void *pth_handler(void *arg)
 {
     LINKTABLE *ltable = (LINKTABLE *)arg;
     int taskid = -1;
+   // DEBUG_LOGGER(ltable->logger, "thread[%08x] start .....", pthread_self());
     while(1)
     {
         if((taskid = ltable->get_urltask(ltable)) != -1)
@@ -884,6 +918,7 @@ int main(int argc, char **argv)
         }
         while(1)
         {
+            //DEBUG_LOGGER(linktable->logger, "thread[%08x] start .....", pthread_self());
             if((sid = linktable->get_request(linktable, &request)) != -1)
             {
                 fprintf(stdout, "num:%d http://%s%s %s\n", sid, request->host, 
