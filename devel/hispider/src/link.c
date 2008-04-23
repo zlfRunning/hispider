@@ -403,6 +403,7 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
                         ps = linktable->requests[i].path;
                         while(*p != '\0') *ps++ = *p++; 
                         *ps = '\0';
+                        fprintf(stdout, "path:%s\n", p);
                         //get ip
                         ps = linktable->requests[i].ip; 
                         if((p = linktable->getip(linktable, linktable->requests[i].host)) == NULL)
@@ -572,7 +573,6 @@ void linktable_urlhandler(LINKTABLE *linktable, long taskid)
                     }
                     flock(PF(linktable->docio)->fd, LOCK_UN);
                 }
-                */
                 if((fd = open(PF(linktable->docio)->path, O_CREAT|O_RDWR, 0644)) > 0)
                 {
                     lseek(fd, 0, SEEK_SET);
@@ -587,10 +587,12 @@ void linktable_urlhandler(LINKTABLE *linktable, long taskid)
                     }
                     close(fd);
                 }
+                */
                 /*
                 close(NIO_FD(linktable->docio));
                 */
                 /*
+                 */
                 if(NIO_SREAD(linktable->docio, zdata, urlmeta->zsize, urlmeta->offset) <= 0)
                 {
                     FATAL_LOGGER(linktable->logger, 
@@ -599,6 +601,7 @@ void linktable_urlhandler(LINKTABLE *linktable, long taskid)
                             urlmeta->zsize, strerror(errno));
                     goto err_end;
                 }
+                /*
                 */
                 n = urlmeta->zsize;
                 if(zdecompress(zdata, n, data, &ndata) != 0)
@@ -746,7 +749,7 @@ int linktable_resume(LINKTABLE *linktable)
     if(linktable)
     {
         //request
-        if(NIO_SEEK_START(linktable->md5io) < 0) return;
+        if(NIO_SEEK_RSTART(linktable->md5io) < 0) return;
         while(NIO_READ(linktable->md5io, &link, sizeof(LINK)) > 0)
         {
             p = md5str;
@@ -764,7 +767,7 @@ int linktable_resume(LINKTABLE *linktable)
         //task
         id = -1;
         n = 0 ;
-        if(NIO_SEEK_START(linktable->metaio) < 0) return;
+        if(NIO_SEEK_RSTART(linktable->metaio) < 0) return;
         while(NIO_READ(linktable->metaio, &urlmeta, sizeof(URLMETA)) > 0)
         {
             if(urlmeta.status == URL_STATUS_INIT && id == -1)
