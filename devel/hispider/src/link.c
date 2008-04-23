@@ -301,21 +301,19 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
                 goto err_end;
             }
             if(NIO_APPEND(linktable->urlio, url, n+1) <= 0) goto err_end;
-            link.offset = offset; 
+            link.offset = linktable->url_total * sizeof(LINK); 
             link.nurl = n + 1;
             link.nhost = strlen(host);
             link.npath = strlen(path);
             DEBUG_LOGGER(linktable->logger, "nurl:%d nhost:%d npath:%d", 
                     link.nurl, link.nhost, link.npath);
-            if(((offset = NIO_SEEK_END(linktable->md5io)) < 0)
-                || (NIO_APPEND(linktable->md5io, &link, sizeof(LINK)) <= 0))
+            if((NIO_APPEND(linktable->md5io, &link, sizeof(LINK)) <= 0))
             {
                 ERROR_LOGGER(linktable->logger, "ERR:MD5:%s URL:%s\n", md5str, url);
                 goto err_end;
             }
-            id = (offset / sizeof(LINK)) + 1;
+            id = ++(linktable->url_total);
             TABLE_ADD(linktable->md5table, md5str, (long *)id);
-            linktable->url_total++;
             ret = 0;
             DEBUG_LOGGER(linktable->logger, "Added URL[%d] md5[%s] %s", id, md5str, url);
         }
@@ -367,6 +365,9 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
                 reqid = i;
                 linktable->requests[i].status = LINK_STATUS_WORKING;
                 (*req) = &(linktable->requests[i]);
+               DEBUG_LOGGER(linktable->logger, "queue[%d] reqid:%d status:%d urlno:%d http://%s%s", 
+                    i, reqid, linktable->requests[i].status, linktable->urlno,
+                    linktable->requests[i].host, linktable->requests[i].path);
                 continue;
             }
             ///DEBUG_LOGGER(linktable->logger, "queue[%d] reqid:%d status:%d urlno:%d http://%s%s", 
@@ -375,11 +376,11 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
             offset = linktable->urlno * sizeof(LINK);
             if(linktable->requests[i].status != LINK_STATUS_WORKING 
                     && linktable->requests[i].status != LINK_STATUS_WAIT 
-                    && linktable->urlno < linktable->url_total
-                    && (offset = NIO_SEEK(linktable->md5io, offset)) >= 0)
+                    && linktable->urlno < linktable->url_total )
             {
-                while(NIO_READ(linktable->md5io, &link, sizeof(LINK)) > 0)
+                while(NIO_SREAD(linktable->md5io, &link, sizeof(LINK), offset) > 0)
                 {
+                    offset += sizeof(LINK);
                     linktable->requests[i].id = linktable->urlno++;
                     memset(&url, 0, HTTP_URL_MAX);
                     if(link.nurl > 0 && link.status == LINK_STATUS_INIT
@@ -398,8 +399,10 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
                         }
                         *ps = '\0';
                         //path
+                        fprintf(stdout, "path:%s\n", p);
                         ps = linktable->requests[i].path;
-                        while(*p != '\0') *ps++ = *p++; *ps = '\0';
+                        while(*p != '\0') *ps++ = *p++; 
+                        *ps = '\0';
                         //get ip
                         ps = linktable->requests[i].ip; 
                         if((p = linktable->getip(linktable, linktable->requests[i].host)) == NULL)
@@ -418,6 +421,10 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
                         linktable->requests[i].status = LINK_STATUS_WAIT;
                         if(reqid == -1) 
                         {
+                            DEBUG_LOGGER(linktable->logger, "queue[%d] reqid:%d status:%d urlno:%d http://%s%s", 
+                                    i, reqid, linktable->requests[i].status, linktable->urlno,
+                                    linktable->requests[i].host, linktable->requests[i].path);
+
                             reqid = i;
                             linktable->requests[i].status = LINK_STATUS_WORKING;
                             (*req) = &(linktable->requests[i]);
@@ -534,57 +541,107 @@ void linktable_urlhandler(LINKTABLE *linktable, long taskid)
     uLong ndata = 0, n = 0; 
     int status = URL_STATUS_ERROR;
     int i = 0;
+    int fd = 0;
     long long offset;
 
     if(linktable && linktable->tasks)
     {
         urlmeta = &(linktable->tasks[taskid]); 
-        ndata = urlmeta->size;
-        if(urlmeta->zsize > 0 )
+        if((data = (char *)calloc(1, urlmeta->size)))
         {
-            if((zdata = (char *)calloc(1, urlmeta->zsize)) == NULL
-                    || n = NIO_SREAD(linktable->docio, zdata, urlmeta->zsize, urlmeta->offset) <= 0
-                    || (data = (char *)calloc(1, urlmeta->size)) == NULL
-                    || zdecompress(zdata, urlmeta->zsize, data, &ndata) != 0)
+            ndata = urlmeta->size;
+            if(urlmeta->zsize > 0 )
             {
-                ERROR_LOGGER(linktable->logger, "Handle compress data off:%lld length:%d failed, %s",
-                        urlmeta->offset, urlmeta->zsize, strerror(errno));
-                goto end;
+                if((zdata = (char *)calloc(1, urlmeta->zsize)) == NULL)
+                {
+                    FATAL_LOGGER(linktable->logger, "Calloc zdata size:%d failed %s", 
+                            urlmeta->zsize, strerror(errno));
+                    goto err_end;
+                }
+                /*
+                if(flock(PF(linktable->docio)->fd, LOCK_NB) == 0)
+                {
+                    if(lseek(PF(linktable->docio)->fd, 0, SEEK_SET) <= 0)
+                    {
+                        FATAL_LOGGER(linktable->logger, "seek to %lld failed, %s", 
+                                urlmeta->offset, strerror(errno));
+                    }
+                    if(read(PF(linktable->docio)->fd, zdata, urlmeta->size) > 0)
+                    {
+                        DEBUG_LOGGER(linktable->logger, "read document %d bytes OK",urlmeta->size);       
+                    }
+                    flock(PF(linktable->docio)->fd, LOCK_UN);
+                }
+                */
+                if((fd = open(PF(linktable->docio)->path, O_CREAT|O_RDWR, 0644)) > 0)
+                {
+                    lseek(fd, 0, SEEK_SET);
+                    if(read(fd, zdata, urlmeta->zsize) <= 0)
+                    {
+                        FATAL_LOGGER(linktable->logger, 
+                                "Read from ducoment[%s] offset[%lld] size:%d failed, %s",
+                                PF(linktable->docio)->path, urlmeta->offset, 
+                                urlmeta->size, strerror(errno));
+                        goto err_end;
+
+                    }
+                    close(fd);
+                }
+                /*
+                close(NIO_FD(linktable->docio));
+                */
+                /*
+                if(NIO_SREAD(linktable->docio, zdata, urlmeta->zsize, urlmeta->offset) <= 0)
+                {
+                    FATAL_LOGGER(linktable->logger, 
+                            "Read from ducoment[%s] offset[%lld] size:%d failed, %s",
+                            PF(linktable->docio)->path, urlmeta->offset, 
+                            urlmeta->zsize, strerror(errno));
+                    goto err_end;
+                }
+                */
+                n = urlmeta->zsize;
+                if(zdecompress(zdata, n, data, &ndata) != 0)
+                {
+                    FATAL_LOGGER(linktable->logger, "Decompress zdata size:%d failed, %s",
+                            urlmeta->zsize, strerror(errno));
+                    goto err_end;
+                }
+                if(zdata) free(zdata);
+                zdata = NULL;
             }
-        }
-        else
-        {
-            if((data = (char *)calloc(1, urlmeta->size)) == NULL
-                    || NIO_SREAD(linktable->docio, data, urlmeta->size, urlmeta->offset) <= 0) 
+            else
             {
-                ERROR_LOGGER(linktable->logger, "Handle  data off:%lld length:%d failed, %s",
-                        urlmeta->offset, urlmeta->size, strerror(errno));
-                goto end;
+                if(NIO_SREAD(linktable->docio, data, urlmeta->size, urlmeta->offset) <= 0)
+                {
+                    FATAL_LOGGER(linktable->logger, 
+                            "Read from ducoment[%s] offset[%lld] size:%d failed, %s",
+                            PF(linktable->docio)->path, urlmeta->offset, 
+                            urlmeta->size, strerror(errno));
+                    goto err_end;
+                }
             }
+            if(data)
+            {
+                host = data + urlmeta->hostoff;
+                path = data + urlmeta->pathoff;
+                p = data + urlmeta->htmloff;
+                end = data + urlmeta->size;
+                DEBUG_LOGGER(linktable->logger, "Ready for parse http://%s%s length:%d",
+                        host, path, (end - p));
+                linktable->parse(linktable, host, path, p, end);
+                status = URL_STATUS_OVER;
+                free(data); data = NULL;
+            }
+err_end:
+            offset = urlmeta->id * sizeof(URLMETA);
+            if(NIO_SWRITE(linktable->metaio, &status, sizeof(int), offset) <= 0)
+            {
+                DEBUG_LOGGER(linktable->logger, "Write status for id[%d] failed, %s", 
+                        urlmeta->id, strerror(errno));
+            }
+            urlmeta->status = status;
         }
-        if(data)
-        {
-            host = data + urlmeta->hostoff;
-            path = data + urlmeta->pathoff;
-            p = data + urlmeta->htmloff;
-            end = data + urlmeta->size;
-            DEBUG_LOGGER(linktable->logger, "Ready for parse http://%s%s length:%d",
-                    host, path, (end - p));
-            linktable->parse(linktable, host, path, p, end);
-            status = URL_STATUS_OVER;
-        }
-end:
-        MUTEX_LOCK(linktable->mutex);
-        urlmeta->status = status;
-        offset = urlmeta->id * sizeof(URLMETA);
-        if(NIO_SWRITE(linktable->metaio, &status, sizeof(int), offset) <= 0)
-        {
-            DEBUG_LOGGER(linktable->logger, "Write status for id[%d] failed, %s", 
-                    urlmeta->id, strerror(errno));
-        }
-        if(data) free(data);
-        if(zdata) free(zdata);
-        MUTEX_UNLOCK(linktable->mutex);
     }
     return ;
 }
@@ -651,13 +708,17 @@ int linktable_add_content(LINKTABLE *linktable, void *response,
                         "pathoff:%d htmloff:%d",
                         urlmeta.offset, urlmeta.zsize, urlmeta.hostoff, 
                         urlmeta.pathoff, urlmeta.htmloff);
-
                 if(NIO_APPEND(linktable->metaio, (&urlmeta), sizeof(URLMETA)) > 0)
                 {
                     linktable->docok_total++;
                     linktable->size += ncontent;
                     linktable->zsize += n;
                     ret = 0;
+                }
+                else
+                {
+                    ERROR_LOGGER(linktable->logger, "Adding meta document length[%d] failed, %s",
+                            urlmeta.size, strerror(errno));
                 }
             }
             else
@@ -691,7 +752,7 @@ int linktable_resume(LINKTABLE *linktable)
             p = md5str;
             for(i = 0; i < MD5_LEN; i++)
                 p += sprintf(p, "%02x", link.md5[i]);
-            TABLE_ADD(linktable->md5table, md5str, (long *)n);
+            TABLE_ADD(linktable->md5table, md5str, (long *)++n);
             if(link.status == LINK_STATUS_INIT && id == -1)
             {
                 id = linktable->urlno = n;
