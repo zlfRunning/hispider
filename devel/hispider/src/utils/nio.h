@@ -26,17 +26,23 @@ typedef struct _NIO
 #define NIO_SEEK_END(ptr) ((PF(ptr))? lseek(PFD(ptr), 0, SEEK_END) : -1)
 #define NIO_READ(ptr, p, n) read(PFD(ptr), p, n)
 #define NIO_WRITE(ptr, p, n) write(PFD(ptr), p, n)
-#define NIO_APPEND(ptr, p, n) ( (PF(ptr)) ?                             \
+#define NIO_APPEND(ptr, p, n) ( (PF(ptr) && (lseek(PFD(ptr), 0, SEEK_END) >= 0)) ?  \
+            write(PFD(ptr), p, n) : -1 )
+#define NIO_SREAD(ptr, p, n, off) ( (PF(ptr) && (lseek(PFD(ptr), off, SEEK_SET) >= 0)) ? \
+            read(PFD(ptr), p, n) : -1 )
+#define NIO_SWRITE(ptr, p, n, off) ( (PF(ptr) && (lseek(PFD(ptr), off, SEEK_SET) >= 0)) ? \
+            write(PFD(ptr), p, n) : -1 )
+#define NIO_LAPPEND(ptr, p, n) ( (PF(ptr)) ?                             \
         ( ((flock(PFD(ptr), LOCK_EX|LOCK_NB) == 0)?                     \
          ( (lseek(PFD(ptr), 0, SEEK_END) >= 0) ?                        \
             (write(PFD(ptr), p, n) | flock(PFD(ptr), LOCK_UN))          \
             : (flock(PFD(ptr), LOCK_UN) | -1) ) : -1) ) : -1)
-#define NIO_SREAD(ptr, p, n, off) ( (PF(ptr)) ?                         \
+#define NIO_LSREAD(ptr, p, n, off) ( (PF(ptr)) ?                         \
         ( (flock(PFD(ptr), LOCK_EX|LOCK_NB) ?                           \
          ( (lseek(PFD(ptr), off, SEEK_SET) >= 0) ?                      \
             (read(PFD(ptr), p, n) | flock(PFD(ptr), LOCK_UN))           \
             : (flock(PFD(ptr), LOCK_UN) | -1) ) : -1) ) : -1) 
-#define NIO_SWRITE(ptr, p, n, off) ( (PF(ptr)) ?                        \
+#define NIO_LSWRITE(ptr, p, n, off) ( (PF(ptr)) ?                        \
         ( (flock(PFD(ptr), LOCK_EX|LOCK_NB) ?                           \
          ( (lseek(PFD(ptr), off, SEEK_SET) >= 0) ?                      \
             (write(PFD(ptr), p, n) | flock(PFD(ptr), LOCK_UN))          \
