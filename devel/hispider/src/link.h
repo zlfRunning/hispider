@@ -62,12 +62,12 @@ typedef struct _URLMETA
 {
     int status;
     int id;
-    long long offset;
     int size;
     int zsize;
     int hostoff;
     int pathoff;
     int htmloff;
+    long long offset;
 }URLMETA;
 typedef struct _LINKTABLE
 {

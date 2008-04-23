@@ -149,39 +149,44 @@ int linktable_parse(LINKTABLE *linktable, char *host, char *path, char *content,
         p = content;
         while(p < end)
         {
-            if(*p == '<' && (*(p+1) == 'a' || *(p+1) == 'A'))
+            if(p < (end - 1) && *p == '<' && (*(p+1) == 'a' || *(p+1) == 'A'))
             {
                 p += 2;
                 pref = 0;
                 while(p < end && (*p == 0x20 || *p == 0x09)) ++p;
-                fprintf(stdout, "%d %c\n", __LINE__, *p);
-                if(strncasecmp(p, "href", 4) != 0) continue;
+                DEBUG_LOGGER(linktable->logger, "%d %c\n", __LINE__, *p);
+                if(p >= (end - 4) && strncasecmp(p, "href", 4) != 0) continue;
                 //fprintf(stdout, "%s\n", p);
+                DEBUG_LOGGER(linktable->logger, "%d %c\n", __LINE__, *p);
                 p += 4;
-                fprintf(stdout, "%d %c\n", __LINE__, *p);
+                DEBUG_LOGGER(linktable->logger, "%d %c\n", __LINE__, *p);
                 while(p < end && (*p == 0x20 || *p == 0x09)) ++p;
-                fprintf(stdout, "%d %c\n", __LINE__, *p);
+                DEBUG_LOGGER(linktable->logger, "%d %c\n", __LINE__, *p);
                 if(*p != '=') continue;
-                fprintf(stdout, "%d %c\n", __LINE__, *p);
                 ++p;
-                fprintf(stdout, "%d %c\n", __LINE__, *p);
                 while(p < end && (*p == 0x20 || *p == 0x09)) ++p;
+                DEBUG_LOGGER(linktable->logger, "%d %c\n", __LINE__, *p);
                 if(*p == '"' || *p == '\''){++p; pref = 1;}
-                fprintf(stdout, "%d %c\n", __LINE__, *p);
-                link = p;
-                if(pref){while(p < end && *p != '\'' && *p != '"')++p;}
-                else {while(p < end && *p != 0x20 && *p != 0x09 && *p != '>')++p;}
-                *p = '\0';
-                //fprintf(stdout, "%s\n", p);
-                if((n = (p - link)) > 0)
+                DEBUG_LOGGER(linktable->logger, "%d %c\n", __LINE__, *p);
+                if(*p == '/' || (*p >= '0' && *p <= '9') 
+                        || (*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z'))
                 {
-                    if(*link != '#' && strncasecmp("javascript", link, 10) != 0)
+                    DEBUG_LOGGER(linktable->logger, "%d %c\n", __LINE__, *p);
+                    link = p;
+                    if(pref){while(p < end && *p != '\'' && *p != '"')++p;}
+                    else {while(p < end && *p != 0x20 && *p != 0x09 && *p != '>')++p;}
+                    DEBUG_LOGGER(linktable->logger, "left:%d\n",(end - p));
+                    //fprintf(stdout, "%s\n", p);
+                    if((n = (p - link)) > 0)
                     {
-                        DEBUG_LOGGER(linktable->logger, "Ready for adding URL from page[%s%s] %d", host, path, n);
-                        linktable->add(linktable, (unsigned char *)host, 
-                                (unsigned char *)path,  (unsigned char *)link,
-                                (unsigned char *)p);
-                        //fprintf(stdout, "%s\n", link);
+                        if(*link != '#' && strncasecmp("javascript", link, 10) != 0)
+                        {
+                            DEBUG_LOGGER(linktable->logger, "Ready for adding URL from page[%s%s] %d", host, path, n);
+                            linktable->add(linktable, (unsigned char *)host, 
+                                    (unsigned char *)path,  (unsigned char *)link,
+                                    (unsigned char *)p);
+                            //fprintf(stdout, "%s\n", link);
+                        }
                     }
                 }
             }
@@ -211,12 +216,16 @@ int linktable_add(LINKTABLE *linktable, unsigned char *host, unsigned char *path
             ps = lpath;
             p = href;
         }
-        else if(strncasecmp((char *)p, "http://", 7) == 0)
+        else if((p < (ehref - 7)) && strncasecmp((char *)p, "http://", 7) == 0)
         {
             ps = lhost;
             p = href + 7;
             n = HTTP_HOST_MAX;
-            while(p < ehref && *p != '/') {*ps++ = *p++; if(--n <= 0) return 0;} 
+            while(p < ehref && *p != '/') 
+            {
+                *ps++ = *p++; 
+                if(--n <= 0) return 0;
+            } 
             *ps = '\0';
             ps = lpath;
         }
@@ -225,7 +234,7 @@ int linktable_add(LINKTABLE *linktable, unsigned char *host, unsigned char *path
             //delete file:// mail:// ftp:// news:// rss:// eg. 
             p = href;
             while(p < ehref && (*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z')) p++;
-            if(memcmp(p, "://", 4) == 0) return -1;
+            if(memcmp(p, "://", 3) == 0) return -1;
             strcpy((char *)lhost, (char *)host);
             p = path;
             ps = lpath;
@@ -296,8 +305,10 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
             link.nurl = n + 1;
             link.nhost = strlen(host);
             link.npath = strlen(path);
+            DEBUG_LOGGER(linktable->logger, "nurl:%d nhost:%d npath:%d", 
+                    link.nurl, link.nhost, link.npath);
             if(((offset = NIO_SEEK_END(linktable->md5io)) < 0)
-                || (NIO_WRITE(linktable->md5io, &link, sizeof(LINK)) <= 0))
+                || (NIO_APPEND(linktable->md5io, &link, sizeof(LINK)) <= 0))
             {
                 ERROR_LOGGER(linktable->logger, "ERR:MD5:%s URL:%s\n", md5str, url);
                 goto err_end;
@@ -358,8 +369,9 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
                 (*req) = &(linktable->requests[i]);
                 continue;
             }
-            //DEBUG_LOGGER(linktable->logger, "queue[%d] status:%d urlno:%d", 
-            //        i, linktable->requests[i].status, linktable->urlno);
+            ///DEBUG_LOGGER(linktable->logger, "queue[%d] reqid:%d status:%d urlno:%d http://%s%s", 
+            //        i, reqid, linktable->requests[i].status, linktable->urlno,
+              //      linktable->requests[i].host, linktable->requests[i].path);
             offset = linktable->urlno * sizeof(LINK);
             if(linktable->requests[i].status != LINK_STATUS_WORKING 
                     && linktable->requests[i].status != LINK_STATUS_WAIT 
@@ -436,15 +448,21 @@ int linktable_update_request(LINKTABLE *linktable, int id, int status)
         if(status != LINK_STATUS_WAIT && status != LINK_STATUS_WORKING)
         {
             offset = req->id * sizeof(LINK);
-            if(NIO_SWRITE(linktable->md5io, &status, sizeof(int), offset) <= 0) goto err_end;
+            if(NIO_SWRITE(linktable->md5io, &status, sizeof(int), offset) <= 0) 
+            {
+                ERROR_LOGGER(linktable->logger, "Update reqs[%d] http://%s%s status[%d] failed, %s",
+                        id, req->host, req->path, status, strerror(errno));
+                goto err_end;
+            }
         }
-        if(status  == LINK_STATUS_OVER) linktable->urlok_total++;
+        if(status  == LINK_STATUS_OVER) 
+            linktable->urlok_total++;
         ret = 0;
-         DEBUG_LOGGER(linktable->logger, "Update status[%d] on request[%d] to %s:%d",
-                 status, id, req->ip, req->port);
 err_end:
+         DEBUG_LOGGER(linktable->logger, "Update request[%d] http://%s%s to  status[%d] via %s:%d",
+                 id, req->host, req->path, status, req->ip, req->port);
+         memset(req, 0, sizeof(HTTP_REQUEST));
          MUTEX_UNLOCK(linktable->mutex);
-
     }
     return ret;
 }
@@ -453,7 +471,7 @@ long linktable_get_urltask(LINKTABLE *linktable)
 {
     URLMETA urlmeta;
     long taskid = -1;
-    int i = 0;
+    int i = 0, n = 0;
     long long offset = 0;
 
     if(linktable)
@@ -463,6 +481,8 @@ long linktable_get_urltask(LINKTABLE *linktable)
         {
             if(taskid == -1 && linktable->tasks[i].status == URL_STATUS_WAIT)
             {
+             DEBUG_LOGGER(linktable->logger, "task[%d] taskid:%d status:%d docno:%d", 
+                    i, taskid, linktable->tasks[i].status, linktable->docno);
                 taskid = i;
                 linktable->tasks[i].status = URL_STATUS_WORKING;
                 continue;
@@ -470,11 +490,15 @@ long linktable_get_urltask(LINKTABLE *linktable)
             offset = linktable->docno * sizeof(URLMETA);
             if(linktable->tasks[i].status != URL_STATUS_WORKING 
                     && linktable->tasks[i].status != URL_STATUS_WAIT 
-                    && linktable->docno < linktable->doc_total
-                    && NIO_SEEK(linktable->metaio, offset) >= 0 )
+                    && linktable->docno < linktable->doc_total)
             {
-                while(NIO_READ(linktable->metaio, &(linktable->tasks[i]), sizeof(URLMETA)) > 0)
+                while((n = NIO_SREAD(linktable->metaio, &(linktable->tasks[i]), 
+                            sizeof(URLMETA), offset)) > 0)
                 {
+             DEBUG_LOGGER(linktable->logger, "n:%d task[%d] taskid:%d status:%d docno:%d off:%lld size:%d", 
+                    n, i, taskid, linktable->tasks[i].status, linktable->docno, 
+                    linktable->tasks[i].offset, linktable->tasks[i].zsize);
+                    offset += sizeof(URLMETA);
                     linktable->tasks[i].id = linktable->docno++;
                     if(linktable->tasks[i].status == URL_STATUS_INIT)
                     {
@@ -488,6 +512,12 @@ long linktable_get_urltask(LINKTABLE *linktable)
                     }
                 }
             }
+        }
+        if(taskid != -1)
+        {
+            DEBUG_LOGGER(linktable->logger, "task:%d off:%lld length:%d docno:%d doctotal:%d", 
+                    taskid, linktable->tasks[taskid].offset, linktable->tasks[taskid].zsize,
+                    linktable->docno, linktable->doc_total);
         }
 err_end:
          MUTEX_UNLOCK(linktable->mutex);
@@ -513,16 +543,24 @@ void linktable_urlhandler(LINKTABLE *linktable, long taskid)
         if(urlmeta->zsize > 0 )
         {
             if((zdata = (char *)calloc(1, urlmeta->zsize)) == NULL
-                    || NIO_SREAD(linktable->docio, zdata, urlmeta->zsize, urlmeta->offset) <= 0
+                    || n = NIO_SREAD(linktable->docio, zdata, urlmeta->zsize, urlmeta->offset) <= 0
                     || (data = (char *)calloc(1, urlmeta->size)) == NULL
                     || zdecompress(zdata, urlmeta->zsize, data, &ndata) != 0)
+            {
+                ERROR_LOGGER(linktable->logger, "Handle compress data off:%lld length:%d failed, %s",
+                        urlmeta->offset, urlmeta->zsize, strerror(errno));
                 goto end;
+            }
         }
         else
         {
             if((data = (char *)calloc(1, urlmeta->size)) == NULL
                     || NIO_SREAD(linktable->docio, data, urlmeta->size, urlmeta->offset) <= 0) 
+            {
+                ERROR_LOGGER(linktable->logger, "Handle  data off:%lld length:%d failed, %s",
+                        urlmeta->offset, urlmeta->size, strerror(errno));
                 goto end;
+            }
         }
         if(data)
         {
@@ -530,6 +568,8 @@ void linktable_urlhandler(LINKTABLE *linktable, long taskid)
             path = data + urlmeta->pathoff;
             p = data + urlmeta->htmloff;
             end = data + urlmeta->size;
+            DEBUG_LOGGER(linktable->logger, "Ready for parse http://%s%s length:%d",
+                    host, path, (end - p));
             linktable->parse(linktable, host, path, p, end);
             status = URL_STATUS_OVER;
         }
@@ -596,15 +636,36 @@ int linktable_add_content(LINKTABLE *linktable, void *response,
                 p = zdata;
                 n = nzdata;
                 urlmeta.zsize = nzdata;
+                DEBUG_LOGGER(linktable->logger, "Compress document size:%d to size:%d ",
+                        urlmeta.size, urlmeta.zsize);
             }
-            if( NIO_APPEND(linktable->docio, p, n) > 0
-                    && NIO_APPEND(linktable->metaio, &urlmeta, sizeof(URLMETA)) > 0)
+            else
             {
-                linktable->docok_total++;
-                linktable->size += ncontent;
-                linktable->zsize += n;
-                ret = 0;
+                ERROR_LOGGER(linktable->logger, "Compress data length[%d] failed, %s",
+                        n, strerror(errno));
+                goto end;
             }
+            if(NIO_APPEND(linktable->docio, p, n) > 0)
+            {
+                DEBUG_LOGGER(linktable->logger, "Add meta offset:%lld zsize:%d hostoff:%d "
+                        "pathoff:%d htmloff:%d",
+                        urlmeta.offset, urlmeta.zsize, urlmeta.hostoff, 
+                        urlmeta.pathoff, urlmeta.htmloff);
+
+                if(NIO_APPEND(linktable->metaio, (&urlmeta), sizeof(URLMETA)) > 0)
+                {
+                    linktable->docok_total++;
+                    linktable->size += ncontent;
+                    linktable->zsize += n;
+                    ret = 0;
+                }
+            }
+            else
+            {
+                ERROR_LOGGER(linktable->logger, "Adding document length[%d] failed, %s",
+                        urlmeta.size, strerror(errno));
+            }
+        end:
             if(zdata) free(zdata);
             if(data) free(data);
         }
@@ -738,9 +799,9 @@ void *pth_handler(void *arg)
     {
         if((taskid = ltable->get_urltask(ltable)) != -1)
         {
-            fprintf(stdout, "start task:%d", taskid);
+            DEBUG_LOGGER(ltable->logger, "start task:%d", taskid);
             ltable->urlhandler(ltable, taskid);
-            fprintf(stdout, "Completed task:%d", taskid);
+            DEBUG_LOGGER(ltable->logger, "Completed task:%d", taskid);
         }
         usleep(100);
     }
@@ -782,8 +843,9 @@ int main(int argc, char **argv)
         linktable->set_urlfile(linktable, "/tmp/hispider.url");
         linktable->set_metafile(linktable, "/tmp/hispider.meta");
         linktable->set_docfile(linktable, "/tmp/hispider.doc");
-        linktable->set_nrequest(linktable, 64);
-        linktable->set_ntask(linktable, 64);
+        linktable->set_nrequest(linktable, 4);
+        linktable->set_ntask(linktable, 4);
+        linktable->iszlib = 1;
         linktable->resume(linktable);
         linktable->addurl(linktable, hostname, path);
         buffer = buffer_init();
@@ -862,26 +924,28 @@ int main(int argc, char **argv)
                             if(response.headers[i])
                                 fprintf(stdout, "%s\n", response.headers[i]);
                         }*/
-                        linktable->add_content(linktable, &response, 
-                                request->host, request->path, p, (end - p));
-                        fprintf(stdout, "parser start\n");
-                        linktable->parse(linktable, request->host, 
-                                request->path, p, end);
+                        if(linktable->add_content(linktable, &response, 
+                                request->host, request->path, p, (end - p)) != 0)
+                        {
+                            ERROR_LOGGER(linktable->logger, "Adding http://%s%s content failed, %s",
+                                    request->host, request->path, strerror(errno));
+                        }
                         linktable->update_request(linktable, sid, LINK_STATUS_OVER);
-                        fprintf(stdout, "parser over\n");
+                        DEBUG_LOGGER(linktable->logger, "OK response ");
                     }
                     else
                     {
+                        DEBUG_LOGGER(linktable->logger, "ERROR response ");
                         linktable->update_request(linktable, sid, LINK_STATUS_ERROR);
                     }
+                    shutdown(fd, SHUT_RDWR);
+                    close(fd);
                 } 
                 else
                 {
                     fprintf(stderr, "connected failed,%s", strerror(errno));
-                    close(fd);
                     linktable->update_request(linktable, sid, LINK_STATUS_DISCARD);
                 }
-                
             }
             usleep(100);
         }
