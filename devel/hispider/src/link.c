@@ -559,40 +559,6 @@ void linktable_urlhandler(LINKTABLE *linktable, long taskid)
                             urlmeta->zsize, strerror(errno));
                     goto err_end;
                 }
-                /*
-                if(flock(PF(linktable->docio)->fd, LOCK_NB) == 0)
-                {
-                    if(lseek(PF(linktable->docio)->fd, 0, SEEK_SET) <= 0)
-                    {
-                        FATAL_LOGGER(linktable->logger, "seek to %lld failed, %s", 
-                                urlmeta->offset, strerror(errno));
-                    }
-                    if(read(PF(linktable->docio)->fd, zdata, urlmeta->size) > 0)
-                    {
-                        DEBUG_LOGGER(linktable->logger, "read document %d bytes OK",urlmeta->size);       
-                    }
-                    flock(PF(linktable->docio)->fd, LOCK_UN);
-                }
-                if((fd = open(PF(linktable->docio)->path, O_CREAT|O_RDWR, 0644)) > 0)
-                {
-                    lseek(fd, 0, SEEK_SET);
-                    if(read(fd, zdata, urlmeta->zsize) <= 0)
-                    {
-                        FATAL_LOGGER(linktable->logger, 
-                                "Read from ducoment[%s] offset[%lld] size:%d failed, %s",
-                                PF(linktable->docio)->path, urlmeta->offset, 
-                                urlmeta->size, strerror(errno));
-                        goto err_end;
-
-                    }
-                    close(fd);
-                }
-                */
-                /*
-                close(NIO_FD(linktable->docio));
-                */
-                /*
-                 */
                 if(NIO_SREAD(linktable->docio, zdata, urlmeta->zsize, urlmeta->offset) <= 0)
                 {
                     FATAL_LOGGER(linktable->logger, 
@@ -601,8 +567,6 @@ void linktable_urlhandler(LINKTABLE *linktable, long taskid)
                             urlmeta->zsize, strerror(errno));
                     goto err_end;
                 }
-                /*
-                */
                 n = urlmeta->zsize;
                 if(zdecompress(zdata, n, data, &ndata) != 0)
                 {
