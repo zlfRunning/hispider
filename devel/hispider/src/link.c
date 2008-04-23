@@ -730,19 +730,21 @@ LINKTABLE *linktable_init()
 #include "buffer.h"
 #include "basedef.h"
 #define BUF_SIZE 8192
-static LINKTABLE *linktable = NULL;
-void* pth_handler(void *arg)
+void *pth_handler(void *arg)
 {
+    LINKTABLE *ltable = (LINKTABLE *)arg;
     int taskid = -1;
     while(1)
     {
-        if((taskid = linktable->get_urltask(linktable)) != -1)
+        if((taskid = ltable->get_urltask(ltable)) != -1)
         {
             fprintf(stdout, "start task:%d", taskid);
-            linktable->urlhandler(linktable, taskid);
+            ltable->urlhandler(ltable, taskid);
             fprintf(stdout, "Completed task:%d", taskid);
         }
+        usleep(100);
     }
+    return NULL;
 }
 
 int main(int argc, char **argv)
@@ -785,7 +787,7 @@ int main(int argc, char **argv)
         linktable->resume(linktable);
         linktable->addurl(linktable, hostname, path);
         buffer = buffer_init();
-        if(pthread_create(&threadid, NULL, &pth_handler, NULL) != 0)
+        if(pthread_create(&threadid, NULL, &pth_handler, (void *)linktable) != 0)
         {
             fprintf(stderr, "Create NEW thread failed, %s\n", strerror(errno));
             _exit(-1);
