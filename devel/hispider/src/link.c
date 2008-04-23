@@ -376,11 +376,11 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
             offset = linktable->urlno * sizeof(LINK);
             if(linktable->requests[i].status != LINK_STATUS_WORKING 
                     && linktable->requests[i].status != LINK_STATUS_WAIT 
-                    && linktable->urlno < linktable->url_total )
+                    && linktable->urlno < linktable->url_total 
+                    && NIO_SEEKR(linktable->md5io, offset) >= 0)
             {
-                while(NIO_SREAD(linktable->md5io, &link, sizeof(LINK), offset) > 0)
+                while(NIO_READ(linktable->md5io, &link, sizeof(LINK)) > 0)
                 {
-                    offset += sizeof(LINK);
                     linktable->requests[i].id = linktable->urlno++;
                     memset(&url, 0, HTTP_URL_MAX);
                     if(link.nurl > 0 && link.status == LINK_STATUS_INIT
@@ -399,11 +399,9 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
                         }
                         *ps = '\0';
                         //path
-                        fprintf(stdout, "path:%s\n", p);
                         ps = linktable->requests[i].path;
                         while(*p != '\0') *ps++ = *p++; 
                         *ps = '\0';
-                        fprintf(stdout, "path:%s\n", p);
                         //get ip
                         ps = linktable->requests[i].ip; 
                         if((p = linktable->getip(linktable, linktable->requests[i].host)) == NULL)
@@ -422,7 +420,8 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST **req)
                         linktable->requests[i].status = LINK_STATUS_WAIT;
                         if(reqid == -1) 
                         {
-                            DEBUG_LOGGER(linktable->logger, "queue[%d] reqid:%d status:%d urlno:%d http://%s%s", 
+                                DEBUG_LOGGER(linktable->logger, 
+                                        "queue[%d] reqid:%d status:%d urlno:%d http://%s%s", 
                                     i, reqid, linktable->requests[i].status, linktable->urlno,
                                     linktable->requests[i].host, linktable->requests[i].path);
 
@@ -471,6 +470,7 @@ err_end:
                  id, req->host, req->path, status, req->ip, req->port);
          memset(req, 0, sizeof(HTTP_REQUEST));
          MUTEX_UNLOCK(linktable->mutex);
+         DEBUG_LOGGER(linktable->logger, "unlock OK");
     }
     return ret;
 }
@@ -498,10 +498,10 @@ long linktable_get_urltask(LINKTABLE *linktable)
             offset = linktable->docno * sizeof(URLMETA);
             if(linktable->tasks[i].status != URL_STATUS_WORKING 
                     && linktable->tasks[i].status != URL_STATUS_WAIT 
-                    && linktable->docno < linktable->doc_total)
+                    && linktable->docno < linktable->doc_total
+                    && NIO_SEEKR(linktable->metaio, offset) >= 0)
             {
-                while((n = NIO_SREAD(linktable->metaio, &(linktable->tasks[i]), 
-                            sizeof(URLMETA), offset)) > 0)
+                while((n = NIO_READ(linktable->metaio, &(linktable->tasks[i]), sizeof(URLMETA))) > 0)
                 {
              DEBUG_LOGGER(linktable->logger, "n:%d task[%d] taskid:%d status:%d docno:%d off:%lld size:%d", 
                     n, i, taskid, linktable->tasks[i].status, linktable->docno, 
