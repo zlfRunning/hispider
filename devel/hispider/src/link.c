@@ -596,13 +596,14 @@ err_end:
 }
 
 /* add content as zdata */
-int linktable_add_zcontent(LINKTABLE *linktable, URLMETA *urlmeta, char *zdata, char *nzdata)
+int linktable_add_zcontent(LINKTABLE *linktable, URLMETA *urlmeta, char *zdata, int nzdata)
 {
+    int ret = -1;
     if(linktable && urlmeta && zdata)
     {
         NIO_LOCK(linktable->docio);
-        urlmeta.offset = NIO_SEEK_END(linktable->docio);
-        if(NIO_WRITE(linktable->docio, p, n) > 0)
+        urlmeta->offset = NIO_SEEK_END(linktable->docio);
+        if(NIO_WRITE(linktable->docio, zdata, nzdata) > 0)
         {
             DEBUG_LOGGER(linktable->logger, "Add meta offset:%lld zsize:%d hostoff:%d "
                     "pathoff:%d htmloff:%d",
@@ -612,8 +613,8 @@ int linktable_add_zcontent(LINKTABLE *linktable, URLMETA *urlmeta, char *zdata, 
             if(NIO_APPEND(linktable->metaio, (urlmeta), sizeof(URLMETA)) > 0)
             {
                 linktable->docok_total++;
-                linktable->size += nzdata;
-                linktable->zsize += n;
+                linktable->size += urlmeta->size;
+                linktable->zsize += nzdata;
                 ret = 0;
             }
             else
@@ -630,6 +631,7 @@ int linktable_add_zcontent(LINKTABLE *linktable, URLMETA *urlmeta, char *zdata, 
         }
         NIO_UNLOCK(linktable->docio);
     }
+    return ret;
 }
 
 /* Add content */

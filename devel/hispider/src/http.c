@@ -11,7 +11,7 @@ int http_request_parse(char *p, char *end, HTTP_REQ *http_req)
     while(s < end && (*s == 0x20 || *s == 0x09))++s;
     for(i = 0; i < HTTP_METHOD_NUM; i++ )
     {
-        if(strncasecamp(http_methods[i].e, s, http_methods[i].elen) == 0)
+        if(strncasecmp(http_methods[i].e, s, http_methods[i].elen) == 0)
         {
             http_req->reqid = i;
         }
@@ -36,7 +36,7 @@ int http_request_parse(char *p, char *end, HTTP_REQ *http_req)
             {
                 s +=  http_headers[i].elen;
                 while(s < end && *s == 0x20)s++;
-                http_response->headers[i] = s;
+                http_req->headers[i] = s;
                 ret++;
                 break;
             }
