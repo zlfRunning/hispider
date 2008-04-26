@@ -39,15 +39,6 @@
 #ifndef MD5_LEN
 #define MD5_LEN 16
 #endif
-typedef struct _LINK
-{
-    int status;
-    unsigned char md5[MD5_LEN]; 
-    long long offset;
-    long nurl;
-    int nhost;
-    int npath;
-}LINK;
 typedef struct _HTTP_REQUEST
 {
     int status;
@@ -56,7 +47,7 @@ typedef struct _HTTP_REQUEST
     int port;
     char host[HTTP_HOST_MAX];
     char path[HTTP_PATH_MAX];
-    void *handler;
+    unsigned char md5[MD5_LEN];
 }HTTP_REQUEST;
 typedef struct _URLMETA
 {
@@ -81,8 +72,6 @@ typedef struct _LINKTABLE
     void *docio;
     long long size;
     long long zsize;
-    HTTP_REQUEST *requests;
-    int nrequest;
     long urlno;
     long url_total;
     long urlok_total;
@@ -107,10 +96,9 @@ typedef struct _LINKTABLE
     int     (*addurl)(struct _LINKTABLE *, char *host, char *path); 
     long    (*get_urltask)(struct _LINKTABLE *);
     void    (*urlhandler)(struct _LINKTABLE *, long id); 
-    int     (*set_nrequest)(struct _LINKTABLE *, int nrequest);
     int     (*set_ntask)(struct _LINKTABLE *, int ntask);
     char*   (*getip)(struct _LINKTABLE *, char *host);
-    int     (*get_request)(struct _LINKTABLE *, HTTP_REQUEST **req);
+    int     (*get_request)(struct _LINKTABLE *, HTTP_REQUEST *req);
     int     (*update_request)(struct _LINKTABLE *, int sid, int status);
     int     (*add_content)(struct _LINKTABLE *, void *response, char *host, char *path,
                 char *content, int ncontent);

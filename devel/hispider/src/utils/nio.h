@@ -18,7 +18,7 @@ typedef struct _NIO
 #define NIO_SET(ptr, lpath) ((PF(ptr) && lpath && strcpy(PF(ptr)->path, lpath)) ? 0 : -1) 
 #define NIO_OPEN(ptr) ((PF(ptr))?(PFD(ptr) = open(PPATH(ptr), O_CREAT|O_RDWR, 0644)) : -1)
 #define NIO_CHECK(ptr) ((PF(ptr) == NULL || (PFD(ptr) <= 0  \
-            && (PFD(ptr) = NIO_OPEN(ptr)) <= 0 )) ? -1 : 0)
+            && (PFD(ptr) = NIO_OPEN(ptr)) <= 0 )) ? (PFD(ptr) = -1) : 0)
 #define NIO_LOCK(ptr) ((PF(ptr)) ? flock(PFD(ptr), LOCK_EX|LOCK_NB) : -1)
 #define NIO_UNLOCK(ptr) ((PF(ptr)) ? flock(PFD(ptr), LOCK_UN) : -1)
 #define NIO_SEEK(ptr, off) ((PF(ptr))? lseek(PFD(ptr), off, SEEK_SET) : -1)
