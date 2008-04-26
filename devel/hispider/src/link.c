@@ -595,6 +595,43 @@ err_end:
     return ;
 }
 
+/* add content as zdata */
+int linktable_add_zcontent(LINKTABLE *linktable, URLMETA *urlmeta, char *zdata, char *nzdata)
+{
+    if(linktable && urlmeta && zdata)
+    {
+        NIO_LOCK(linktable->docio);
+        urlmeta.offset = NIO_SEEK_END(linktable->docio);
+        if(NIO_WRITE(linktable->docio, p, n) > 0)
+        {
+            DEBUG_LOGGER(linktable->logger, "Add meta offset:%lld zsize:%d hostoff:%d "
+                    "pathoff:%d htmloff:%d",
+                    urlmeta->offset, urlmeta->zsize, urlmeta->hostoff, 
+                    urlmeta->pathoff, urlmeta->htmloff);
+            NIO_LOCK(linktable->metaio);
+            if(NIO_APPEND(linktable->metaio, (urlmeta), sizeof(URLMETA)) > 0)
+            {
+                linktable->docok_total++;
+                linktable->size += nzdata;
+                linktable->zsize += n;
+                ret = 0;
+            }
+            else
+            {
+                ERROR_LOGGER(linktable->logger, "Adding meta document length[%d] failed, %s",
+                        urlmeta->size, strerror(errno));
+            }
+            NIO_UNLOCK(linktable->metaio);
+        }
+        else
+        {
+            ERROR_LOGGER(linktable->logger, "Adding document length[%d] failed, %s",
+                    urlmeta->size, strerror(errno));
+        }
+        NIO_UNLOCK(linktable->docio);
+    }
+}
+
 /* Add content */
 int linktable_add_content(LINKTABLE *linktable, void *response, 
         char *host, char *path, char *content, int ncontent)
@@ -789,6 +826,7 @@ LINKTABLE *linktable_init()
         linktable->getip            = linktable_getip; 
         linktable->get_request      = linktable_get_request; 
         linktable->update_request   = linktable_update_request; 
+        linktable->add_zcontent     = linktable_add_zcontent; 
         linktable->add_content      = linktable_add_content; 
         linktable->get_urltask      = linktable_get_urltask; 
         linktable->urlhandler       = linktable_urlhandler; 

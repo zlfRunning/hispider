@@ -10,6 +10,7 @@
 
 #ifndef _HTTP_H
 #define _HTTP_H
+#define HTTP_URL_PATH_MAX  1024
 
 typedef struct _HTTP_ELEMENT
 {
@@ -336,7 +337,7 @@ static HTTP_ELEMENT http_headers[] =
    | extension-method
    extension-method = token
  */
-#define HTTP_METHOD_NUM 8
+#define HTTP_METHOD_NUM 9
 static HTTP_ELEMENT http_methods[] = 
 {
 #define HTTP_OPTIONS	0
@@ -354,7 +355,9 @@ static HTTP_ELEMENT http_methods[] =
 #define HTTP_TRACE	6
 	{6, "TRACE", 5, NULL},
 #define HTTP_CONNECT	7
-	{7, "CONNECT", 7, NULL}
+	{7, "CONNECT", 7, NULL},
+#define HTTP_TASK   8
+    {8, "TASK", 8, NULL}
 };
 
 /* file ext support list */
@@ -438,6 +441,15 @@ typedef struct _HTTP_RESPONSE
     int header_size;
     char *headers[HTTP_HEADER_NUM];
 }HTTP_RESPONSE;
-/* HTTP HEADER parser */
+typedef struct _HTTP_REQ
+{
+    int reqid;
+    int header_size;
+    char path[HTTP_URL_PATH_MAX];
+    char *headers[HTTP_HEADER_NUM];
+}HTTP_REQ;
+/* HTTP request HEADER parser */
+int http_request_parse(char *p, char *end, HTTP_REQ *http_req);
+/* HTTP response HEADER parser */
 int http_response_parse(char *p, char *end, HTTP_RESPONSE *resp);
 #endif

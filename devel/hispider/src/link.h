@@ -5,13 +5,13 @@
 #define _LINK_H
 #define HTTP_BUF_SIZE 8192
 #ifndef HTTP_HOST_MAX
-#define HTTP_HOST_MAX  256
+#define HTTP_HOST_MAX  64
 #endif
 #ifndef HTTP_PATH_MAX
-#define HTTP_PATH_MAX 3840
+#define HTTP_PATH_MAX 960
 #endif
 #ifndef HTTP_URL_MAX
-#define HTTP_URL_MAX  4096
+#define HTTP_URL_MAX  1024
 #endif
 #ifndef LFILE_PATH_MAX
 #define LFILE_PATH_MAX 256
@@ -100,6 +100,7 @@ typedef struct _LINKTABLE
     char*   (*getip)(struct _LINKTABLE *, char *host);
     int     (*get_request)(struct _LINKTABLE *, HTTP_REQUEST *req);
     int     (*update_request)(struct _LINKTABLE *, int sid, int status);
+    int     (*add_zcontent)(struct _LINKTABLE *, URLMETA *, char *, int);
     int     (*add_content)(struct _LINKTABLE *, void *response, char *host, char *path,
                 char *content, int ncontent);
     int     (*resume)(struct _LINKTABLE *);

@@ -12,11 +12,36 @@
 #include "logger.h"
 #include "common.h"
 #include "timer.h"
+#define DEFAULT_CONTENT_LENGTH 1048576
+#define SBASE_LOG "/tmp/sbase.log"
+static const char *__html__body__  = 
+"<HTML><HEAD>\n"
+"<TITLE>Hispider Running Status</TITLE>\n"
+"<meta http-equiv='refresh' content='2; URL=/'>\n</HEAD>\n"
+"<meta http-equiv='content-type' content='text/html; charset=UTF-8'>\n"
+"<BODY bgcolor='#000000' align=center >\n"
+"<h1><font color=white >Hispider Running Status</font></h1>\n"
+"<hr noshade><ul><br><table  align=center width='100%%' >\n"
+"<tr><td align=left ><li><font color=red size=72 >URL Totoal:%d </font></li></td></tr>\n"
+"<tr><td align=left ><li><font color=red size=72 >URL Current :%d </font></li></td></tr>\n"
+"<tr><td align=left ><li><font color=red size=72 >URL Handled:%d </font></li></td></tr>\n"
+"<tr><td align=left ><li><font color=red size=72 >Doc Total:%d </font></li></td></tr>\n"
+"<tr><td align=left ><li><font color=red size=72 >Doc Current:%d </font></li></td></tr>\n"
+"<tr><td align=left ><li><font color=red size=72 >Doc Handled:%d </font></li></td></tr>\n"
+"<tr><td align=left ><li><font color=red size=72 >Doc Size:%lld </font></li></td></tr>\n"
+"<tr><td align=left ><li><font color=red size=72 >Doc Zsize:%lld </font></li></td></tr>\n"
+"<tr><td align=left ><li><font color=red size=72 >DNS count:%d </font></li></td></tr>\n"
+"</table><br><hr  noshade><em>\n"
+"<font color=white ><a href='http://code.google.com/p/hispider' >"
+"Hispider</a> Powered By <a href='http://code.google.com/p/hispider'>"
+"http://code.google.com/p/hispider</a></font>"
+"</BODY></HTML>\n";
 
 static SBASE *sbase = NULL;
 SERVICE *serv = NULL;
 static dictionary *dict = NULL;
 static LOGGER *daemon_logger = NULL;
+static LINKTABLE *linktable = NULL;
 static long long global_timeout_times = 60000000;
 
 //daemon task handler 
@@ -158,7 +183,8 @@ void cb_serv_oob_handler(CONN *conn, BUFFER *oob)
 /* Initialize from ini file */
 int sbase_initialize(SBASE *sbase, char *conf)
 {
-	char *logfile = NULL, *s = NULL, *p = NULL;
+	char *logfile = NULL, *s = NULL, *p = NULL, *hostname = NULL, *path = NULL, 
+         *docfile = NULL, *md5file = NULL, *urlfile = NULL, *metafile = NULL;
 	int n = 0, ntask = 0;
 	int ret = 0;
 
@@ -312,7 +338,30 @@ int sbase_initialize(SBASE *sbase, char *conf)
     if((p = iniparser_getstr(dict, "DAEMON:timeout")))
         global_timeout_times = str2ll(p);
     //linktable files
+	md5file = iniparser_getstr(dict, "DAEMON:md5file");
+    metafile = iniparser_getstr(dict, "DAEMON:metafile");
+    urlfile = iniparser_getstr(dict, "DAEMON:urlfile");
+    docfile = iniparser_getstr(dict, "DAEMON:docfile");
+    logfile = iniparser_getstr(dict, "DAEMON:logfile");
+    hostname = iniparser_getstr(dict, "DAEMON:hostname");
+    path = iniparser_getstr(dict, "DAEMON:path");
+    nrequest = iniparser_getint(dict, "DAEMON:nrequest", 128);
     ntask = iniparser_getint(dict, "DAEMON:ntask", 128);
+    //linktable setting 
+    if((linktable = linktable_init()) == NULL)
+    {
+        fprintf(stderr, "Initialize linktable failed, %s\n", strerror(errno));
+        return -1;
+    }
+    linktable->iszlib = iniparser_getint(dict, "DAEMON:iszlib", 1);
+    linktable->set_logger(linktable, NULL, daemon_logger);
+    linktable->set_md5file(linktable, md5file);
+    linktable->set_urlfile(linktable, urlfile);
+    linktable->set_metafile(linktable, metafile);
+    linktable->set_docfile(linktable, docfile);
+    linktable->set_ntask(linktable, ntask);
+    linktable->resume(linktable);
+    linktable->addurl(linktable, hostname, path);
     return 0;
 }
 
