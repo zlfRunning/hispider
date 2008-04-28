@@ -13,6 +13,7 @@
 #include "common.h"
 #include "timer.h"
 #define HTTP_CHUNK_MAX 1048576
+#define SBASE_LOG "/tmp/sbase.log"
 
 static SBASE *sbase = NULL;
 SERVICE *serv = NULL;
@@ -32,7 +33,7 @@ typedef struct _TASK
     int ntask_over;
     HTTP_REQUEST *requests;
     URLMETA *tasks;
-    char *results;
+    char **results;
 }TASK;
 static TASK task = {0};
 //error handler 
@@ -60,7 +61,7 @@ void cb_serv_heartbeat_handler(void *arg)
     long taskid = 0;
     CONN *conn = NULL;
 
-    if(serv && linktable)
+    if(serv)
     {
         if(task.conn == NULL && daemon_ip)
         {
@@ -93,7 +94,7 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
 {
     HTTP_RESPONSE response;
     char *p = NULL, *end = NULL;
-    int len = 0, sid = 0;
+    int len = 0, c_id = 0;
     
     if(conn)
     {
@@ -107,7 +108,7 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
             if(response.respid == RESP_OK && response.headers[HEAD_ENT_CONTENT_LENGTH])
             {
                 len = atoi(response.headers[HEAD_ENT_CONTENT_LENGTH]);       
-                conn->receive_chunk(conn, len);
+                conn->recv_chunk(conn, len);
                 return ;
             }
         }
@@ -152,9 +153,9 @@ void cb_serv_data_handler(CONN *conn, BUFFER *packet,
     HTTP_RESPONSE *resp = NULL;
     HTTP_REQUEST *req = NULL;
     char buf[HTTP_BUF_SIZE];
-    char *data = NULL, *zdata = NULL;
+    char *data = NULL, *zdata = NULL, *p = NULL;
     int i = 0, c_id = 0, n = 0, nhost = 0, npath = 0;
-    uLong nzdata = 0;
+    unsigned long nzdata = 0;
 
     if(conn && chunk->buf && (req = (HTTP_REQUEST *)chunk->buf->data))
     {
@@ -170,7 +171,6 @@ void cb_serv_data_handler(CONN *conn, BUFFER *packet,
         else
         {
             resp = (HTTP_RESPONSE *)cache->data;
-            memset(&urlmeta, 0, sizeof(urlmeta));
             p = buf;
             for(i = 0; i < HTTP_HEADER_NUM; i++)
             {
@@ -184,19 +184,20 @@ void cb_serv_data_handler(CONN *conn, BUFFER *packet,
             nhost = strlen(req->host) + 1;
             npath = strlen(req->path) + 1;
             purlmeta = &(task.tasks[c_id]);
+            memset(purlmeta, 0, sizeof(URLMETA));
             purlmeta->hostoff = (p - buf);
             purlmeta->pathoff =  purlmeta->hostoff + nhost;
             purlmeta->htmloff = purlmeta->pathoff + npath;
             purlmeta->size = purlmeta->htmloff + chunk->buf->size;
             purlmeta->status = URL_STATUS_ERROR;
             task.ntask_over++;
-            if((data = (char *)calloc(1, purlmeta.size)))
+            if((data = (char *)calloc(1, purlmeta->size)))
             {
                 p = data;
                 memcpy(p, buf, purlmeta->hostoff);
-                p += urlmeta.hostoff;
-                memcpy(p, req->host, nhost)
-                    p += nhost;
+                p += purlmeta->hostoff;
+                memcpy(p, req->host, nhost);
+                p += nhost;
                 memcpy(p, req->path, npath);
                 p += npath;
                 memcpy(p, chunk->buf->data, chunk->buf->size);
@@ -237,10 +238,10 @@ void cb_serv_transaction_handler(CONN *conn, int tid)
                 conn->push_chunk(conn, p, n);
                 conn->push_chunk(conn, &(task.tasks[tid]), sizeof(URLMETA));
                 conn->push_chunk(conn, task.results[tid], task.tasks[tid].zsize);
-                memset(&(task.requests[tid]), 0, sizeof(HTTP_REQUESTS));
+                memset(&(task.requests[tid]), 0, sizeof(HTTP_REQUEST));
                 task.requests[tid].id = -1;
                 memset(&(task.tasks[tid]), 0, sizeof(URLMETA));
-                task.tasks[tid] = -1;
+                task.tasks[tid].id = -1;
                 free(task.results[tid]);
                 task.results[tid] = NULL;
             }
@@ -296,43 +297,6 @@ int sbase_initialize(SBASE *sbase, char *conf)
 	sbase->set_log(sbase, logfile);
 	if((logfile = iniparser_getstr(dict, "SBASE:evlogfile")))
 	    sbase->set_evlog(sbase, logfile);
-	/* TRANSPORT */
-	fprintf(stdout, "Parsing TRANSPORT...\n");
-	if((transport = service_init()) == NULL)
-	{
-		fprintf(stderr, "Initialize transport failed, %s", strerror(errno));
-		_exit(-1);
-	}
-    /* service type */
-    transport->service_type = iniparser_getint(dict, "TRANSPORT:service_type", 1);
-	/* INET protocol family */
-	n = iniparser_getint(dict, "TRANSPORT:inet_family", 0);
-	switch(n)
-	{
-		case 0:
-			transport->family = AF_INET;
-			break;
-		case 1:
-			transport->family = AF_INET6;
-			break;
-		default:
-			fprintf(stderr, "Illegal INET family :%d \n", n);
-			_exit(-1);
-	}
-	/* socket type */
-	n = iniparser_getint(dict, "TRANSPORT:socket_type", 0);
-	switch(n)
-	{
-		case 0:
-			transport->socket_type = SOCK_STREAM;
-			break;
-		case 1:
-			transport->socket_type = SOCK_DGRAM;
-			break;
-		default:
-			fprintf(stderr, "Illegal socket type :%d \n", n);
-			_exit(-1);
-	}
     /* DAEMON */
     if((serv = service_init()) == NULL)
 	{
@@ -380,7 +344,6 @@ int sbase_initialize(SBASE *sbase, char *conf)
 	serv->sleep_usec = iniparser_getint(dict, "DAEMON:sleep_usec", 100);
 	serv->heartbeat_interval = iniparser_getint(dict, "DAEMON:heartbeat_interval", 1000000);
 	logfile = iniparser_getstr(dict, "DAEMON:logfile");
-	if(logfile == NULL) logfile = TRANSPORT_LOG;
 	serv->logfile = logfile;
 	logfile = iniparser_getstr(dict, "DAEMON:evlogfile");
 	serv->evlogfile = logfile;
@@ -418,11 +381,6 @@ int sbase_initialize(SBASE *sbase, char *conf)
 		fprintf(stderr, "Initiailize service[%s] failed, %s\n", serv->name, strerror(errno));
 		return ret;
 	}
-	if((ret = sbase->add_service(sbase, transport)) != 0)
-	{
-		fprintf(stderr, "Initiailize service[%s] failed, %s\n", transport->name, strerror(errno));
-		return ret;
-	}
     //logger 
 	daemon_logger = logger_init(iniparser_getstr(dict, "DAEMON:access_log"));
     //timeout
@@ -430,7 +388,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
         task.timeout = str2ll(p);
     //linktable files
     task.ntask_limit = iniparser_getint(dict, "DAEMON:ntask", 128);
-    if((task.requests = (HTTP_REQUEUST *)calloc(task.ntask_limit, sizeof(HTTP_REQUEST)))
+    if((task.requests = (HTTP_REQUEST *)calloc(task.ntask_limit, sizeof(HTTP_REQUEST)))
         && (task.tasks = (URLMETA *)calloc(task.ntask_limit, sizeof(URLMETA)))
         && (task.results = (char **)calloc(task.ntask_limit, sizeof(char *))))
     {
