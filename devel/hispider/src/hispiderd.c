@@ -100,7 +100,7 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
         memset(&http_req, 0, sizeof(HTTP_REQ));
         http_req.reqid = -1;
         http_request_parser(p, end, &http_req)
-        if(http_req.reqid == HTTP_METHOD_GET)
+        if(http_req.reqid == HTTP_GET)
         {
             p = buf;
             m = sprintf(p, __html__body__, linktable->url_total, 
@@ -115,7 +115,7 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
             conn->over(conn);
             return ;
         }
-        if(http_req.reqid == HTTP_METHOD_TASK)
+        if(http_req.reqid == HTTP_TASK)
         {
             if(linktable->get_request(linktable, &request) != -1) 
             {
@@ -132,7 +132,7 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
             }
             return ;
         }
-        if(http_req.reqid == HTTP_METHOD_PUT)
+        if(http_req.reqid == HTTP_PUT)
         {
             if(http_req.headers[HEAD_ENT_CONTENT_LENGTH])
             {

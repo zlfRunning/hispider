@@ -21,24 +21,28 @@ static LOGGER *daemon_logger = NULL;
 static long long global_timeout_times = 60000000;
 static char *daemon_ip = NULL;
 static int daemon_port = 3721;
-static CONN *c_conn = NULL;
-static int global_ntask = 0;
-static int global_ntask_total = 0;
-static int global_ntask_wait = 0;
-static int global_ntask_over = 0;
-static int global_ntask_working = 0;
-static HTTP_REQUEST *requests = NULL;
-static URLMETA *tasks = NULL;
-static char **results = NULL;
-
+typedef struct _TASK
+{
+    CONN *conn;
+    long long timeout;
+    int ntask_limit;
+    int ntask_total;
+    int ntask_wait;
+    int ntask_working;
+    int ntask_over;
+    HTTP_REQUEST *requests;
+    URLMETA *tasks;
+    char *results;
+}TASK;
+static TASK task = {0};
 //error handler 
 void cb_server_error_handler(CONN *conn)
 {
     if(conn)
     {
-        if(conn == c_conn)
+        if(conn == task.conn)
         {
-            c_conn = NULL;
+            task.conn = NULL;
         }
         else
         {
@@ -58,17 +62,19 @@ void cb_serv_heartbeat_handler(void *arg)
 
     if(serv && linktable)
     {
-        if(c_conn == NULL && daemon_ip)
+        if(task.conn == NULL && daemon_ip)
         {
-            if((c_conn = serv->newconn(serv, daemon_ip, daemon_port)))
-                c_conn->start_cstate(c_conn);
+            if((task.conn = serv->newconn(serv, daemon_ip, daemon_port)))
+                task.conn->start_cstate(task.conn);
         }
-        if(c_conn && requests)
+        //get new request
+        if(task.conn && task.ntask_total < task.ntask_limit)
         {
-            for(i = 0; i < nrequest; i++)
-            {
-                if(requests[i].status != URL_STATUS_)
-            }
+        }
+        //handle over task
+        if(task.conn && task.ntask_over > 0)
+        {
+            
         }
     }
     return  ;
@@ -77,14 +83,6 @@ void cb_serv_heartbeat_handler(void *arg)
 //daemon task handler 
 void cb_serv_task_handler(void *arg)
 {
-    long taskid = (long )arg;
-    if(taskid >= 0)
-    {
-        DEBUG_LOGGER(daemon_logger, "start task:%d", taskid);
-        linktable->urlhandler(linktable, taskid);
-        DEBUG_LOGGER(daemon_logger, "Completed task:%d", taskid);
-        //fprintf(stdout, "%d:task:%d\n", __LINE__, taskid);
-    }
 }
 
 int cb_serv_packet_reader(CONN *conn, BUFFER *buffer)
@@ -104,7 +102,7 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
         p   = (char *)packet->data;
         end = (char *)packet->end;
         http_response_parse(p, end, &response);
-        if(conn == c_conn)
+        if(conn == task.conn)
         {
             if(response.respid == RESP_OK && response.headers[HEAD_ENT_CONTENT_LENGTH])
             {
@@ -135,9 +133,9 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
                 }
             }
             c_id = conn->c_id;
-            if(tasks)
+            if(task.tasks)
             {
-                tasks[c_id].status = URL_STATUS_ERROR;
+                task.tasks[c_id].status = URL_STATUS_ERROR;
                 conn->over_cstate(conn);
                 conn->over(conn);
                 return ;
@@ -160,19 +158,13 @@ void cb_serv_data_handler(CONN *conn, BUFFER *packet,
 
     if(conn && chunk->buf && (req = (HTTP_REQUEST *)chunk->buf->data))
     {
-        if(conn == c_conn)
+        if(conn == task.conn)
         {
+            c_id = task.conn->c_id;
             if(chunk->buf->size == sizeof(HTTP_REQUEST))
             {
-                for(i = 0; i < ntask_global; i++)
-                {
-                    if(request[i].id == -1)
-                    {
-                        memcpy(&(request[i]), chunk->buf->data, sizeof(HTTP_REQUEST));
-                        global_ntask_wait++;
-                        break;
-                    }
-                }
+                memcpy(&(task.requests[c_id]), chunk->buf->data, sizeof(HTTP_REQUEST));
+                task.ntask_wait++;
             }
         }
         else
@@ -188,34 +180,34 @@ void cb_serv_data_handler(CONN *conn, BUFFER *packet,
                 }
             }
             c_id = conn->c_id;
-            req = &(requests[c_id]); 
+            req = &(task.requests[c_id]); 
             nhost = strlen(req->host) + 1;
             npath = strlen(req->path) + 1;
-            purlmeta = &(tasks[c_id]);
+            purlmeta = &(task.tasks[c_id]);
             purlmeta->hostoff = (p - buf);
             purlmeta->pathoff =  purlmeta->hostoff + nhost;
             purlmeta->htmloff = purlmeta->pathoff + npath;
             purlmeta->size = purlmeta->htmloff + chunk->buf->size;
             purlmeta->status = URL_STATUS_ERROR;
-            global_ntask_wait++;
+            task.ntask_over++;
             if((data = (char *)calloc(1, purlmeta.size)))
             {
                 p = data;
                 memcpy(p, buf, purlmeta->hostoff);
                 p += urlmeta.hostoff;
                 memcpy(p, req->host, nhost)
-                p += nhost;
+                    p += nhost;
                 memcpy(p, req->path, npath);
                 p += npath;
                 memcpy(p, chunk->buf->data, chunk->buf->size);
                 if((zdata = (char *)calloc(1, purlmeta->size)))
                 {
-                    nzdata = urlmeta.size;
-                    if(zcompress(p, urlmeta.size, zdata, &(nzdata)) == 0)
+                    nzdata = purlmeta->size;
+                    if(zcompress(p, purlmeta->size, zdata, &(nzdata)) == 0)
                     {
                         purlmeta->status = URL_STATUS_OVER;
                         purlmeta->zsize = nzdata;
-                        result[i] = zdata;
+                        task.results[i] = zdata;
                     }
                 }
                 free(data);
@@ -228,10 +220,52 @@ void cb_serv_data_handler(CONN *conn, BUFFER *packet,
 //daemon transaction handler 
 void cb_serv_transaction_handler(CONN *conn, int tid)
 {
-    if(conn && tid >= 0 )
+    char buf[HTTP_BUF_SIZE];
+    char *p = NULL;
+    int n = 0;
+
+    if(conn && tid >= 0 && tid < task.ntask_limit)
     {
-        
+        //daemon connection 
+        if(conn == task.conn)
+        {
+            if(task.results[tid])
+            {
+                p = buf;
+                n = sprintf(p, "PUT / HTTP/1.0\r\nContent-Length : %d\r\n\r\n", 
+                        sizeof(URLMETA) + task.tasks[tid].zsize); 
+                conn->push_chunk(conn, p, n);
+                conn->push_chunk(conn, &(task.tasks[tid]), sizeof(URLMETA));
+                conn->push_chunk(conn, task.results[tid], task.tasks[tid].zsize);
+                memset(&(task.requests[tid]), 0, sizeof(HTTP_REQUESTS));
+                task.requests[tid].id = -1;
+                memset(&(task.tasks[tid]), 0, sizeof(URLMETA));
+                task.tasks[tid] = -1;
+                free(task.results[tid]);
+                task.results[tid] = NULL;
+            }
+            if(task.requests[tid].id == -1)
+            {
+                n = sprintf(p, "TASK / HTTP/1.0\r\n\r\n");
+                conn->push_chunk(conn, p, n);
+            }
+        }
+        else
+        {
+            if(task.requests[tid].id != -1)
+            {
+                n = sprintf(p, "GET %s HTTP/1.0\r\nHOST: %s User-Agent:Mozilla\r\n\r\n",
+                        task.requests[tid].path, task.requests[tid].host);
+                conn->push_chunk(conn, p, n);
+            }
+            else
+            {
+                conn->over_cstate(conn);
+                conn->over(conn);
+            }
+        }
     }
+    return ;
 }
 
 void cb_serv_oob_handler(CONN *conn, BUFFER *oob)
@@ -393,10 +427,16 @@ int sbase_initialize(SBASE *sbase, char *conf)
 	daemon_logger = logger_init(iniparser_getstr(dict, "DAEMON:access_log"));
     //timeout
     if((p = iniparser_getstr(dict, "DAEMON:timeout")))
-        global_timeout_times = str2ll(p);
+        task.timeout = str2ll(p);
     //linktable files
-    ntask = iniparser_getint(dict, "DAEMON:ntask", 128);
-    return 0;
+    task.ntask_limit = iniparser_getint(dict, "DAEMON:ntask", 128);
+    if((task.requests = (HTTP_REQUEUST *)calloc(task.ntask_limit, sizeof(HTTP_REQUEST)))
+        && (task.tasks = (URLMETA *)calloc(task.ntask_limit, sizeof(URLMETA)))
+        && (task.results = (char **)calloc(task.ntask_limit, sizeof(char *))))
+    {
+        return 0;
+    }
+    return -1;
 }
 
 static void cb_stop(int sig){
