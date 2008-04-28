@@ -12,12 +12,40 @@
 #include "logger.h"
 #include "common.h"
 #include "timer.h"
+#define HTTP_CHUNK_MAX 1048576
 
 static SBASE *sbase = NULL;
 SERVICE *serv = NULL;
 static dictionary *dict = NULL;
 static LOGGER *daemon_logger = NULL;
 static long long global_timeout_times = 60000000;
+static char *daemon_ip = NULL;
+static int daemon_port = 3721;
+static CONN *c_conn = NULL;
+static int global_ntask = 0;
+static int global_ntask_total = 0;
+static int global_ntask_wait = 0;
+static int global_ntask_over = 0;
+static int global_ntask_working = 0;
+static HTTP_REQUEST *requests = NULL;
+static URLMETA *tasks = NULL;
+static char **results = NULL;
+
+//error handler 
+void cb_server_error_handler(CONN *conn)
+{
+    if(conn)
+    {
+        if(conn == c_conn)
+        {
+            c_conn = NULL;
+        }
+        else
+        {
+            
+        }
+    }
+}
 
 //daemon task handler 
 void cb_serv_task_handler(void *arg);
@@ -26,17 +54,21 @@ void cb_serv_heartbeat_handler(void *arg)
 {
     int  n = 0, tid = 0;
     long taskid = 0;
+    CONN *conn = NULL;
 
     if(serv && linktable)
     {
-        //DEBUG_LOGGER(daemon_logger, "start heartbeat");
-        //request
-        //task
-        while((taskid = linktable->get_urltask(linktable)) != -1)
+        if(c_conn == NULL && daemon_ip)
         {
-            serv->newtask(serv, (void *)&cb_serv_task_handler, (void *)taskid);
-            DEBUG_LOGGER(daemon_logger, "linktable->docno:%d doc_total:%d", 
-                    linktable->docno, linktable->doc_total);
+            if((c_conn = serv->newconn(serv, daemon_ip, daemon_port)))
+                c_conn->start_cstate(c_conn);
+        }
+        if(c_conn && requests)
+        {
+            for(i = 0; i < nrequest; i++)
+            {
+                if(requests[i].status != URL_STATUS_)
+            }
         }
     }
     return  ;
@@ -61,69 +93,56 @@ int cb_serv_packet_reader(CONN *conn, BUFFER *buffer)
 
 void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
 {
-    HTTP_REQUEST request;
-    HTTP_REQ http_req;
-    char header[HTTP_BUF_SIZE];
-    char buf[HTTP_BUF_SIZE];
-    char *p = NULL, *ps = NULL, *end = NULL;
-    int n = 0, m = 0;
+    HTTP_RESPONSE response;
+    char *p = NULL, *end = NULL;
+    int len = 0, sid = 0;
     
     if(conn)
     {
-        p = packet->data;
-        end = packet->end;
-        memset(&http_req, 0, sizeof(HTTP_REQ));
-        http_req.reqid = -1;
-        http_request_parser(p, end, &http_req)
-        if(http_req.reqid == HTTP_METHOD_GET)
+        memset(&response, 0, sizeof(HTTP_RESPONSE));
+        response.respid = -1;
+        p   = (char *)packet->data;
+        end = (char *)packet->end;
+        http_response_parse(p, end, &response);
+        if(conn == c_conn)
         {
-            p = buf;
-            m = sprintf(p, __html__body__, linktable->url_total, 
-                    linktable->urlno, linktable->urlok_total, 
-                    linktable->doc_total, linktable->docno,
-                    linktable->docok_total, linktable->size, 
-                    linktable->zsize, linktable->dnscount);
-            n = sprintf(header, "HTTP/1.0 200 OK \r\nContent-Type: text/html\r\n"
-                    "Content-Length: %d\r\n\r\n", m);
-            conn->push_chunk(conn, header, n);
-            conn->push_chunk(conn, buf, m);
-            conn->over(conn);
-            return ;
+            if(response.respid == RESP_OK && response.headers[HEAD_ENT_CONTENT_LENGTH])
+            {
+                len = atoi(response.headers[HEAD_ENT_CONTENT_LENGTH]);       
+                conn->receive_chunk(conn, len);
+                return ;
+            }
         }
-        if(http_req.reqid == HTTP_METHOD_TASK)
+        else
         {
-            if(linktable->get_request(linktable, &request) != -1) 
+            if(response.respid == RESP_OK)
             {
-                p = buf;
-                m = sprintf(p, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\n\r\n", 
-                        sizeof(HTTP_REQUEST));
-                conn->push_chunk(conn, buf, m);
-                conn->push_chunk(conn, &request, sizeof(HTTP_REQUEST));
+                if(response.headers[HEAD_ENT_CONTENT_TYPE]
+                    && strncasecmp(response.headers[HEAD_ENT_CONTENT_TYPE], "text", 4) == 0)
+                {
+                    if(response.headers[HEAD_ENT_CONTENT_LENGTH])
+                    {
+                        len = atoi(response.headers[HEAD_ENT_CONTENT_LENGTH]);       
+                        conn->cache->push(conn->cache, &response, sizeof(HTTP_RESPONSE));
+                        conn->recv_chunk(conn, len);
+                    }
+                    else
+                    {
+                        conn->cache->push(conn->cache, &response, sizeof(HTTP_RESPONSE));
+                        conn->recv_chunk(conn, HTTP_CHUNK_MAX);
+                    }
+                    return ;
+                }
             }
-            else
+            c_id = conn->c_id;
+            if(tasks)
             {
-                p = "HTTP/1.0 500 Internal Server Error\r\n\r\n";
-                conn->push_chunk(conn, p, strlen(p));
+                tasks[c_id].status = URL_STATUS_ERROR;
+                conn->over_cstate(conn);
+                conn->over(conn);
+                return ;
             }
-            return ;
         }
-        if(http_req.reqid == HTTP_METHOD_PUT)
-        {
-            if(http_req.headers[HEAD_ENT_CONTENT_LENGTH])
-            {
-                n = atoi(http_req.headers[HEAD_ENT_CONTENT_LENGTH]);
-                conn->cache->reset(conn->cache);
-                conn->cache->push(conn->cache, &http_req, sizeof(HTTP_REQ));
-                conn->recv_chunk(conn, n);
-            }
-            else
-            {
-                p = "HTTP/1.0 400 Bad Request\r\n\r\n";
-                conn->push_chunk(conn, p, strlen(p));
-            }
-            return ;
-        }
-        conn->over(conn);
     }
     return ;
 }
@@ -131,14 +150,78 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
 void cb_serv_data_handler(CONN *conn, BUFFER *packet, 
         CHUNK *chunk, BUFFER *cache)
 {
-    URLMETA *urlmeta = NULL;
-    char *zdata = NULL;
-    if(conn && chunk->buf && chunk->buf->data)
+    URLMETA *purlmeta = NULL;
+    HTTP_RESPONSE *resp = NULL;
+    HTTP_REQUEST *req = NULL;
+    char buf[HTTP_BUF_SIZE];
+    char *data = NULL, *zdata = NULL;
+    int i = 0, c_id = 0, n = 0, nhost = 0, npath = 0;
+    uLong nzdata = 0;
+
+    if(conn && chunk->buf && (req = (HTTP_REQUEST *)chunk->buf->data))
     {
-        urlmeta = (URLMETA *)chunk->buf->data;                
-        zdata = (char *)chunk->buf->data + sizeof(URLMETA);
-        linktable->add_zcontent(linktable, urlmeta, zdata, urlmeta->zsize);
-        linktable->update_request(linktable, urlmeta->id, URL_STATUS_OVER);
+        if(conn == c_conn)
+        {
+            if(chunk->buf->size == sizeof(HTTP_REQUEST))
+            {
+                for(i = 0; i < ntask_global; i++)
+                {
+                    if(request[i].id == -1)
+                    {
+                        memcpy(&(request[i]), chunk->buf->data, sizeof(HTTP_REQUEST));
+                        global_ntask_wait++;
+                        break;
+                    }
+                }
+            }
+        }
+        else
+        {
+            resp = (HTTP_RESPONSE *)cache->data;
+            memset(&urlmeta, 0, sizeof(urlmeta));
+            p = buf;
+            for(i = 0; i < HTTP_HEADER_NUM; i++)
+            {
+                if(resp->headers[i])
+                {
+                    p += sprintf(p, "[%d:%s:%s]", i, http_headers[i].e, resp->headers[i]);                   
+                }
+            }
+            c_id = conn->c_id;
+            req = &(requests[c_id]); 
+            nhost = strlen(req->host) + 1;
+            npath = strlen(req->path) + 1;
+            purlmeta = &(tasks[c_id]);
+            purlmeta->hostoff = (p - buf);
+            purlmeta->pathoff =  purlmeta->hostoff + nhost;
+            purlmeta->htmloff = purlmeta->pathoff + npath;
+            purlmeta->size = purlmeta->htmloff + chunk->buf->size;
+            purlmeta->status = URL_STATUS_ERROR;
+            global_ntask_wait++;
+            if((data = (char *)calloc(1, purlmeta.size)))
+            {
+                p = data;
+                memcpy(p, buf, purlmeta->hostoff);
+                p += urlmeta.hostoff;
+                memcpy(p, req->host, nhost)
+                p += nhost;
+                memcpy(p, req->path, npath);
+                p += npath;
+                memcpy(p, chunk->buf->data, chunk->buf->size);
+                if((zdata = (char *)calloc(1, purlmeta->size)))
+                {
+                    nzdata = urlmeta.size;
+                    if(zcompress(p, urlmeta.size, zdata, &(nzdata)) == 0)
+                    {
+                        purlmeta->status = URL_STATUS_OVER;
+                        purlmeta->zsize = nzdata;
+                        result[i] = zdata;
+                    }
+                }
+                free(data);
+                data = NULL;
+            }
+        }
     }
 }
 
