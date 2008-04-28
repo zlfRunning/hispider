@@ -99,7 +99,7 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
         end = packet->end;
         memset(&http_req, 0, sizeof(HTTP_REQ));
         http_req.reqid = -1;
-        http_request_parser(p, end, &http_req)
+        http_request_parse(p, end, &http_req);
         if(http_req.reqid == HTTP_GET)
         {
             p = buf;
@@ -170,10 +170,6 @@ void cb_serv_data_handler(CONN *conn, BUFFER *packet,
 //daemon transaction handler 
 void cb_serv_transaction_handler(CONN *conn, int tid)
 {
-    if(conn && tid >= 0 )
-    {
-        
-    }
 }
 
 void cb_serv_oob_handler(CONN *conn, BUFFER *oob)
@@ -205,43 +201,6 @@ int sbase_initialize(SBASE *sbase, char *conf)
 	sbase->set_log(sbase, logfile);
 	if((logfile = iniparser_getstr(dict, "SBASE:evlogfile")))
 	    sbase->set_evlog(sbase, logfile);
-	/* TRANSPORT */
-	fprintf(stdout, "Parsing TRANSPORT...\n");
-	if((transport = service_init()) == NULL)
-	{
-		fprintf(stderr, "Initialize transport failed, %s", strerror(errno));
-		_exit(-1);
-	}
-    /* service type */
-    transport->service_type = iniparser_getint(dict, "TRANSPORT:service_type", 1);
-	/* INET protocol family */
-	n = iniparser_getint(dict, "TRANSPORT:inet_family", 0);
-	switch(n)
-	{
-		case 0:
-			transport->family = AF_INET;
-			break;
-		case 1:
-			transport->family = AF_INET6;
-			break;
-		default:
-			fprintf(stderr, "Illegal INET family :%d \n", n);
-			_exit(-1);
-	}
-	/* socket type */
-	n = iniparser_getint(dict, "TRANSPORT:socket_type", 0);
-	switch(n)
-	{
-		case 0:
-			transport->socket_type = SOCK_STREAM;
-			break;
-		case 1:
-			transport->socket_type = SOCK_DGRAM;
-			break;
-		default:
-			fprintf(stderr, "Illegal socket type :%d \n", n);
-			_exit(-1);
-	}
     /* DAEMON */
     if((serv = service_init()) == NULL)
 	{
@@ -289,7 +248,6 @@ int sbase_initialize(SBASE *sbase, char *conf)
 	serv->sleep_usec = iniparser_getint(dict, "DAEMON:sleep_usec", 100);
 	serv->heartbeat_interval = iniparser_getint(dict, "DAEMON:heartbeat_interval", 1000000);
 	logfile = iniparser_getstr(dict, "DAEMON:logfile");
-	if(logfile == NULL) logfile = TRANSPORT_LOG;
 	serv->logfile = logfile;
 	logfile = iniparser_getstr(dict, "DAEMON:evlogfile");
 	serv->evlogfile = logfile;
@@ -327,11 +285,6 @@ int sbase_initialize(SBASE *sbase, char *conf)
 		fprintf(stderr, "Initiailize service[%s] failed, %s\n", serv->name, strerror(errno));
 		return ret;
 	}
-	if((ret = sbase->add_service(sbase, transport)) != 0)
-	{
-		fprintf(stderr, "Initiailize service[%s] failed, %s\n", transport->name, strerror(errno));
-		return ret;
-	}
     //logger 
 	daemon_logger = logger_init(iniparser_getstr(dict, "DAEMON:access_log"));
     //timeout
@@ -345,7 +298,6 @@ int sbase_initialize(SBASE *sbase, char *conf)
     logfile = iniparser_getstr(dict, "DAEMON:logfile");
     hostname = iniparser_getstr(dict, "DAEMON:hostname");
     path = iniparser_getstr(dict, "DAEMON:path");
-    nrequest = iniparser_getint(dict, "DAEMON:nrequest", 128);
     ntask = iniparser_getint(dict, "DAEMON:ntask", 128);
     //linktable setting 
     if((linktable = linktable_init()) == NULL)

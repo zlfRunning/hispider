@@ -39,6 +39,14 @@ static TASK task = {0};
 //error handler 
 void cb_server_error_handler(CONN *conn)
 {
+    HTTP_REQUEST *req = NULL;
+    HTTP_RESPONSE *resp = NULL;
+    URLMETA *purlmeta = NULL;
+    char buf[HTTP_BUF_SIZE];
+    char *data = NULL, *zdata = NULL, *p = NULL;
+    int i = 0, n = 0, nhost = 0, npath = 0, c_id = 0;
+    unsigned long nzdata = 0;
+
     if(conn)
     {
         if(conn == task.conn)
@@ -47,9 +55,56 @@ void cb_server_error_handler(CONN *conn)
         }
         else
         {
-            
+            c_id = conn->c_id;
+            purlmeta = &(task.tasks[c_id]);
+            memset(purlmeta, 0, sizeof(URLMETA));
+            purlmeta->status = URL_STATUS_ERROR;
+            if(conn->cache->data)
+            {
+                resp = (HTTP_RESPONSE *)conn->cache->data;
+                p = buf;
+                for(i = 0; i < HTTP_HEADER_NUM; i++)
+                {
+                    if(resp->headers[i])
+                    {
+                        p += sprintf(p, "[%d:%s:%s]", i, http_headers[i].e, resp->headers[i]);                   
+                    }
+                }
+                req = &(task.requests[c_id]); 
+                nhost = strlen(req->host) + 1;
+                npath = strlen(req->path) + 1;
+                purlmeta->hostoff = (p - buf);
+                purlmeta->pathoff =  purlmeta->hostoff + nhost;
+                purlmeta->htmloff = purlmeta->pathoff + npath;
+                purlmeta->size = purlmeta->htmloff + conn->chunk->buf->size;
+                if((data = (char *)calloc(1, purlmeta->size)))
+                {
+                    p = data;
+                    memcpy(p, buf, purlmeta->hostoff);
+                    p += purlmeta->hostoff;
+                    memcpy(p, req->host, nhost);
+                    p += nhost;
+                    memcpy(p, req->path, npath);
+                    p += npath;
+                    memcpy(p, conn->chunk->buf->data, conn->chunk->buf->size);
+                    if((zdata = (char *)calloc(1, purlmeta->size)))
+                    {
+                        nzdata = purlmeta->size;
+                        if(zcompress(p, purlmeta->size, zdata, &(nzdata)) == 0)
+                        {
+                            purlmeta->status = URL_STATUS_OVER;
+                            purlmeta->zsize = nzdata;
+                            task.results[i] = zdata;
+                        }
+                    }
+                    free(data);
+                    data = NULL;
+                }
+            }
+            task.ntask_over++;
         }
     }
+    return ;
 }
 
 //daemon task handler 
@@ -57,8 +112,7 @@ void cb_serv_task_handler(void *arg);
 
 void cb_serv_heartbeat_handler(void *arg)
 {
-    int  n = 0, tid = 0;
-    long taskid = 0;
+    int  n = 0, tid = 0, i = 0;
     CONN *conn = NULL;
 
     if(serv)
@@ -75,7 +129,9 @@ void cb_serv_heartbeat_handler(void *arg)
         //handle over task
         if(task.conn && task.ntask_over > 0)
         {
-            
+           for(i = 0; i < task.ntask_limit; i++)
+           {
+           }
         }
     }
     return  ;
@@ -117,7 +173,7 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
             if(response.respid == RESP_OK)
             {
                 if(response.headers[HEAD_ENT_CONTENT_TYPE]
-                    && strncasecmp(response.headers[HEAD_ENT_CONTENT_TYPE], "text", 4) == 0)
+                        && strncasecmp(response.headers[HEAD_ENT_CONTENT_TYPE], "text", 4) == 0)
                 {
                     if(response.headers[HEAD_ENT_CONTENT_LENGTH])
                     {
@@ -139,6 +195,7 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
                 task.tasks[c_id].status = URL_STATUS_ERROR;
                 conn->over_cstate(conn);
                 conn->over(conn);
+                task.ntask_over++;
                 return ;
             }
         }
@@ -170,6 +227,10 @@ void cb_serv_data_handler(CONN *conn, BUFFER *packet,
         }
         else
         {
+            c_id = conn->c_id;
+            purlmeta = &(task.tasks[c_id]);
+            memset(purlmeta, 0, sizeof(URLMETA));
+            purlmeta->status = URL_STATUS_ERROR;
             resp = (HTTP_RESPONSE *)cache->data;
             p = buf;
             for(i = 0; i < HTTP_HEADER_NUM; i++)
@@ -179,18 +240,13 @@ void cb_serv_data_handler(CONN *conn, BUFFER *packet,
                     p += sprintf(p, "[%d:%s:%s]", i, http_headers[i].e, resp->headers[i]);                   
                 }
             }
-            c_id = conn->c_id;
             req = &(task.requests[c_id]); 
             nhost = strlen(req->host) + 1;
             npath = strlen(req->path) + 1;
-            purlmeta = &(task.tasks[c_id]);
-            memset(purlmeta, 0, sizeof(URLMETA));
             purlmeta->hostoff = (p - buf);
             purlmeta->pathoff =  purlmeta->hostoff + nhost;
             purlmeta->htmloff = purlmeta->pathoff + npath;
             purlmeta->size = purlmeta->htmloff + chunk->buf->size;
-            purlmeta->status = URL_STATUS_ERROR;
-            task.ntask_over++;
             if((data = (char *)calloc(1, purlmeta->size)))
             {
                 p = data;
@@ -214,6 +270,10 @@ void cb_serv_data_handler(CONN *conn, BUFFER *packet,
                 free(data);
                 data = NULL;
             }
+            //complete data and over connection
+            task.ntask_over++;
+            conn->over_cstate(conn);
+            conn->over(conn);
         }
     }
 }
@@ -234,7 +294,7 @@ void cb_serv_transaction_handler(CONN *conn, int tid)
             {
                 p = buf;
                 n = sprintf(p, "PUT / HTTP/1.0\r\nContent-Length : %d\r\n\r\n", 
-                        sizeof(URLMETA) + task.tasks[tid].zsize); 
+                        (sizeof(URLMETA) + task.tasks[tid].zsize)); 
                 conn->push_chunk(conn, p, n);
                 conn->push_chunk(conn, &(task.tasks[tid]), sizeof(URLMETA));
                 conn->push_chunk(conn, task.results[tid], task.tasks[tid].zsize);

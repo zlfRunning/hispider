@@ -2,13 +2,14 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT(Hispider, 0.0.2, [SounOS@gmail.com])
+AC_INIT(hispider, 0.0.2, [SounOS@gmail.com])
 AM_INIT_AUTOMAKE
 AC_CONFIG_SRCDIR([src/link.c])
 AC_CONFIG_HEADER([config.h])
 
 # Checks for programs.
 AC_PROG_CC
+AM_PROG_CC_C_O
 AC_PROG_INSTALL
 
 # Checks for libraries.

@@ -9,3 +9,5 @@ hispiderd_LDFLAGS = -lsbase -lz -lm
 
 hispider_SOURCES = hispider.c iniparser.c iniparser.h link.h link.c \
 http.h http.c basedef.h utils/buffer.c utils/buffer.h utils/zstream.c utils/zstream.h
+hispider_CPPFLAGS = -I utils -D_FILE_OFFSET_BITS=64
+hispider_LDFLAGS = -lsbase -lz -lm
