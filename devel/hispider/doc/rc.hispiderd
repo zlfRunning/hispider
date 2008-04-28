@@ -1,0 +1,59 @@
+#!/bin/sh
+#
+# HISPIDERD:
+#
+# chkconfig:	2345 90 63
+# description:  HISPIDERD
+#
+#
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+#[ -r /etc/sysconfig/hispiderd ] && . /etc/sysconfig/hispiderd
+HISPIDERDARGS=" -c /usr/local/etc/hispiderd.ini > /tmp/hispiderd.log 2>&1 "
+
+start() 
+{
+        echo -n $"Starting hispiderd: "
+        daemon /usr/local/bin/hispiderd $HISPIDERDARGS
+
+	touch /var/lock/subsys/hispiderd
+        echo
+}
+
+stop() 
+{
+        echo -n $"Shutting down hispiderd: "
+	killproc hispiderd
+
+	rm -f  /var/lock/subsys/hispiderd
+        echo
+}
+
+[ -f /usr/local/bin/hispiderd ] || exit 0
+
+# See how we were called.
+case "$1" in
+  start)
+	start
+        ;;
+  stop)
+	stop
+        ;;
+  restart|reload)
+	stop
+	start
+	;;
+  condrestart)
+	[ -e /var/lock/subsys/hispiderd ] && (stop; start)
+	;;
+  status)
+  	status hidd
+	;;
+  *)
+        echo $"Usage: $0 {start|stop|restart|reload|condrestart}"
+        exit 1
+esac
+
+exit 0
