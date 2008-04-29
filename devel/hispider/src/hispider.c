@@ -281,7 +281,7 @@ void cb_trans_data_handler(CONN *conn, BUFFER *packet,
     char buf[HTTP_BUF_SIZE];
     char *data = NULL, *zdata = NULL, *p = NULL;
     int i = 0, c_id = 0, n = 0, nhost = 0, npath = 0;
-    unsigned long nzdata = 0;
+    unsigned long nzdata = 0, ndata = 0;
 
     if(conn && chunk->buf)
     {
@@ -302,7 +302,6 @@ void cb_trans_data_handler(CONN *conn, BUFFER *packet,
         }
         else
         {
-            DEBUG_LOGGER(daemon_logger, "--start data handler---");
             c_id = conn->c_id;
             purlmeta = &(task.tasks[c_id]);
             req = &(task.requests[c_id]); 
@@ -333,11 +332,19 @@ void cb_trans_data_handler(CONN *conn, BUFFER *packet,
                 memcpy(p, req->path, npath);
                 p += npath;
                 memcpy(p, chunk->buf->data, chunk->buf->size);
-                if((zdata = (char *)calloc(1, purlmeta->size)))
+                p += chunk->buf->size;
+                ndata = purlmeta->size;
+                DEBUG_LOGGER(daemon_logger, 
+                "nhost:%d npath:%d hostoff:%d htmloff:%d off:%d dsize:%d ndata:%d", 
+                nhost, npath, purlmeta->hostoff, purlmeta->htmloff, 
+                (p - data), chunk->buf->size, ndata);
+                if((zdata = (char *)calloc(1, ndata)))
                 {
                     nzdata = purlmeta->size;
-                    if(zcompress(p, purlmeta->size, zdata, &(nzdata)) == 0)
+                    if(zcompress(data, ndata, zdata, &(nzdata)) == 0)
                     {
+                        DEBUG_LOGGER(daemon_logger, "compress %d  to %d body:%d ",
+                                ndata, nzdata, chunk->buf->size);
                         req->status = LINK_STATUS_OVER;
                         purlmeta->zsize = nzdata;
                         task.results[c_id] = zdata;
@@ -350,8 +357,6 @@ void cb_trans_data_handler(CONN *conn, BUFFER *packet,
             task.ntask_over++;
             conn->over_cstate(conn);
             conn->over(conn);
-            DEBUG_LOGGER(daemon_logger, "--over data handler zsize:%d size:%d---",
-                    purlmeta->zsize, purlmeta->size);
         }
     }
     return ;
@@ -368,7 +373,6 @@ void cb_trans_transaction_handler(CONN *conn, int tid)
     {
         if(conn == task.conns[tid])
         {
-            DEBUG_LOGGER(daemon_logger, "ready for transaction on %s:%d via %d", conn->ip, conn->port, conn->fd);
             if(task.requests[tid].id == -2)
             {
                 p = buf;
@@ -379,7 +383,6 @@ void cb_trans_transaction_handler(CONN *conn, int tid)
             else if(task.tasks[tid].status == LINK_STATUS_OVER 
                     || task.tasks[tid].status == LINK_STATUS_ERROR)
             {
-                DEBUG_LOGGER(daemon_logger, "ready for transaction on %s:%d via %d", conn->ip, conn->port, conn->fd);
                 p = buf;
                 n = sprintf(p, "PUT / HTTP/1.0\r\nContent-Length: %d\r\n\r\n", 
                         (sizeof(URLMETA) + task.tasks[tid].zsize)); 
@@ -399,16 +402,17 @@ void cb_trans_transaction_handler(CONN *conn, int tid)
         {
             if(task.requests[tid].id != -1 && task.requests[tid].status == LINK_STATUS_WAIT)
             {
-            DEBUG_LOGGER(daemon_logger, "ready for transaction on %s:%d via %d", conn->ip, conn->port, conn->fd);
-                p = buf;
                 task.requests[tid].status = LINK_STATUS_WORKING;
-                n = sprintf(p, "GET %s HTTP/1.0\r\nHOST: %s User-Agent:Mozilla\r\n\r\n",
+                p = buf;
+                n = sprintf(p, "GET %s HTTP/1.0\r\nHOST: %s\r\nUser-Agent: Mozilla\r\n\r\n",
                         task.requests[tid].path, task.requests[tid].host);
-                conn->push_chunk(conn, p, n);
+                conn->push_chunk(conn, buf, n);
+                //DEBUG_LOGGER(daemon_logger, "ready for visit:%s on %s:%d via %d", 
+                  //      buf, conn->ip, conn->port, conn->fd);
+
             }
             else
             {
-            DEBUG_LOGGER(daemon_logger, "ready for transaction on %s:%d via %d", conn->ip, conn->port, conn->fd);
                 conn->over_cstate(conn);
                 conn->over(conn);
             }
