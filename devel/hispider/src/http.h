@@ -357,7 +357,7 @@ static HTTP_ELEMENT http_methods[] =
 #define HTTP_CONNECT	7
 	{7, "CONNECT", 7, NULL},
 #define HTTP_TASK   8
-    {8, "TASK", 8, NULL}
+    {8, "TASK", 4, NULL}
 };
 
 /* file ext support list */

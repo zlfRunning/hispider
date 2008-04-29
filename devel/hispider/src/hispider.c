@@ -16,14 +16,13 @@
 #define SBASE_LOG "/tmp/sbase.log"
 
 static SBASE *sbase = NULL;
-SERVICE *serv = NULL;
+SERVICE *transport = NULL;
 static dictionary *dict = NULL;
 static LOGGER *daemon_logger = NULL;
-static long long global_timeout_times = 60000000;
-static char *daemon_ip = NULL;
-static int daemon_port = 3721;
 typedef struct _TASK
 {
+    char *daemon_ip;
+    int daemon_port;
     CONN *conn;
     long long timeout;
     int ntask_limit;
@@ -57,8 +56,9 @@ void cb_server_error_handler(CONN *conn)
         {
             c_id = conn->c_id;
             purlmeta = &(task.tasks[c_id]);
+            req = &(task.requests[c_id]); 
             memset(purlmeta, 0, sizeof(URLMETA));
-            purlmeta->status = URL_STATUS_ERROR;
+            req->status = URL_STATUS_ERROR;
             if(conn->cache->data)
             {
                 resp = (HTTP_RESPONSE *)conn->cache->data;
@@ -70,7 +70,6 @@ void cb_server_error_handler(CONN *conn)
                         p += sprintf(p, "[%d:%s:%s]", i, http_headers[i].e, resp->headers[i]);                   
                     }
                 }
-                req = &(task.requests[c_id]); 
                 nhost = strlen(req->host) + 1;
                 npath = strlen(req->path) + 1;
                 purlmeta->hostoff = (p - buf);
@@ -92,7 +91,7 @@ void cb_server_error_handler(CONN *conn)
                         nzdata = purlmeta->size;
                         if(zcompress(p, purlmeta->size, zdata, &(nzdata)) == 0)
                         {
-                            purlmeta->status = URL_STATUS_OVER;
+                            req->status = URL_STATUS_OVER;
                             purlmeta->zsize = nzdata;
                             task.results[i] = zdata;
                         }
@@ -108,29 +107,71 @@ void cb_server_error_handler(CONN *conn)
 }
 
 //daemon task handler 
-void cb_serv_task_handler(void *arg);
+void cb_trans_task_handler(void *arg);
 
-void cb_serv_heartbeat_handler(void *arg)
+void cb_trans_heartbeat_handler(void *arg)
 {
     int  n = 0, tid = 0, i = 0;
     CONN *conn = NULL;
 
-    if(serv)
+    if(transport)
     {
-        if(task.conn == NULL && daemon_ip)
+        if(task.conn == NULL && task.daemon_ip)
         {
-            if((task.conn = serv->newconn(serv, daemon_ip, daemon_port)))
+            if((task.conn = transport->newconn(transport, task.daemon_ip, task.daemon_port)))
                 task.conn->start_cstate(task.conn);
         }
         //get new request
         if(task.conn && task.ntask_total < task.ntask_limit)
         {
+            for(i = 0; i < task.ntask_limit; i++)
+            {
+                if(task.requests[i].id == -2) break;
+                if(task.requests[i].id == -1) 
+                {
+                    task.requests[i].id = -2;
+                    transport->newtransaction(transport, task.conn, i);
+                    break;
+                }
+            }
+        }
+        //new task 
+        if(task.ntask_wait > 0)
+        {
+            for(i = 0; i < task.ntask_limit; i++)
+            {
+                if(task.requests[i].id >= 0 
+                        && task.requests[i].status == URL_STATUS_INIT
+                        && strlen(task.requests[i].ip) > 0)
+
+                {
+                    if((conn = transport->newconn(transport, task.requests[i].ip, task.requests[i].port)))
+                    {
+                        transport->newtransaction(transport, conn, i);
+                        conn->start_cstate(conn);
+                        conn->set_timeout(conn, task.timeout);
+                        task.ntask_wait--;
+                        task.requests[i].status = URL_STATUS_WAIT;
+                        break;
+                    }
+                }
+            }
         }
         //handle over task
         if(task.conn && task.ntask_over > 0)
         {
            for(i = 0; i < task.ntask_limit; i++)
            {
+               if(task.requests[i].status == URL_STATUS_ERROR 
+                       || task.requests[i].status == URL_STATUS_OVER)
+               {
+                   task.tasks[i].id     = task.requests[i].id;
+                   task.tasks[i].status = task.requests[i].status;
+                   memset(&(task.requests[i]), 0, sizeof(HTTP_REQUEST));
+                   task.requests[i].id = -1;
+                   transport->newtransaction(transport, task.conn, i);
+                   break;
+               }
            }
         }
     }
@@ -138,15 +179,15 @@ void cb_serv_heartbeat_handler(void *arg)
 }
 
 //daemon task handler 
-void cb_serv_task_handler(void *arg)
+void cb_trans_task_handler(void *arg)
 {
 }
 
-int cb_serv_packet_reader(CONN *conn, BUFFER *buffer)
+int cb_trans_packet_reader(CONN *conn, BUFFER *buffer)
 {
 }
 
-void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
+void cb_trans_packet_handler(CONN *conn, BUFFER *packet)
 {
     HTTP_RESPONSE response;
     char *p = NULL, *end = NULL;
@@ -190,20 +231,17 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
                 }
             }
             c_id = conn->c_id;
-            if(task.tasks)
-            {
-                task.tasks[c_id].status = URL_STATUS_ERROR;
-                conn->over_cstate(conn);
-                conn->over(conn);
-                task.ntask_over++;
-                return ;
-            }
+            task.requests[c_id].status = URL_STATUS_ERROR;
+            conn->over_cstate(conn);
+            conn->over(conn);
+            task.ntask_over++;
+            return ;
         }
     }
     return ;
 }
 
-void cb_serv_data_handler(CONN *conn, BUFFER *packet, 
+void cb_trans_data_handler(CONN *conn, BUFFER *packet, 
         CHUNK *chunk, BUFFER *cache)
 {
     URLMETA *purlmeta = NULL;
@@ -229,8 +267,9 @@ void cb_serv_data_handler(CONN *conn, BUFFER *packet,
         {
             c_id = conn->c_id;
             purlmeta = &(task.tasks[c_id]);
+            req = &(task.requests[c_id]); 
             memset(purlmeta, 0, sizeof(URLMETA));
-            purlmeta->status = URL_STATUS_ERROR;
+            req->status = URL_STATUS_ERROR;
             resp = (HTTP_RESPONSE *)cache->data;
             p = buf;
             for(i = 0; i < HTTP_HEADER_NUM; i++)
@@ -240,7 +279,6 @@ void cb_serv_data_handler(CONN *conn, BUFFER *packet,
                     p += sprintf(p, "[%d:%s:%s]", i, http_headers[i].e, resp->headers[i]);                   
                 }
             }
-            req = &(task.requests[c_id]); 
             nhost = strlen(req->host) + 1;
             npath = strlen(req->path) + 1;
             purlmeta->hostoff = (p - buf);
@@ -262,7 +300,7 @@ void cb_serv_data_handler(CONN *conn, BUFFER *packet,
                     nzdata = purlmeta->size;
                     if(zcompress(p, purlmeta->size, zdata, &(nzdata)) == 0)
                     {
-                        purlmeta->status = URL_STATUS_OVER;
+                        req->status = URL_STATUS_OVER;
                         purlmeta->zsize = nzdata;
                         task.results[i] = zdata;
                     }
@@ -279,7 +317,7 @@ void cb_serv_data_handler(CONN *conn, BUFFER *packet,
 }
 
 //daemon transaction handler 
-void cb_serv_transaction_handler(CONN *conn, int tid)
+void cb_trans_transaction_handler(CONN *conn, int tid)
 {
     char buf[HTTP_BUF_SIZE];
     char *p = NULL;
@@ -290,31 +328,36 @@ void cb_serv_transaction_handler(CONN *conn, int tid)
         //daemon connection 
         if(conn == task.conn)
         {
-            if(task.results[tid])
+            if(task.requests[tid].id == -2)
+            {
+                p = buf;
+                n = sprintf(p, "TASK / HTTP/1.0\r\n\r\n");
+                conn->push_chunk(conn, p, n);
+                return ;
+            }
+            if(task.tasks[tid].status == URL_STATUS_OVER 
+                    || task.tasks[tid].status == URL_STATUS_ERROR)
             {
                 p = buf;
                 n = sprintf(p, "PUT / HTTP/1.0\r\nContent-Length : %d\r\n\r\n", 
                         (sizeof(URLMETA) + task.tasks[tid].zsize)); 
                 conn->push_chunk(conn, p, n);
                 conn->push_chunk(conn, &(task.tasks[tid]), sizeof(URLMETA));
-                conn->push_chunk(conn, task.results[tid], task.tasks[tid].zsize);
-                memset(&(task.requests[tid]), 0, sizeof(HTTP_REQUEST));
-                task.requests[tid].id = -1;
+                if(task.results[tid])
+                {
+                    conn->push_chunk(conn, task.results[tid], task.tasks[tid].zsize);
+                    free(task.results[tid]);
+                    task.results[tid] = NULL;
+                }
                 memset(&(task.tasks[tid]), 0, sizeof(URLMETA));
                 task.tasks[tid].id = -1;
-                free(task.results[tid]);
-                task.results[tid] = NULL;
-            }
-            if(task.requests[tid].id == -1)
-            {
-                n = sprintf(p, "TASK / HTTP/1.0\r\n\r\n");
-                conn->push_chunk(conn, p, n);
             }
         }
         else
         {
-            if(task.requests[tid].id != -1)
+            if(task.requests[tid].id != -1 && task.requests[tid].status == URL_STATUS_WAIT)
             {
+                task.requests[tid].status = URL_STATUS_WORKING;
                 n = sprintf(p, "GET %s HTTP/1.0\r\nHOST: %s User-Agent:Mozilla\r\n\r\n",
                         task.requests[tid].path, task.requests[tid].host);
                 conn->push_chunk(conn, p, n);
@@ -329,7 +372,7 @@ void cb_serv_transaction_handler(CONN *conn, int tid)
     return ;
 }
 
-void cb_serv_oob_handler(CONN *conn, BUFFER *oob)
+void cb_trans_oob_handler(CONN *conn, BUFFER *oob)
 {
 }
 
@@ -357,60 +400,60 @@ int sbase_initialize(SBASE *sbase, char *conf)
 	sbase->set_log(sbase, logfile);
 	if((logfile = iniparser_getstr(dict, "SBASE:evlogfile")))
 	    sbase->set_evlog(sbase, logfile);
-    /* DAEMON */
-    if((serv = service_init()) == NULL)
+    /* TRANSPORT */
+    if((transport = service_init()) == NULL)
 	{
 		fprintf(stderr, "Initialize serv failed, %s", strerror(errno));
 		_exit(-1);
 	}
     /* service type */
-	serv->service_type = iniparser_getint(dict, "DAEMON:service_type", 0);
+	transport->service_type = iniparser_getint(dict, "TRANSPORT:service_type", 0);
 	/* INET protocol family */
-	n = iniparser_getint(dict, "DAEMON:inet_family", 0);
+	n = iniparser_getint(dict, "TRANSPORT:inet_family", 0);
 	/* INET protocol family */
-	n = iniparser_getint(dict, "DAEMON:inet_family", 0);
+	n = iniparser_getint(dict, "TRANSPORT:inet_family", 0);
 	switch(n)
 	{
 		case 0:
-			serv->family = AF_INET;
+			transport->family = AF_INET;
 			break;
 		case 1:
-			serv->family = AF_INET6;
+			transport->family = AF_INET6;
 			break;
 		default:
 			fprintf(stderr, "Illegal INET family :%d \n", n);
 			_exit(-1);
 	}
 	/* socket type */
-	n = iniparser_getint(dict, "DAEMON:socket_type", 0);
+	n = iniparser_getint(dict, "TRANSPORT:socket_type", 0);
 	switch(n)
 	{
 		case 0:
-			serv->socket_type = SOCK_STREAM;
+			transport->socket_type = SOCK_STREAM;
 			break;
 		case 1:
-			serv->socket_type = SOCK_DGRAM;
+			transport->socket_type = SOCK_DGRAM;
 			break;
 		default:
 			fprintf(stderr, "Illegal socket type :%d \n", n);
 			_exit(-1);
 	}
 	/* serv name and ip and port */
-	serv->name = iniparser_getstr(dict, "DAEMON:service_name");
-	serv->ip = iniparser_getstr(dict, "DAEMON:service_ip");
-	if(serv->ip && serv->ip[0] == 0 ) serv->ip = NULL;
-	serv->port = iniparser_getint(dict, "DAEMON:service_port", 80);
-	serv->max_procthreads = iniparser_getint(dict, "DAEMON:max_procthreads", 1);
-	serv->sleep_usec = iniparser_getint(dict, "DAEMON:sleep_usec", 100);
-	serv->heartbeat_interval = iniparser_getint(dict, "DAEMON:heartbeat_interval", 1000000);
-	logfile = iniparser_getstr(dict, "DAEMON:logfile");
-	serv->logfile = logfile;
-	logfile = iniparser_getstr(dict, "DAEMON:evlogfile");
-	serv->evlogfile = logfile;
-	serv->max_connections = iniparser_getint(dict, "DAEMON:max_connections", MAX_CONNECTIONS);
-	serv->packet_type = PACKET_DELIMITER;
-	serv->packet_delimiter = iniparser_getstr(dict, "DAEMON:packet_delimiter");
-	p = s = serv->packet_delimiter;
+	transport->name = iniparser_getstr(dict, "TRANSPORT:service_name");
+	transport->ip = iniparser_getstr(dict, "TRANSPORT:service_ip");
+	if(transport->ip && transport->ip[0] == 0 ) transport->ip = NULL;
+	transport->port = iniparser_getint(dict, "TRANSPORT:service_port", 80);
+	transport->max_procthreads = iniparser_getint(dict, "TRANSPORT:max_procthreads", 1);
+	transport->sleep_usec = iniparser_getint(dict, "TRANSPORT:sleep_usec", 100);
+	transport->heartbeat_interval = iniparser_getint(dict, "TRANSPORT:heartbeat_interval", 1000000);
+	logfile = iniparser_getstr(dict, "TRANSPORT:logfile");
+	transport->logfile = logfile;
+	logfile = iniparser_getstr(dict, "TRANSPORT:evlogfile");
+	transport->evlogfile = logfile;
+	transport->max_connections = iniparser_getint(dict, "TRANSPORT:max_connections", MAX_CONNECTIONS);
+	transport->packet_type = PACKET_DELIMITER;
+	transport->packet_delimiter = iniparser_getstr(dict, "TRANSPORT:packet_delimiter");
+	p = s = transport->packet_delimiter;
 	while(*p != 0 )
 	{
 		if(*p == '\\' && *(p+1) == 'n')
@@ -427,27 +470,31 @@ int sbase_initialize(SBASE *sbase, char *conf)
 			*s++ = *p++;
 	}
 	*s++ = 0;
-	serv->packet_delimiter_length = strlen(serv->packet_delimiter);
-	serv->buffer_size = iniparser_getint(dict, "DAEMON:buffer_size", SB_BUF_SIZE);
-	serv->cb_packet_reader = &cb_serv_packet_reader;
-	serv->cb_packet_handler = &cb_serv_packet_handler;
-	serv->cb_data_handler = &cb_serv_data_handler;
-	serv->cb_transaction_handler = &cb_serv_transaction_handler;
-	serv->cb_oob_handler = &cb_serv_oob_handler;
-	serv->cb_heartbeat_handler = &cb_serv_heartbeat_handler;
+	transport->packet_delimiter_length = strlen(transport->packet_delimiter);
+	transport->buffer_size = iniparser_getint(dict, "TRANSPORT:buffer_size", SB_BUF_SIZE);
+	transport->cb_packet_reader = &cb_trans_packet_reader;
+	transport->cb_packet_handler = &cb_trans_packet_handler;
+	transport->cb_data_handler = &cb_trans_data_handler;
+	transport->cb_transaction_handler = &cb_trans_transaction_handler;
+	transport->cb_oob_handler = &cb_trans_oob_handler;
+	transport->cb_heartbeat_handler = &cb_trans_heartbeat_handler;
         /* server */
-	if((ret = sbase->add_service(sbase, serv)) != 0)
+	if((ret = sbase->add_service(sbase, transport)) != 0)
 	{
-		fprintf(stderr, "Initiailize service[%s] failed, %s\n", serv->name, strerror(errno));
+		fprintf(stderr, "Initiailize service[%s] failed, %s\n", transport->name, strerror(errno));
 		return ret;
 	}
     //logger 
-	daemon_logger = logger_init(iniparser_getstr(dict, "DAEMON:access_log"));
+	daemon_logger = logger_init(iniparser_getstr(dict, "TRANSPORT:access_log"));
+    //daemon ip and ip
+    task.daemon_ip = iniparser_getstr(dict, "TRANSPORT:daemon_ip");
+    task.daemon_port = iniparser_getint(dict, "TRANSPORT:daemon_port", 3721);
     //timeout
-    if((p = iniparser_getstr(dict, "DAEMON:timeout")))
+    task.timeout = 60000000;
+    if((p = iniparser_getstr(dict, "TRANSPORT:timeout")))
         task.timeout = str2ll(p);
     //linktable files
-    task.ntask_limit = iniparser_getint(dict, "DAEMON:ntask", 128);
+    task.ntask_limit = iniparser_getint(dict, "TRANSPORT:ntask", 128);
     if((task.requests = (HTTP_REQUEST *)calloc(task.ntask_limit, sizeof(HTTP_REQUEST)))
         && (task.tasks = (URLMETA *)calloc(task.ntask_limit, sizeof(URLMETA)))
         && (task.results = (char **)calloc(task.ntask_limit, sizeof(char *))))

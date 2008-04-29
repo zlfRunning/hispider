@@ -99,7 +99,8 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
         end = packet->end;
         memset(&http_req, 0, sizeof(HTTP_REQ));
         http_req.reqid = -1;
-        http_request_parse(p, end, &http_req);
+        if(http_request_parse(p, end, &http_req) != 0) goto end ;
+        DEBUG_LOGGER(daemon_logger, "reqid:%d", http_req.reqid);
         if(http_req.reqid == HTTP_GET)
         {
             p = buf;
@@ -112,7 +113,7 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
                     "Content-Length: %d\r\n\r\n", m);
             conn->push_chunk(conn, header, n);
             conn->push_chunk(conn, buf, m);
-            conn->over(conn);
+            //conn->over(conn);
             return ;
         }
         if(http_req.reqid == HTTP_TASK)
@@ -148,6 +149,7 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
             }
             return ;
         }
+end:
         conn->over(conn);
     }
     return ;
@@ -246,7 +248,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
 	serv->port = iniparser_getint(dict, "DAEMON:service_port", 80);
 	serv->max_procthreads = iniparser_getint(dict, "DAEMON:max_procthreads", 1);
 	serv->sleep_usec = iniparser_getint(dict, "DAEMON:sleep_usec", 100);
-	serv->heartbeat_interval = iniparser_getint(dict, "DAEMON:heartbeat_interval", 1000000);
+	serv->heartbeat_interval = iniparser_getint(dict, "DAEMON:heartbeat_interval", 10000000);
 	logfile = iniparser_getstr(dict, "DAEMON:logfile");
 	serv->logfile = logfile;
 	logfile = iniparser_getstr(dict, "DAEMON:evlogfile");
