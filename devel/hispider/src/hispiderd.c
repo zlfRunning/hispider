@@ -54,7 +54,8 @@ void cb_serv_heartbeat_handler(void *arg)
 
     if(serv && linktable)
     {
-        //DEBUG_LOGGER(daemon_logger, "start heartbeat");
+        DEBUG_LOGGER(daemon_logger, "start heartbeat docno:%d doctotal:%d", 
+                linktable->docno, linktable->doc_total);
         //request
         //task
         while((taskid = linktable->get_urltask(linktable)) != -1)
@@ -99,7 +100,8 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
         end = packet->end;
         memset(&http_req, 0, sizeof(HTTP_REQ));
         http_req.reqid = -1;
-        if(http_request_parse(p, end, &http_req) != 0) goto end ;
+        if(http_request_parse(p, end, &http_req) == -1) goto end ;
+        DEBUG_LOGGER(daemon_logger, "HTTP:%d %s", http_req.reqid, (char *)packet->data);
         if(http_req.reqid == HTTP_GET)
         {
             p = buf;
@@ -136,6 +138,8 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
         {
             if(http_req.headers[HEAD_ENT_CONTENT_LENGTH])
             {
+                DEBUG_LOGGER(daemon_logger, "ready for PUT %s bytes", 
+                        http_req.headers[HEAD_ENT_CONTENT_LENGTH]);
                 n = atoi(http_req.headers[HEAD_ENT_CONTENT_LENGTH]);
                 conn->cache->reset(conn->cache);
                 conn->cache->push(conn->cache, &http_req, sizeof(HTTP_REQ));
@@ -143,12 +147,15 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
             }
             else
             {
+                DEBUG_LOGGER(daemon_logger, "ready for PUT %s bytes", 
+                        http_req.headers[HEAD_ENT_CONTENT_LENGTH]);
                 p = "HTTP/1.0 400 Bad Request\r\n\r\n";
                 conn->push_chunk(conn, p, strlen(p));
             }
             return ;
         }
 end:
+        DEBUG_LOGGER(daemon_logger, "%s", packet->data);
         conn->over(conn);
     }
     return ;
@@ -159,12 +166,17 @@ void cb_serv_data_handler(CONN *conn, BUFFER *packet,
 {
     URLMETA *urlmeta = NULL;
     char *zdata = NULL;
+    int id = 0, status = 0;
+
     if(conn && chunk->buf && chunk->buf->data)
     {
         urlmeta = (URLMETA *)chunk->buf->data;                
         zdata = (char *)chunk->buf->data + sizeof(URLMETA);
-        linktable->add_zcontent(linktable, urlmeta, zdata, urlmeta->zsize);
-        linktable->update_request(linktable, urlmeta->id, URL_STATUS_OVER);
+        status = urlmeta->status;
+        id = urlmeta->id;
+        linktable->update_request(linktable, id, status);
+        if(urlmeta->zsize > 0)
+            linktable->add_zcontent(linktable, urlmeta, zdata, urlmeta->zsize);
     }
 }
 

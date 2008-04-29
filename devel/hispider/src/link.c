@@ -610,6 +610,7 @@ int linktable_add_zcontent(LINKTABLE *linktable, URLMETA *urlmeta, char *zdata, 
                     urlmeta->offset, urlmeta->zsize, urlmeta->hostoff, 
                     urlmeta->pathoff, urlmeta->htmloff);
             NIO_LOCK(linktable->metaio);
+            urlmeta->status = URL_STATUS_INIT;
             if(NIO_APPEND(linktable->metaio, (urlmeta), sizeof(URLMETA)) > 0)
             {
                 linktable->docok_total++;
@@ -630,6 +631,7 @@ int linktable_add_zcontent(LINKTABLE *linktable, URLMETA *urlmeta, char *zdata, 
                     urlmeta->size, strerror(errno));
         }
         NIO_UNLOCK(linktable->docio);
+        linktable->doc_total++;
     }
     return ret;
 }

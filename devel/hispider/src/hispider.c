@@ -21,9 +21,9 @@ static dictionary *dict = NULL;
 static LOGGER *daemon_logger = NULL;
 typedef struct _TASK
 {
+    CONN **conns;
     char *daemon_ip;
     int daemon_port;
-    CONN *conn;
     long long timeout;
     int ntask_limit;
     int ntask_total;
@@ -35,6 +35,29 @@ typedef struct _TASK
     char **results;
 }TASK;
 static TASK task = {0};
+#define NCONN(tp, n) ((tp.conns[n])?(tp.conns[n])\
+        :(tp.conns[n] = transport->newconn(transport, tp.daemon_ip, tp.daemon_port)))
+#define DCONN(tp, n) (tp.conns[n] = NULL)
+#define NEWREQ(tp, n)                                       \
+{                                                           \
+    transport->newtransaction(transport, tp.conns[n], n);   \
+    tp.requests[n].id = -2;                                 \
+    tp.conns[n]->start_cstate(tp.conns[n]);                 \
+    tp.conns[n]->c_id = n;                                  \
+    tp.ntask_total++;                                       \
+}
+#define OVERREQ(tp, n)                                      \
+{                                                           \
+    memset(&(tp.requests[n]), 0, sizeof(HTTP_REQUEST));     \
+    tp.requests[n].id = -1;                                 \
+    tp.ntask_total--;                                       \
+}
+#define CLEARREQ(tp, n)                                     \
+{                                                           \
+    tp.conns[n]->over_cstate(tp.conns[n]);                  \
+    tp.conns[n]->over(tp.conns[n]);                         \
+    tp.conns[n] = NULL;                                     \
+}
 //error handler 
 void cb_server_error_handler(CONN *conn)
 {
@@ -48,17 +71,17 @@ void cb_server_error_handler(CONN *conn)
 
     if(conn)
     {
-        if(conn == task.conn)
+        c_id = conn->c_id;
+        if(conn == task.conns[c_id])
         {
-            task.conn = NULL;
+            task.conns[c_id] = NULL;
         }
         else
         {
-            c_id = conn->c_id;
             purlmeta = &(task.tasks[c_id]);
             req = &(task.requests[c_id]); 
             memset(purlmeta, 0, sizeof(URLMETA));
-            req->status = URL_STATUS_ERROR;
+            req->status = LINK_STATUS_ERROR;
             if(conn->cache->data)
             {
                 resp = (HTTP_RESPONSE *)conn->cache->data;
@@ -91,7 +114,7 @@ void cb_server_error_handler(CONN *conn)
                         nzdata = purlmeta->size;
                         if(zcompress(p, purlmeta->size, zdata, &(nzdata)) == 0)
                         {
-                            req->status = URL_STATUS_OVER;
+                            req->status = LINK_STATUS_OVER;
                             purlmeta->zsize = nzdata;
                             task.results[i] = zdata;
                         }
@@ -116,22 +139,18 @@ void cb_trans_heartbeat_handler(void *arg)
 
     if(transport)
     {
-        if(task.conn == NULL && task.daemon_ip)
-        {
-            if((task.conn = transport->newconn(transport, task.daemon_ip, task.daemon_port)))
-                task.conn->start_cstate(task.conn);
-        }
         //get new request
-        if(task.conn && task.ntask_total < task.ntask_limit)
+        if(task.ntask_total < task.ntask_limit)
         {
             for(i = 0; i < task.ntask_limit; i++)
             {
                 if(task.requests[i].id == -2) break;
                 if(task.requests[i].id == -1) 
                 {
-                    task.requests[i].id = -2;
-                    transport->newtransaction(transport, task.conn, i);
-                    task.ntask_total++;
+                    if((conn = NCONN(task, i)))
+                    {
+                        NEWREQ(task, i);
+                    }
                     break;
                 }
             }
@@ -142,7 +161,7 @@ void cb_trans_heartbeat_handler(void *arg)
             for(i = 0; i < task.ntask_limit; i++)
             {
                 if(task.requests[i].id >= 0 
-                        && task.requests[i].status == URL_STATUS_INIT
+                        && task.requests[i].status == LINK_STATUS_INIT
                         && strlen(task.requests[i].ip) > 0)
 
                 {
@@ -156,25 +175,28 @@ void cb_trans_heartbeat_handler(void *arg)
                         DEBUG_LOGGER(daemon_logger, "Set timeout[%lld] on %s:%d via %d",
                                 task.timeout, conn->ip, conn->port, conn->fd);
                         task.ntask_wait--;
-                        task.requests[i].status = URL_STATUS_WAIT;
+                        task.requests[i].status = LINK_STATUS_WAIT;
                         break;
                     }
                 }
             }
         }
         //handle over task
-        if(task.conn && task.ntask_over > 0)
+        if(task.ntask_over > 0)
         {
            for(i = 0; i < task.ntask_limit; i++)
            {
-               if(task.requests[i].status == URL_STATUS_ERROR 
-                       || task.requests[i].status == URL_STATUS_OVER)
+               if(task.requests[i].status == LINK_STATUS_ERROR 
+                       || task.requests[i].status == LINK_STATUS_OVER)
                {
-                   task.tasks[i].id     = task.requests[i].id;
-                   task.tasks[i].status = task.requests[i].status;
-                   memset(&(task.requests[i]), 0, sizeof(HTTP_REQUEST));
-                   task.requests[i].id = -1;
-                   transport->newtransaction(transport, task.conn, i);
+                    if((conn = NCONN(task, i)))
+                    {
+                        task.tasks[i].id     = task.requests[i].id;
+                        task.tasks[i].status = task.requests[i].status;
+                        OVERREQ(task, i);
+                        conn->set_timeout(conn, task.timeout);
+                        transport->newtransaction(transport, conn, i);
+                    }
                    break;
                }
            }
@@ -204,8 +226,9 @@ void cb_trans_packet_handler(CONN *conn, BUFFER *packet)
         response.respid = -1;
         p   = (char *)packet->data;
         end = (char *)packet->end;
-        if(http_response_parse(p, end, &response) != 0) goto end;
-        if(conn == task.conn)
+        if(http_response_parse(p, end, &response) == -1) goto end;
+        c_id = conn->c_id;
+        if(conn == task.conns[c_id])
         {
             if(response.respid == RESP_OK && response.headers[HEAD_ENT_CONTENT_LENGTH])
             {
@@ -236,7 +259,7 @@ void cb_trans_packet_handler(CONN *conn, BUFFER *packet)
                 }
             }
             c_id = conn->c_id;
-            task.requests[c_id].status = URL_STATUS_ERROR;
+            task.requests[c_id].status = LINK_STATUS_ERROR;
             conn->over_cstate(conn);
             conn->over(conn);
             task.ntask_over++;
@@ -262,14 +285,20 @@ void cb_trans_data_handler(CONN *conn, BUFFER *packet,
 
     if(conn && chunk->buf)
     {
-        if(conn == task.conn)
+        c_id = conn->c_id;
+        if(conn == task.conns[c_id])
         {
-            c_id = task.conn->c_id;
             if(chunk->buf->size == sizeof(HTTP_REQUEST))
             {
                 memcpy(&(task.requests[c_id]), chunk->buf->data, sizeof(HTTP_REQUEST));
                 task.ntask_wait++;
             }
+            else
+            {
+                OVERREQ(task, c_id);
+                CLEARREQ(task, c_id);
+            }
+            return ;
         }
         else
         {
@@ -278,7 +307,7 @@ void cb_trans_data_handler(CONN *conn, BUFFER *packet,
             purlmeta = &(task.tasks[c_id]);
             req = &(task.requests[c_id]); 
             memset(purlmeta, 0, sizeof(URLMETA));
-            req->status = URL_STATUS_ERROR;
+            req->status = LINK_STATUS_ERROR;
             resp = (HTTP_RESPONSE *)cache->data;
             p = buf;
             for(i = 0; i < HTTP_HEADER_NUM; i++)
@@ -309,7 +338,7 @@ void cb_trans_data_handler(CONN *conn, BUFFER *packet,
                     nzdata = purlmeta->size;
                     if(zcompress(p, purlmeta->size, zdata, &(nzdata)) == 0)
                     {
-                        req->status = URL_STATUS_OVER;
+                        req->status = LINK_STATUS_OVER;
                         purlmeta->zsize = nzdata;
                         task.results[c_id] = zdata;
                     }
@@ -325,7 +354,7 @@ void cb_trans_data_handler(CONN *conn, BUFFER *packet,
                     purlmeta->zsize, purlmeta->size);
         }
     }
-    return;
+    return ;
 }
 
 //daemon transaction handler 
@@ -337,23 +366,22 @@ void cb_trans_transaction_handler(CONN *conn, int tid)
 
     if(conn && tid >= 0 && tid < task.ntask_limit)
     {
-        //daemon connection 
-        if(conn == task.conn)
+        if(conn == task.conns[tid])
         {
             DEBUG_LOGGER(daemon_logger, "ready for transaction on %s:%d via %d", conn->ip, conn->port, conn->fd);
             if(task.requests[tid].id == -2)
             {
                 p = buf;
                 n = sprintf(p, "TASK / HTTP/1.0\r\n\r\n");
-                conn->push_chunk(conn, p, n);
+                conn->push_chunk(conn, buf, n);
                 return ;
             }
-            else if(task.tasks[tid].status == URL_STATUS_OVER 
-                    || task.tasks[tid].status == URL_STATUS_ERROR)
+            else if(task.tasks[tid].status == LINK_STATUS_OVER 
+                    || task.tasks[tid].status == LINK_STATUS_ERROR)
             {
-            DEBUG_LOGGER(daemon_logger, "ready for transaction on %s:%d via %d", conn->ip, conn->port, conn->fd);
+                DEBUG_LOGGER(daemon_logger, "ready for transaction on %s:%d via %d", conn->ip, conn->port, conn->fd);
                 p = buf;
-                n = sprintf(p, "PUT / HTTP/1.0\r\nContent-Length : %d\r\n\r\n", 
+                n = sprintf(p, "PUT / HTTP/1.0\r\nContent-Length: %d\r\n\r\n", 
                         (sizeof(URLMETA) + task.tasks[tid].zsize)); 
                 conn->push_chunk(conn, buf, n);
                 conn->push_chunk(conn, &(task.tasks[tid]), sizeof(URLMETA));
@@ -369,11 +397,11 @@ void cb_trans_transaction_handler(CONN *conn, int tid)
         }
         else
         {
-            if(task.requests[tid].id != -1 && task.requests[tid].status == URL_STATUS_WAIT)
+            if(task.requests[tid].id != -1 && task.requests[tid].status == LINK_STATUS_WAIT)
             {
             DEBUG_LOGGER(daemon_logger, "ready for transaction on %s:%d via %d", conn->ip, conn->port, conn->fd);
                 p = buf;
-                task.requests[tid].status = URL_STATUS_WORKING;
+                task.requests[tid].status = LINK_STATUS_WORKING;
                 n = sprintf(p, "GET %s HTTP/1.0\r\nHOST: %s User-Agent:Mozilla\r\n\r\n",
                         task.requests[tid].path, task.requests[tid].host);
                 conn->push_chunk(conn, p, n);
@@ -515,6 +543,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
     task.ntask_limit = iniparser_getint(dict, "TRANSPORT:ntask", 128);
     if((task.requests = (HTTP_REQUEST *)calloc(task.ntask_limit, sizeof(HTTP_REQUEST)))
         && (task.tasks = (URLMETA *)calloc(task.ntask_limit, sizeof(URLMETA)))
+        && (task.conns = (CONN **)calloc(task.ntask_limit, sizeof(CONN *)))
         && (task.results = (char **)calloc(task.ntask_limit, sizeof(char *))))
     {
         for(i = 0; i < task.ntask_limit; i++) task.requests[i].id = -1;

@@ -49,7 +49,7 @@ int http_request_parse(char *p, char *end, HTTP_REQ *http_req)
             while(s < end && *s != '\n')++s;
             *s++ = '\0';
         }
-        ret = 0;
+        ret++;
     }
     return ret;
 }
@@ -94,7 +94,7 @@ int http_response_parse(char *p, char *end, HTTP_RESPONSE *http_response)
             while(s < end && *s != '\n')++s;
             *s++ = '\0';
         }
-        ret = 0;
+        ret++;
     }
     return ret;
 }
