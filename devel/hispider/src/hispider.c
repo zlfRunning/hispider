@@ -87,7 +87,7 @@ static TASK task = {0};
     tp.ntask_over--;                                        \
 }
 //error handler 
-void cb_server_error_handler(CONN *conn)
+void cb_trans_error_handler(CONN *conn)
 {
     HTTP_REQUEST *req = NULL;
     HTTP_RESPONSE *resp = NULL;
@@ -151,8 +151,8 @@ void cb_server_error_handler(CONN *conn)
                     data = NULL;
                 }
             }
+            ENDTASK(task, c_id, req->status);
         }
-        ENDTASK(task, c_id, req->status);
     }
     return ;
 }
@@ -562,6 +562,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
 	transport->cb_transaction_handler = &cb_trans_transaction_handler;
 	transport->cb_oob_handler = &cb_trans_oob_handler;
 	transport->cb_heartbeat_handler = &cb_trans_heartbeat_handler;
+	transport->cb_error_handler = &cb_trans_error_handler;
         /* server */
 	if((ret = sbase->add_service(sbase, transport)) != 0)
 	{
