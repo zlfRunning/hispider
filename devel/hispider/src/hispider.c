@@ -75,6 +75,8 @@ void cb_server_error_handler(CONN *conn)
         if(conn == task.conns[c_id])
         {
             task.conns[c_id] = NULL;
+            OVERREQ(task, c_id);
+            CLEARREQ(task, c_id);
         }
         else
         {
@@ -139,16 +141,19 @@ void cb_trans_heartbeat_handler(void *arg)
 
     if(transport)
     {
+        DEBUG_LOGGER(daemon_logger, "ntask_total:%d ntask_wait:%d ntask_over:%d",
+                task.ntask_total, task.ntask_wait, task.ntask_over);
         //get new request
         if(task.ntask_total < task.ntask_limit)
         {
             for(i = 0; i < task.ntask_limit; i++)
             {
-                if(task.requests[i].id == -2) break;
+                if(task.requests[i].id == -2) continue;
                 if(task.requests[i].id == -1) 
                 {
                     if((conn = NCONN(task, i)))
                     {
+                        //DEBUG_LOGGER(daemon_logger, "NEWREQ:%d", i);
                         NEWREQ(task, i);
                     }
                     break;
