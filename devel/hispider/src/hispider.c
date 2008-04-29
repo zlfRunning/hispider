@@ -40,19 +40,22 @@ static TASK task = {0};
 #define DCONN(tp, n) (tp.conns[n] = NULL)
 #define NEWREQ(tp, n)                                       \
 {                                                           \
-    transport->newtransaction(transport, tp.conns[n], n);   \
     tp.requests[n].id = -2;                                 \
     memset(&(tp.tasks[n]), 0, sizeof(URLMETA));             \
     tp.tasks[n].id = -1;                                    \
-    tp.conns[n]->start_cstate(tp.conns[n]);                 \
-    tp.conns[n]->c_id = n;                                  \
     tp.ntask_total++;                                       \
+    tp.conns[n]->c_id = n;                                  \
+    tp.conns[n]->start_cstate(tp.conns[n]);                 \
+    tp.conns[n]->set_timeout(tp.conns[n], tp.timeout);      \
+    transport->newtransaction(transport, tp.conns[n], n);   \
+    DEBUG_LOGGER(daemon_logger, "NEW REQUEST");             \
 }
 #define OVERREQ(tp, n)                                      \
 {                                                           \
     memset(&(tp.requests[n]), 0, sizeof(HTTP_REQUEST));     \
     tp.requests[n].id = -1;                                 \
     tp.ntask_total--;                                       \
+    DEBUG_LOGGER(daemon_logger, "OVER REQUEST");            \
 }
 #define CLEARREQ(tp, n)                                     \
 {                                                           \
@@ -65,12 +68,15 @@ static TASK task = {0};
     memcpy(&(tp.requests[n]), rq, sizeof(HTTP_REQUEST));    \
     tp.tasks[n].id = tp.requests[n].id;                     \
     tp.ntask_wait++;                                        \
+    DEBUG_LOGGER(daemon_logger, "NEW TASK %s:%d",           \
+            tp.requests[n].ip, tp.requests[n].port);        \
 }
 #define ENDTASK(tp, n, st)                                  \
 {                                                           \
-    DEBUG_LOGGER(daemon_logger, "TASK END");                \
     tp.requests[n].status = st;                             \
     tp.ntask_over++;                                        \
+    DEBUG_LOGGER(daemon_logger, "TASK END %s:%d",           \
+            tp.requests[n].ip, tp.requests[n].port);        \
 }
 #define OVERTASK(tp, n)                                     \
 {                                                           \
@@ -144,6 +150,7 @@ void cb_server_error_handler(CONN *conn)
                 }
             }
         }
+        ENDTASK(task, c_id, req->status);
     }
     return ;
 }
@@ -158,8 +165,8 @@ void cb_trans_heartbeat_handler(void *arg)
 
     if(transport)
     {
-        DEBUG_LOGGER(daemon_logger, "ntask_total:%d ntask_wait:%d ntask_over:%d",
-                task.ntask_total, task.ntask_wait, task.ntask_over);
+        //DEBUG_LOGGER(daemon_logger, "ntask_total:%d ntask_wait:%d ntask_over:%d",
+          //      task.ntask_total, task.ntask_wait, task.ntask_over);
         //get new request
         if(task.ntask_total < task.ntask_limit)
         {
@@ -216,7 +223,6 @@ void cb_trans_heartbeat_handler(void *arg)
                            task.tasks[i].id = task.requests[i].id;
                            task.tasks[i].status = task.requests[i].status;
                            conn->c_id = i;
-                           conn->set_timeout(conn, task.timeout);
                            transport->newtransaction(transport, conn, i);
                        }
                    }
@@ -421,6 +427,7 @@ void cb_trans_transaction_handler(CONN *conn, int tid)
                 }
                 OVERREQ(task, tid);
                 OVERTASK(task, tid);
+                return ;
             }
         }
         else
