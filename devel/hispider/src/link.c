@@ -897,11 +897,11 @@ int main(int argc, char **argv)
 
     if(linktable = linktable_init())
     {
-        linktable->set_logger(linktable, "/tmp/hispider.log", NULL);
-        linktable->set_md5file(linktable, "/tmp/hispider.md5");
-        linktable->set_urlfile(linktable, "/tmp/hispider.url");
-        linktable->set_metafile(linktable, "/tmp/hispider.meta");
-        linktable->set_docfile(linktable, "/tmp/hispider.doc");
+        linktable->set_logger(linktable, "/tmp/link.log", NULL);
+        linktable->set_md5file(linktable, "/tmp/link.md5");
+        linktable->set_urlfile(linktable, "/tmp/link.url");
+        linktable->set_metafile(linktable, "/tmp/link.meta");
+        linktable->set_docfile(linktable, "/tmp/link.doc");
         linktable->set_ntask(linktable, 4);
         linktable->iszlib = 1;
         linktable->resume(linktable);

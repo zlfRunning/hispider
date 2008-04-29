@@ -48,14 +48,16 @@ static TASK task = {0};
     tp.conns[n]->start_cstate(tp.conns[n]);                 \
     tp.conns[n]->set_timeout(tp.conns[n], tp.timeout);      \
     transport->newtransaction(transport, tp.conns[n], n);   \
-    DEBUG_LOGGER(daemon_logger, "NEW REQUEST");             \
+    DEBUG_LOGGER(daemon_logger, "NEW REQUEST %s:%d via %d", \
+        tp.conns[n]->ip, tp.conns[n]->port, tp.conns[n]->fd);             \
 }
 #define OVERREQ(tp, n)                                      \
 {                                                           \
     memset(&(tp.requests[n]), 0, sizeof(HTTP_REQUEST));     \
     tp.requests[n].id = -1;                                 \
     tp.ntask_total--;                                       \
-    DEBUG_LOGGER(daemon_logger, "OVER REQUEST");            \
+    DEBUG_LOGGER(daemon_logger, "OVER REQUEST %s:%d via %d", \
+        tp.conns[n]->ip, tp.conns[n]->port, tp.conns[n]->fd);             \
 }
 #define CLEARREQ(tp, n)                                     \
 {                                                           \
@@ -165,8 +167,8 @@ void cb_trans_heartbeat_handler(void *arg)
 
     if(transport)
     {
-        //DEBUG_LOGGER(daemon_logger, "ntask_total:%d ntask_wait:%d ntask_over:%d",
-          //      task.ntask_total, task.ntask_wait, task.ntask_over);
+        DEBUG_LOGGER(daemon_logger, "ntask_total:%d ntask_wait:%d ntask_over:%d",
+                task.ntask_total, task.ntask_wait, task.ntask_over);
         //get new request
         if(task.ntask_total < task.ntask_limit)
         {
