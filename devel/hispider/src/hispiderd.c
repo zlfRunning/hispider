@@ -100,7 +100,6 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
         memset(&http_req, 0, sizeof(HTTP_REQ));
         http_req.reqid = -1;
         if(http_request_parse(p, end, &http_req) != 0) goto end ;
-        DEBUG_LOGGER(daemon_logger, "reqid:%d", http_req.reqid);
         if(http_req.reqid == HTTP_GET)
         {
             p = buf;
