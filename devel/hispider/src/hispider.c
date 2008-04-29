@@ -230,10 +230,17 @@ void cb_trans_packet_handler(CONN *conn, BUFFER *packet)
         c_id = conn->c_id;
         if(conn == task.conns[c_id])
         {
-            if(response.respid == RESP_OK && response.headers[HEAD_ENT_CONTENT_LENGTH])
+            if(response.respid == RESP_OK)
             {
-                len = atoi(response.headers[HEAD_ENT_CONTENT_LENGTH]);       
-                conn->recv_chunk(conn, len);
+                if(response.headers[HEAD_ENT_CONTENT_LENGTH])
+                {
+                    len = atoi(response.headers[HEAD_ENT_CONTENT_LENGTH]);       
+                    conn->recv_chunk(conn, len);
+                }
+            }
+            else
+            {
+                OVERREQ(task, c_id);
             }
             return ;
         }
