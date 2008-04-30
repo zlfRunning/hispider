@@ -416,8 +416,10 @@ void cb_trans_transaction_handler(CONN *conn, int tid)
                         "Connection:close\r\nUser-Agent: Mozilla\r\n\r\n",
                         task.requests[tid].path, task.requests[tid].host);
                 conn->push_chunk(conn, buf, n);
-                DEBUG_LOGGER(daemon_logger, "ready for visit:%s on %s:%d via %d", 
-                       buf, conn->ip, conn->port, conn->fd);
+                DEBUG_LOGGER(daemon_logger, "ready for visit:http://%s%s "
+			"on %s:%d via %d", 
+                       task.requests[tid].host, task.requests[tid].path,
+			 conn->ip, conn->port, conn->fd);
 
             }
             else
