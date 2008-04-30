@@ -157,7 +157,7 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
             return ;
         }
 end:
-        DEBUG_LOGGER(daemon_logger, "%s", packet->data);
+        //DEBUG_LOGGER(daemon_logger, "%s", packet->data);
         conn->over(conn);
     }
     return ;

@@ -184,7 +184,7 @@ void cb_trans_heartbeat_handler(void *arg)
         {
            for(i = 0; i < task.ntask_limit; i++)
            {
-               if(task.requests[i].id != -1)
+               if(task.tasks[i].id != -1 &&  task.requests[i].id != -1)
                {
                    if(task.requests[i].status == LINK_STATUS_OVER 
                            || task.requests[i].status == LINK_STATUS_ERROR)
