@@ -54,16 +54,18 @@ void cb_serv_heartbeat_handler(void *arg)
 
     if(serv && linktable)
     {
-        DEBUG_LOGGER(daemon_logger, "start heartbeat docno:%d doctotal:%d", 
-                linktable->docno, linktable->doc_total);
+        //DEBUG_LOGGER(daemon_logger, "start heartbeat docno:%d doctotal:%d", 
+        //        linktable->docno, linktable->doc_total);
         //request
         //task
-        while((taskid = linktable->get_urltask(linktable)) != -1)
+        if((taskid = linktable->get_urltask(linktable)) != -1)
         {
             serv->newtask(serv, (void *)&cb_serv_task_handler, (void *)taskid);
-            DEBUG_LOGGER(daemon_logger, "linktable->docno:%d doc_total:%d", 
-                    linktable->docno, linktable->doc_total);
+            //DEBUG_LOGGER(daemon_logger, "linktable->docno:%d doc_total:%d", 
+            //        linktable->docno, linktable->doc_total);
         }
+        //DEBUG_LOGGER(daemon_logger, "end heartbeat docno:%d doctotal:%d", 
+        //        linktable->docno, linktable->doc_total);
     }
     return  ;
 }

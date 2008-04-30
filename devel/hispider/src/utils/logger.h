@@ -23,7 +23,7 @@ extern "C" {
 #ifndef _TYPEDEF_LOGGER
 #define _TYPEDEF_LOGGER
 #define LOGGER_FILENAME_LIMIT  	1024
-#define LOGGER_LINE_LIMIT  	8192
+#define LOGGER_LINE_LIMIT  	512000
 #define __DEBUG__		0
 #define	__WARN__ 		1
 #define	__ERROR__ 		2

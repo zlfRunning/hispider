@@ -376,6 +376,7 @@ char *linktable_getip(LINKTABLE *linktable, char *hostname)
         MUTEX_LOCK(linktable->mutex);
         DEBUG_LOGGER(linktable->logger, "Ready for [%s]'s ip", hostname);
         if((ip = (char *)TABLE_GET(linktable->dnstable, hostname))) goto end;
+        DEBUG_LOGGER(linktable->logger, "Ready for [%s]'s ip", hostname);
         if((hp = gethostbyname((const char *)hostname)) == NULL) goto end;
         DEBUG_LOGGER(linktable->logger, "Ready for [%s]'s ip", hostname);
         if((linktable->dnslist = (char **)realloc(linktable->dnslist, 
