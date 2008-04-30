@@ -37,6 +37,15 @@ typedef struct _TASK
 static TASK task = {0};
 #define NCONN(tp, n) ((tp.conns[n])?(tp.conns[n])\
         :(tp.conns[n] = transport->newconn(transport, tp.daemon_ip, tp.daemon_port)))
+#define OCONN(tp, n)                                        \
+{                                                           \
+    if(tp.conns[n])                                         \
+    {                                                       \
+        tp.conns[n]->over_cstate(tp.conns[n]);              \
+        tp.conns[n]->over(tp.conns[n]);                     \
+        tp.conns[n] = NULL;                                 \
+    }                                                       \
+}
 #define DCONN(tp, n) (tp.conns[n] = NULL)
 #define NEWREQ(tp, n)                                       \
 {                                                           \
@@ -56,14 +65,13 @@ static TASK task = {0};
     memset(&(tp.requests[n]), 0, sizeof(HTTP_REQUEST));     \
     tp.requests[n].id = -1;                                 \
     tp.ntask_total--;                                       \
-    DEBUG_LOGGER(daemon_logger, "OVER REQUEST %s:%d via %d", \
-        tp.conns[n]->ip, tp.conns[n]->port, tp.conns[n]->fd);             \
-}
-#define CLEARREQ(tp, n)                                     \
-{                                                           \
-    tp.conns[n]->over_cstate(tp.conns[n]);                  \
-    tp.conns[n]->over(tp.conns[n]);                         \
-    tp.conns[n] = NULL;                                     \
+    if(tp.conns[n])                                         \
+    {                                                       \
+        DEBUG_LOGGER(daemon_logger,                         \
+        "OVER REQUEST %s:%d via %d",                        \
+        tp.conns[n]->ip, tp.conns[n]->port,                 \
+        tp.conns[n]->fd);                                   \
+    }                                                       \
 }
 #define NEWTASK(tp, n, rq)                                  \
 {                                                           \
@@ -89,69 +97,22 @@ static TASK task = {0};
 //error handler 
 void cb_trans_error_handler(CONN *conn)
 {
-    HTTP_REQUEST *req = NULL;
-    HTTP_RESPONSE *resp = NULL;
-    URLMETA *purlmeta = NULL;
-    char buf[HTTP_BUF_SIZE];
-    char *data = NULL, *zdata = NULL, *p = NULL;
-    int i = 0, n = 0, nhost = 0, npath = 0, c_id = 0, status = 0;
-    unsigned long nzdata = 0;
-
+    int c_id = 0;
     if(conn)
     {
         c_id = conn->c_id;
         if(conn == task.conns[c_id])
         {
             OVERREQ(task, c_id);
-            CLEARREQ(task, c_id);
+            DCONN(task, c_id);
         }
         else
         {
-            purlmeta = &(task.tasks[c_id]);
-            req = &(task.requests[c_id]); 
-            req->status = LINK_STATUS_ERROR;
-            if(conn->cache->data)
+            if(conn->packet->data && conn->cache->data)
             {
-                resp = (HTTP_RESPONSE *)conn->cache->data;
-                p = buf;
-                for(i = 0; i < HTTP_HEADER_NUM; i++)
-                {
-                    if(resp->headers[i])
-                    {
-                        p += sprintf(p, "[%d:%s:%s]", i, http_headers[i].e, resp->headers[i]);                   
-                    }
-                }
-                nhost = strlen(req->host) + 1;
-                npath = strlen(req->path) + 1;
-                purlmeta->hostoff = (p - buf);
-                purlmeta->pathoff =  purlmeta->hostoff + nhost;
-                purlmeta->htmloff = purlmeta->pathoff + npath;
-                purlmeta->size = purlmeta->htmloff + conn->chunk->buf->size;
-                if((data = (char *)calloc(1, purlmeta->size)))
-                {
-                    p = data;
-                    memcpy(p, buf, purlmeta->hostoff);
-                    p += purlmeta->hostoff;
-                    memcpy(p, req->host, nhost);
-                    p += nhost;
-                    memcpy(p, req->path, npath);
-                    p += npath;
-                    memcpy(p, conn->chunk->buf->data, conn->chunk->buf->size);
-                    if((zdata = (char *)calloc(1, purlmeta->size)))
-                    {
-                        nzdata = purlmeta->size;
-                        if(zcompress(p, purlmeta->size, zdata, &(nzdata)) == 0)
-                        {
-                            req->status = LINK_STATUS_OVER;
-                            purlmeta->zsize = nzdata;
-                            task.results[i] = zdata;
-                        }
-                    }
-                    free(data);
-                    data = NULL;
-                }
+                return conn->cb_data_handler(conn, conn->packet, conn->chunk, conn->cache);
             }
-            ENDTASK(task, c_id, req->status);
+            ENDTASK(task, c_id, LINK_STATUS_ERROR);
         }
     }
     return ;
@@ -271,7 +232,7 @@ void cb_trans_packet_handler(CONN *conn, BUFFER *packet)
             else
             {
                 OVERREQ(task, c_id);
-                CLEARREQ(task, c_id);
+                OCONN(task, c_id);
             }
             return ;
         }
@@ -330,7 +291,7 @@ void cb_trans_data_handler(CONN *conn, BUFFER *packet,
             else
             {
                 OVERREQ(task, c_id);
-                CLEARREQ(task, c_id);
+                OCONN(task, c_id);
             }
             return ;
         }
@@ -429,6 +390,7 @@ void cb_trans_transaction_handler(CONN *conn, int tid)
                 }
                 OVERREQ(task, tid);
                 OVERTASK(task, tid);
+                OCONN(task, tid);
                 return ;
             }
         }
