@@ -54,18 +54,18 @@ void cb_serv_heartbeat_handler(void *arg)
 
     if(serv && linktable)
     {
-        //DEBUG_LOGGER(daemon_logger, "start heartbeat docno:%d doctotal:%d", 
-        //        linktable->docno, linktable->doc_total);
+        DEBUG_LOGGER(daemon_logger, "start heartbeat docno:%d doctotal:%d", 
+                linktable->docno, linktable->doc_total);
         //request
         //task
         if((taskid = linktable->get_urltask(linktable)) != -1)
         {
             serv->newtask(serv, (void *)&cb_serv_task_handler, (void *)taskid);
-            //DEBUG_LOGGER(daemon_logger, "linktable->docno:%d doc_total:%d", 
-            //        linktable->docno, linktable->doc_total);
+            DEBUG_LOGGER(daemon_logger, "linktable->docno:%d doc_total:%d", 
+                    linktable->docno, linktable->doc_total);
         }
-        //DEBUG_LOGGER(daemon_logger, "end heartbeat docno:%d doctotal:%d", 
-        //        linktable->docno, linktable->doc_total);
+        DEBUG_LOGGER(daemon_logger, "end heartbeat docno:%d doctotal:%d", 
+                linktable->docno, linktable->doc_total);
     }
     return  ;
 }
@@ -332,6 +332,17 @@ int sbase_initialize(SBASE *sbase, char *conf)
     return 0;
 }
 
+void bt_handler()
+{
+    char* callstack[128];
+    int i, frames = backtrace(callstack, 128);
+    char** strs = backtrace_symbols(callstack, frames);
+    for (i = 0; i < frames; ++i) {
+        fprintf(stderr, "%s\n", strs[i]);
+    }
+    free(strs);
+}
+
 static void cb_stop(int sig){
         switch (sig) {
                 case SIGINT:
@@ -339,6 +350,9 @@ static void cb_stop(int sig){
                         fprintf(stderr, "lhttpd server is interrupted by user.\n");
                         if(sbase)sbase->stop(sbase);
                         break;
+                case SIGSEGV:
+                    bt_handler();
+                    break;
                 default:
                         break;
         }
@@ -362,6 +376,7 @@ int main(int argc, char **argv)
 	signal(SIGTERM, &cb_stop);
 	signal(SIGINT,  &cb_stop);
 	signal(SIGHUP,  &cb_stop);
+	signal(SIGSEGV,  &cb_stop);
 	signal(SIGPIPE, SIG_IGN);
 	pid = fork();
 	switch (pid) {

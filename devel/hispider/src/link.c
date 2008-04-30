@@ -388,6 +388,7 @@ char *linktable_getip(LINKTABLE *linktable, char *hostname)
             TABLE_ADD(linktable->dnstable, hostname, ip);
         }
 end:
+        DEBUG_LOGGER(linktable->logger, "Ready for [%s]'s ip", hostname);
         MUTEX_UNLOCK(linktable->mutex);
         if(ip){DEBUG_LOGGER(linktable->logger, "DNS name[%s] ip[%s]", hostname, ip);}
         else {WARN_LOGGER(linktable->logger, "DNS name[%s] failed", hostname);}
