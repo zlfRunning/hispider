@@ -351,7 +351,7 @@ static void cb_stop(int sig){
                         if(sbase)sbase->stop(sbase);
                         break;
                 case SIGSEGV:
-                    bt_handler();
+                    //bt_handler();
                     break;
                 default:
                         break;

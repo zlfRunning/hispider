@@ -57,8 +57,8 @@ static TASK task = {0};
     tp.conns[n]->start_cstate(tp.conns[n]);                 \
     tp.conns[n]->set_timeout(tp.conns[n], tp.timeout);      \
     transport->newtransaction(transport, tp.conns[n], n);   \
-    DEBUG_LOGGER(daemon_logger, "NEW REQUEST %s:%d via %d", \
-        tp.conns[n]->ip, tp.conns[n]->port, tp.conns[n]->fd);             \
+    DEBUG_LOGGER(daemon_logger, "NEW REQUEST[%d] %s:%d via %d", \
+        n, tp.conns[n]->ip, tp.conns[n]->port, tp.conns[n]->fd);             \
 }
 #define OVERREQ(tp, n)                                      \
 {                                                           \
@@ -68,8 +68,8 @@ static TASK task = {0};
     if(tp.conns[n])                                         \
     {                                                       \
         DEBUG_LOGGER(daemon_logger,                         \
-        "OVER REQUEST %s:%d via %d",                        \
-        tp.conns[n]->ip, tp.conns[n]->port,                 \
+        "OVER REQUEST[%d] %s:%d via %d",                        \
+        n, tp.conns[n]->ip, tp.conns[n]->port,                 \
         tp.conns[n]->fd);                                   \
     }                                                       \
 }
@@ -78,18 +78,20 @@ static TASK task = {0};
     memcpy(&(tp.requests[n]), rq, sizeof(HTTP_REQUEST));    \
     tp.tasks[n].id = tp.requests[n].id;                     \
     tp.ntask_wait++;                                        \
-    DEBUG_LOGGER(daemon_logger, "NEW TASK %s:%d",           \
-            tp.requests[n].ip, tp.requests[n].port);        \
+    DEBUG_LOGGER(daemon_logger, "NEW TASK[%d] %s:%d id:%d",           \
+            n, tp.requests[n].ip, tp.requests[n].port,  tp.tasks[n].id);        \
 }
 #define ENDTASK(tp, n, st)                                  \
 {                                                           \
     tp.requests[n].status = st;                             \
     tp.ntask_over++;                                        \
-    DEBUG_LOGGER(daemon_logger, "TASK END %s:%d",           \
-            tp.requests[n].ip, tp.requests[n].port);        \
+    DEBUG_LOGGER(daemon_logger, "END TASK[%d] %s:%d",           \
+            n, tp.requests[n].ip, tp.requests[n].port);        \
 }
 #define OVERTASK(tp, n)                                     \
 {                                                           \
+    DEBUG_LOGGER(daemon_logger, "OVER TASK[%d] %s:%d",           \
+            n, tp.requests[n].ip, tp.requests[n].port);        \
     memset(&(tp.tasks[n]), 0, sizeof(URLMETA));             \
     tp.tasks[n].id = -1;                                    \
     tp.ntask_over--;                                        \
@@ -102,10 +104,16 @@ void cb_trans_error_handler(CONN *conn)
     {
         c_id = conn->c_id;
         if(conn == task.conns[c_id])
-        {
-            OVERREQ(task, c_id);
-            DCONN(task, c_id);
-        }
+	{
+		//OVERREQ(task, c_id);
+		if(task.tasks[c_id].id >= 0)
+		{
+			OVERTASK(task, c_id);
+			OVERREQ(task, c_id);
+			OCONN(task, c_id);
+		}
+		DCONN(task, c_id);
+	}
         else
         {
             if(conn->packet->data && conn->cache->data)
@@ -187,6 +195,8 @@ void cb_trans_heartbeat_handler(void *arg)
                            task.tasks[i].status = task.requests[i].status;
                            conn->c_id = i;
                            transport->newtransaction(transport, conn, i);
+			   DEBUG_LOGGER(daemon_logger, "Ready for over TASK:%d id:%d",
+				 i,  task.tasks[i].id);
                        }
                    }
                }
@@ -220,22 +230,24 @@ void cb_trans_packet_handler(CONN *conn, BUFFER *packet)
         if(http_response_parse(p, end, &response) == -1) goto end;
         c_id = conn->c_id;
         if(conn == task.conns[c_id])
-        {
-            if(response.respid == RESP_OK)
-            {
-                if(response.headers[HEAD_ENT_CONTENT_LENGTH])
-                {
-                    len = atoi(response.headers[HEAD_ENT_CONTENT_LENGTH]);       
-                    conn->recv_chunk(conn, len);
-                }
-            }
-            else
-            {
-                OVERREQ(task, c_id);
-                OCONN(task, c_id);
-            }
-            return ;
-        }
+	{
+		if(response.respid == RESP_OK)
+		{
+			if(response.headers[HEAD_ENT_CONTENT_LENGTH])
+			{
+				len = atoi(response.headers[HEAD_ENT_CONTENT_LENGTH]);       
+				conn->recv_chunk(conn, len);
+				return ;
+			}
+		}
+		if(task.tasks[c_id].id >= 0)
+		{
+			OVERTASK(task, c_id);
+			OVERREQ(task, c_id);
+			OCONN(task, c_id);
+		}
+		return ;
+	}
         else
         {
             if(response.respid == RESP_OK)
@@ -388,9 +400,9 @@ void cb_trans_transaction_handler(CONN *conn, int tid)
                     free(task.results[tid]);
                     task.results[tid] = NULL;
                 }
-                OVERREQ(task, tid);
-                OVERTASK(task, tid);
-                OCONN(task, tid);
+                //OVERREQ(task, tid);
+                //OVERTASK(task, tid);
+                //OCONN(task, tid);
                 return ;
             }
         }
@@ -404,8 +416,8 @@ void cb_trans_transaction_handler(CONN *conn, int tid)
                         "Connection:close\r\nUser-Agent: Mozilla\r\n\r\n",
                         task.requests[tid].path, task.requests[tid].host);
                 conn->push_chunk(conn, buf, n);
-                //DEBUG_LOGGER(daemon_logger, "ready for visit:%s on %s:%d via %d", 
-                  //      buf, conn->ip, conn->port, conn->fd);
+                DEBUG_LOGGER(daemon_logger, "ready for visit:%s on %s:%d via %d", 
+                       buf, conn->ip, conn->port, conn->fd);
 
             }
             else
