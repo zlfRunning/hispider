@@ -55,7 +55,6 @@ static TASK task = {0};
     tp.ntask_total++;                                       \
     tp.conns[n]->c_id = n;                                  \
     tp.conns[n]->start_cstate(tp.conns[n]);                 \
-    tp.conns[n]->set_timeout(tp.conns[n], tp.timeout);      \
     transport->newtransaction(transport, tp.conns[n], n);   \
     DEBUG_LOGGER(daemon_logger, "NEW REQUEST[%d] %s:%d via %d", \
         n, tp.conns[n]->ip, tp.conns[n]->port, tp.conns[n]->fd);             \
@@ -138,70 +137,42 @@ void cb_trans_heartbeat_handler(void *arg)
     {
         DEBUG_LOGGER(daemon_logger, "ntask_total:%d ntask_wait:%d ntask_over:%d",
                 task.ntask_total, task.ntask_wait, task.ntask_over);
-        //get new request
-        if(task.ntask_total < task.ntask_limit)
-        {
-            for(i = 0; i < task.ntask_limit; i++)
-            {
-                if(task.requests[i].id == -1) 
-                {
-                    if((conn = NCONN(task, i)))
-                    {
-                        NEWREQ(task, i);
-                    }
-                    break;
-                }
-            }
-        }
-        //new task 
-        if(task.ntask_wait > 0)
-        {
-            for(i = 0; i < task.ntask_limit; i++)
-            {
-                if(task.requests[i].id >= 0 
-                        && task.requests[i].status == LINK_STATUS_INIT
-                        && strlen(task.requests[i].ip) > 0)
-
-                {
-                    if((conn = transport->newconn(transport, task.requests[i].ip, 
-                                    task.requests[i].port)))
-                    {
-                        conn->start_cstate(conn);
-                        conn->c_id = i;
-                        conn->set_timeout(conn, task.timeout);
-                        DEBUG_LOGGER(daemon_logger, "Set timeout[%lld] on %s:%d via %d",
-                                task.timeout, conn->ip, conn->port, conn->fd);
-                        task.ntask_wait--;
-                        task.requests[i].status = LINK_STATUS_WAIT;
-                        transport->newtransaction(transport, conn, i);
-                    }
-                    break;
-                }
-            }
-        }
-        //handle over task
-        if(task.ntask_over > 0)
-        {
-           for(i = 0; i < task.ntask_limit; i++)
-           {
-               if(task.tasks[i].id != -1 &&  task.requests[i].id != -1)
-               {
-                   if(task.requests[i].status == LINK_STATUS_OVER 
-                           || task.requests[i].status == LINK_STATUS_ERROR)
-                   {
-                       if((conn = NCONN(task, i)))
+	for(i = 0; i < task.ntask_limit; i++)
+	{
+		if(task.requests[i].status == LINK_STATUS_INIT
+			&& (conn = NCONN(task, i)))
+		{
+			task.requests[i].status = LINK_STATUS_REQUEST;
+			NEWREQ(task, i);
+		}
+		if(task.requests[i].status == LINK_STATUS_WAIT)
+		{
+			if((conn = transport->newconn(transport, task.requests[i].ip, 
+							task.requests[i].port)))
+			{
+				conn->start_cstate(conn);
+				conn->c_id = i;
+				conn->set_timeout(conn, task.timeout);
+				DEBUG_LOGGER(daemon_logger, 
+				"Set timeout[%lld] on %s:%d via %d",
+				task.timeout, conn->ip, conn->port, conn->fd);
+				task.ntask_wait--;
+				task.requests[i].status = LINK_STATUS_WORKING;
+				transport->newtransaction(transport, conn, i);
+			}
+		}
+		if(task.requests[i].status == LINK_STATUS_OVER)
+		{
+			if((conn = NCONN(task, i)))
                        {
-                           task.tasks[i].id = task.requests[i].id;
-                           task.tasks[i].status = task.requests[i].status;
                            conn->c_id = i;
+			   task.requests[i].status = LINK_STATUS_COMPLETE;
                            transport->newtransaction(transport, conn, i);
 			   DEBUG_LOGGER(daemon_logger, "Ready for over TASK:%d id:%d",
 				 i,  task.tasks[i].id);
                        }
-                   }
-               }
-           }
-        }
+		}
+	}
     }
     return  ;
 }
@@ -237,14 +208,8 @@ void cb_trans_packet_handler(CONN *conn, BUFFER *packet)
 			{
 				len = atoi(response.headers[HEAD_ENT_CONTENT_LENGTH]);       
 				conn->recv_chunk(conn, len);
-				return ;
 			}
-		}
-		if(task.tasks[c_id].id >= 0)
-		{
-			OVERTASK(task, c_id);
-			OVERREQ(task, c_id);
-			OCONN(task, c_id);
+			return ;
 		}
 		return ;
 	}
@@ -380,14 +345,14 @@ void cb_trans_transaction_handler(CONN *conn, int tid)
     {
         if(conn == task.conns[tid])
         {
-            if(task.requests[tid].id == -2)
+            if(task.requests[tid].status == LINK_STATUS_REQUEST)
             {
                 p = buf;
                 n = sprintf(p, "TASK / HTTP/1.0\r\n\r\n");
                 conn->push_chunk(conn, buf, n);
                 return ;
             }
-            if(task.tasks[tid].id  != -1)
+            if(task.requests[tid].status == LINK_STATUS_COMPLETE)
             {
                 p = buf;
                 n = sprintf(p, "PUT / HTTP/1.0\r\nContent-Length: %d\r\n\r\n", 
@@ -400,17 +365,13 @@ void cb_trans_transaction_handler(CONN *conn, int tid)
                     free(task.results[tid]);
                     task.results[tid] = NULL;
                 }
-                //OVERREQ(task, tid);
-                //OVERTASK(task, tid);
-                //OCONN(task, tid);
                 return ;
             }
         }
         else
         {
-            if(task.requests[tid].id != -1 && task.requests[tid].status == LINK_STATUS_WAIT)
+            if(task.requests[tid].status == LINK_STATUS_WORKING)
             {
-                task.requests[tid].status = LINK_STATUS_WORKING;
                 p = buf;
                 n = sprintf(p, "GET %s HTTP/1.0\r\nHOST: %s\r\n"
                         "Connection:close\r\nUser-Agent: Mozilla\r\n\r\n",
@@ -421,11 +382,6 @@ void cb_trans_transaction_handler(CONN *conn, int tid)
                        task.requests[tid].host, task.requests[tid].path,
 			 conn->ip, conn->port, conn->fd);
 
-            }
-            else
-            {
-                conn->over_cstate(conn);
-                conn->over(conn);
             }
         }
     }

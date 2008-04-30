@@ -36,6 +36,8 @@
 #define LINK_STATUS_DISCARD     0X10
 #define LINK_STATUS_ERROR       0x20
 #define LINK_STATUS_OVER        0x30
+#define LINK_STATUS_REQUEST     0x40
+#define LINK_STATUS_COMPLETE    0x50
 #ifndef MD5_LEN
 #define MD5_LEN 16
 #endif
