@@ -13,7 +13,7 @@ int mutex_lock(MUTEX *mutex);
 /* Unlock*/
 int mutex_unlock(MUTEX *mutex);
 /* Destroy */
-
+int mutex_destroy(MUTEX **mutex);
 #ifdef HAVE_PTHREAD
 #include <pthread.h>
 #define MUTEX_INIT(mlock) {         \
