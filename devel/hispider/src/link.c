@@ -15,6 +15,7 @@
 #include "zstream.h"
 #include "mutex.h"
 #include "logger.h"
+#include "timer.h"
 #include "http.h"
 #include "nio.h"
 
@@ -290,6 +291,7 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
     long long offset = 0;
     long n = 0, id = 0;
     int ret = -1;
+    void *timer = NULL;
 
     if(linktable)
     {
@@ -300,6 +302,7 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
                 && NIO_CHECK(linktable->urlio) == 0 
                 && (n = sprintf(url, "http://%s%s", host, path)) > 0)
         {
+            TIMER_INIT(timer);
             md5((unsigned char *)url, n, req.md5);
             p = md5str;
             for(i = 0; i < MD5_LEN; i++) p += sprintf(p, "%02x", req.md5[i]);
@@ -312,6 +315,7 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
                 goto err_end;
             }
             //\n end
+            TIMER_RESET(timer);
             url[n] = '\n';
             NIO_LOCK(linktable->urlio);
             if(NIO_APPEND(linktable->urlio, url, n+1) <= 0) 
@@ -321,6 +325,8 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
             }
             NIO_UNLOCK(linktable->urlio);
             url[n] = '\0';
+            TIMER_SAMPLE(timer);
+            DEBUG_LOGGER(linktable->logger, "APPEND URL[%s] time used:%lld", url, PT_USEC_USED(timer));
             //host
             ps = req.host;
             p = host;
@@ -350,6 +356,7 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
             }
             DEBUG_LOGGER(linktable->logger, "New URL:http://%s%s", host, path);
             req.id = id = linktable->url_total++;
+            TIMER_RESET(timer);
             NIO_LOCK(linktable->md5io);
             if(NIO_APPEND(linktable->md5io, &req, sizeof(HTTP_REQUEST)) <= 0 ) 
             {
@@ -357,9 +364,13 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
                 goto err_end;
             }
             NIO_UNLOCK(linktable->md5io);
+            TIMER_SAMPLE(timer);
+            DEBUG_LOGGER(linktable->logger, "APPEND MD5[%s] time used:%lld", url, PT_USEC_USED(timer));
             ADD_TO_MD5TABLE(linktable, md5str, (long *)id);
             ret = 0;
-            DEBUG_LOGGER(linktable->logger, "Added URL[%d] md5[%s] %s", id, md5str, url);
+            TIMER_SAMPLE(timer);
+            DEBUG_LOGGER(linktable->logger, "time:%lld Added URL[%d] md5[%s] %s", 
+                    PT_USEC_USED(timer), id, md5str, url);
         }
     }
 err_end:
@@ -447,6 +458,40 @@ int linktable_update_request(LINKTABLE *linktable, int id, int status)
 }
 
 //get url task
+long linktable_get_urltask_one(LINKTABLE *linktable)
+{
+    long long offset = 0;
+    long taskid = -1;
+    int n = 0;
+
+    if(linktable && linktable->task.id == -1 && linktable->docno < linktable->doc_total)
+    {
+        fprintf(stdout, "%d id:%d\n", linktable->docno, linktable->task.id);
+        offset = linktable->docno * sizeof(URLMETA);
+        NIO_LOCK(linktable->metaio);
+        if(NIO_SEEK(linktable->metaio, offset) >= 0)
+        {
+            while((n = NIO_READ(linktable->metaio, &(linktable->task), sizeof(URLMETA))) > 0)
+            {
+                linktable->docno++;
+                DEBUG_LOGGER(linktable->logger, 
+                        "task[%d] status:%d docno:%d off:%lld zsize:%d size:%d", 
+                        linktable->task.id, linktable->task.status, linktable->docno, 
+                        linktable->task.offset, linktable->task.zsize, linktable->task.size);
+                if(linktable->task.status == URL_STATUS_INIT)
+                {
+                    taskid = linktable->task.id;
+                    linktable->task.status = URL_STATUS_WORKING;
+                    break;
+                }
+            }
+        }
+        NIO_UNLOCK(linktable->metaio);
+    }
+    return taskid;
+}
+
+//get url task
 long linktable_get_urltask(LINKTABLE *linktable)
 {
     URLMETA urlmeta;
@@ -517,13 +562,13 @@ void linktable_urlhandler(LINKTABLE *linktable, long taskid)
          *path = NULL, *p = NULL, *end = NULL;
     uLong ndata = 0, n = 0; 
     int status = URL_STATUS_ERROR;
-    int i = 0;
-    int fd = 0;
-    long long offset;
+    int i = 0, fd = 0;
+    long long offset = 0;
+    void *timer = NULL;
 
-    if(linktable && linktable->tasks)
+    if(linktable && linktable->task.id == taskid)
     {
-        urlmeta = &(linktable->tasks[taskid]); 
+        urlmeta = &(linktable->task); 
         if((data = (char *)calloc(1, urlmeta->size)))
         {
             ndata = urlmeta->size;
@@ -551,8 +596,8 @@ void linktable_urlhandler(LINKTABLE *linktable, long taskid)
                 n = urlmeta->zsize;
                 if(zdecompress(zdata, n, data, &ndata) != 0)
                 {
-                    FATAL_LOGGER(linktable->logger, "Decompress zdata size:%d failed, %s",
-                            urlmeta->zsize, strerror(errno));
+                    FATAL_LOGGER(linktable->logger, "Decompress zdata zsize:%d size:%d failed, %s",
+                            urlmeta->zsize, urlmeta->size, strerror(errno));
                     goto err_end;
                 }
                 if(zdata) free(zdata);
@@ -578,11 +623,18 @@ void linktable_urlhandler(LINKTABLE *linktable, long taskid)
                 path = data + urlmeta->pathoff;
                 p = data + urlmeta->htmloff;
                 end = data + urlmeta->size;
+                TIMER_INIT(timer);
                 linktable->parse(linktable, host, path, p, end);
+                TIMER_SAMPLE(timer);
+                DEBUG_LOGGER(linktable->logger, "parse http://%s%s time used:%lld", 
+                        host, path, PT_USEC_USED(timer));
+                TIMER_CLEAN(timer);
+                linktable->docok_total++;
                 status = URL_STATUS_OVER;
                 free(data); data = NULL;
             }
 err_end:
+            linktable->task.id = -1;
             NIO_LOCK(linktable->metaio);
             offset = urlmeta->id * sizeof(URLMETA);
             if(NIO_SWRITE(linktable->metaio, &status, sizeof(int), offset) <= 0)
@@ -605,17 +657,18 @@ int linktable_add_zcontent(LINKTABLE *linktable, URLMETA *urlmeta, char *zdata, 
     {
         NIO_LOCK(linktable->docio);
         urlmeta->offset = NIO_SEEK_END(linktable->docio);
+        urlmeta->id = (urlmeta->offset / sizeof(URLMETA));
         if(NIO_WRITE(linktable->docio, zdata, nzdata) > 0)
         {
-            DEBUG_LOGGER(linktable->logger, "Add meta offset:%lld zsize:%d hostoff:%d "
-                    "pathoff:%d htmloff:%d",
+            DEBUG_LOGGER(linktable->logger, "Add meta[%d] offset:%lld zsize:%d hostoff:%d "
+                    "pathoff:%d htmloff:%d size:%d", urlmeta->id,
                     urlmeta->offset, urlmeta->zsize, urlmeta->hostoff, 
-                    urlmeta->pathoff, urlmeta->htmloff);
+                    urlmeta->pathoff, urlmeta->htmloff, urlmeta->size);
             NIO_LOCK(linktable->metaio);
             urlmeta->status = URL_STATUS_INIT;
             if(NIO_APPEND(linktable->metaio, (urlmeta), sizeof(URLMETA)) > 0)
             {
-                linktable->docok_total++;
+                linktable->doc_total++;
                 linktable->size += urlmeta->size;
                 linktable->zsize += nzdata;
                 ret = 0;
@@ -633,7 +686,6 @@ int linktable_add_zcontent(LINKTABLE *linktable, URLMETA *urlmeta, char *zdata, 
                     urlmeta->size, strerror(errno));
         }
         NIO_UNLOCK(linktable->docio);
-        linktable->doc_total++;
     }
     return ret;
 }
@@ -705,7 +757,7 @@ int linktable_add_content(LINKTABLE *linktable, void *response,
                 NIO_LOCK(linktable->metaio);
                 if(NIO_APPEND(linktable->metaio, (&urlmeta), sizeof(URLMETA)) > 0)
                 {
-                    linktable->docok_total++;
+                    linktable->doc_total++;
                     linktable->size += ncontent;
                     linktable->zsize += n;
                     ret = 0;
@@ -727,7 +779,6 @@ end:
             if(zdata) free(zdata);
             if(data) free(data);
         }
-        linktable->doc_total++;
     }
     return ret;
 }
@@ -818,6 +869,7 @@ LINKTABLE *linktable_init()
         linktable->urlio = NIO_INIT();
         linktable->metaio = NIO_INIT();
         linktable->docio = NIO_INIT();
+        linktable->task.id = -1;
         linktable->md5table         = TABLE_INIT(TABLE_SIZE);
         linktable->dnstable         = TABLE_INIT(TABLE_SIZE);
         linktable->set_logger       = linktable_set_logger;
@@ -835,6 +887,7 @@ LINKTABLE *linktable_init()
         linktable->add_zcontent     = linktable_add_zcontent; 
         linktable->add_content      = linktable_add_content; 
         linktable->get_urltask      = linktable_get_urltask; 
+        linktable->get_urltask_one  = linktable_get_urltask_one; 
         linktable->urlhandler       = linktable_urlhandler; 
         linktable->resume           = linktable_resume; 
         linktable->clean            = linktable_clean; 

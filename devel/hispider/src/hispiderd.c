@@ -54,18 +54,18 @@ void cb_serv_heartbeat_handler(void *arg)
 
     if(serv && linktable)
     {
-        DEBUG_LOGGER(daemon_logger, "start heartbeat docno:%d doctotal:%d", 
-                linktable->docno, linktable->doc_total);
+        //DEBUG_LOGGER(daemon_logger, "start heartbeat docno:%d doctotal:%d", 
+         //       linktable->docno, linktable->doc_total);
         //request
         //task
-        if((taskid = linktable->get_urltask(linktable)) != -1)
+        if((taskid = linktable->get_urltask_one(linktable)) != -1)
         {
             serv->newtask(serv, (void *)&cb_serv_task_handler, (void *)taskid);
             DEBUG_LOGGER(daemon_logger, "linktable->docno:%d doc_total:%d", 
                     linktable->docno, linktable->doc_total);
         }
-        DEBUG_LOGGER(daemon_logger, "end heartbeat docno:%d doctotal:%d", 
-                linktable->docno, linktable->doc_total);
+        //DEBUG_LOGGER(daemon_logger, "end heartbeat docno:%d doctotal:%d", 
+          //      linktable->docno, linktable->doc_total);
     }
     return  ;
 }
@@ -167,8 +167,8 @@ void cb_serv_data_handler(CONN *conn, BUFFER *packet,
         CHUNK *chunk, BUFFER *cache)
 {
     URLMETA *urlmeta = NULL;
-    char *zdata = NULL;
-    int id = 0, status = 0;
+    char *zdata = NULL, *p = NULL;
+    int id = 0, status = 0, ret = 0;
 
     if(conn && chunk->buf && chunk->buf->data)
     {
@@ -176,9 +176,14 @@ void cb_serv_data_handler(CONN *conn, BUFFER *packet,
         zdata = (char *)chunk->buf->data + sizeof(URLMETA);
         status = urlmeta->status;
         id = urlmeta->id;
-        linktable->update_request(linktable, id, status);
+        ret |= linktable->update_request(linktable, id, status);
         if(urlmeta->zsize > 0)
-            linktable->add_zcontent(linktable, urlmeta, zdata, urlmeta->zsize);
+            ret |= linktable->add_zcontent(linktable, urlmeta, zdata, urlmeta->zsize);
+        if(ret != -1) 
+            p = "HTTP/1.0 200 OK\r\n\r\n";
+        else 
+            p = "HTTP/1.0 500 Internal Server Error\r\n\r\n";
+        conn->push_chunk(conn, p, strlen(p));
     }
 }
 

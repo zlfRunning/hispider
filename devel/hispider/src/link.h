@@ -78,6 +78,7 @@ typedef struct _LINKTABLE
     long url_total;
     long urlok_total;
     URLMETA *tasks;
+    URLMETA task;
     int  iszlib;
     int  ntask;
     long  docno;
@@ -97,6 +98,7 @@ typedef struct _LINKTABLE
             unsigned char *href, unsigned char *ehref); 
     int     (*addurl)(struct _LINKTABLE *, char *host, char *path); 
     long    (*get_urltask)(struct _LINKTABLE *);
+    long    (*get_urltask_one)(struct _LINKTABLE *);
     void    (*urlhandler)(struct _LINKTABLE *, long id); 
     int     (*set_ntask)(struct _LINKTABLE *, int ntask);
     char*   (*getip)(struct _LINKTABLE *, char *host);

@@ -120,8 +120,8 @@ void cb_trans_heartbeat_handler(void *arg)
 
     if(transport)
     {
-        DEBUG_LOGGER(daemon_logger, "ntask_total:%d ntask_wait:%d ntask_over:%d",
-                task.ntask_total, task.ntask_wait, task.ntask_over);
+        //DEBUG_LOGGER(daemon_logger, "ntask_total:%d ntask_wait:%d ntask_over:%d",
+        //        task.ntask_total, task.ntask_wait, task.ntask_over);
         for(i = 0; i < task.ntask_limit; i++)
         {
             if(task.requests[i].status == LINK_STATUS_INIT
