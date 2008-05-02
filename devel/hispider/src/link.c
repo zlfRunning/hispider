@@ -313,11 +313,11 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
     if(linktable)
     {
         DEBUG_LOGGER(linktable->logger, "New URL:http://%s%s", host, path);
-        memset(&req, 0, sizeof(HTTP_REQUEST));
         //check dns
         if((n = sprintf(url, "http://%s%s", host, path)) > 0)
         {
-            TIMER_INIT(timer);
+            memset(&req, 0, sizeof(HTTP_REQUEST));
+            memset(md5str, 0, MD5_LEN * 2 + 1);
             md5((unsigned char *)url, n, req.md5);
             p = md5str;
             for(i = 0; i < MD5_LEN; i++) p += sprintf(p, "%02x", req.md5[i]);
@@ -330,16 +330,12 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
                 goto err_end;
             }
             //\n end
-            TIMER_RESET(timer);
             url[n] = '\n';
             if(HIO_APPEND(linktable->urlio, url, n+1, offset) <= 0) 
             {
                 goto err_end;
             }
             url[n] = '\0';
-            TIMER_SAMPLE(timer);
-            DEBUG_LOGGER(linktable->logger, "APPEND URL[%s] offset:%lld time used:%lld", 
-                    url, offset, PT_USEC_USED(timer));
             //host
             ps = req.host;
             p = host;
@@ -367,19 +363,16 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
                 *ps++ = *p++;
                 if(n-- <= 0) {goto err_end;}
             }
-            DEBUG_LOGGER(linktable->logger, "New URL:http://%s%s", host, path);
-            req.id = id = linktable->url_total++;
-            TIMER_RESET(timer);
+            req.id = id = (linktable->url_total + 1);
             if(HIO_APPEND(linktable->md5io, &req, sizeof(HTTP_REQUEST), offset) <= 0 ) 
+            {
                 goto err_end;
-            TIMER_SAMPLE(timer);
-            DEBUG_LOGGER(linktable->logger, "APPEND MD5[%s] offset:%lld time:%lld", 
-                    url, offset, PT_USEC_USED(timer));
+            }
             ADD_TO_MD5TABLE(linktable, md5str, (long *)id);
+            linktable->url_total++;
+            DEBUG_LOGGER(linktable->logger, "New[%d] URL:http://%s%s TOTAL:%d STATUS:%d", 
+                    id, host, path, linktable->url_total, req.status);
             ret = 0;
-            TIMER_SAMPLE(timer);
-            DEBUG_LOGGER(linktable->logger, "time:%lld Added URL[%d] md5[%s] %s", 
-                    PT_USEC_USED(timer), id, md5str, url);
         }
     }
 err_end:
@@ -423,7 +416,7 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST *req)
     int ret = -1;
     int lock = 0;
 
-    if(linktable && req)
+    if(linktable && req && linktable->urlno < linktable->url_total)
     {
         offset = (linktable->urlno * sizeof(HTTP_REQUEST));
         if(HIO_RSEEK(linktable->md5io, offset) >= 0)
@@ -436,7 +429,6 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST *req)
                     ret = 0;
                     break;
                 }
-                else continue;
             }
         }
     }
@@ -449,9 +441,9 @@ int linktable_update_request(LINKTABLE *linktable, int id, int status)
     int ret = -1;
     long long offset = 0;
 
-    if(linktable && id >= 0 && id < linktable->url_total)
+    if(linktable && id > 0 && id <= linktable->url_total)
     {
-        offset = id * sizeof(HTTP_REQUEST);
+        offset = (id-1) * sizeof(HTTP_REQUEST);
         if(HIO_SWRITE(linktable->md5io, &status, sizeof(int), offset) > 0)
         {
             DEBUG_LOGGER(linktable->logger, "Update request[%d] to status[%d]", id ,status);
