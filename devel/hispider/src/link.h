@@ -17,8 +17,8 @@
 #define LFILE_PATH_MAX 256
 #endif
 #ifndef LBUF_SIZE
-//900k
-#define LBUF_SIZE               921600
+//500k
+#define LBUF_SIZE               512000
 #endif  
 #define URL_STATUS_INIT         0x00
 #define URL_STATUS_WAIT         0x02

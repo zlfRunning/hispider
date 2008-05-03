@@ -622,91 +622,57 @@ int linktable_add_content(LINKTABLE *linktable, void *response,
         char *host, char *path, char *content, int ncontent)
 {
     URLMETA urlmeta;
-    int i = 0, ret = -1;
+    HTTP_RESPONSE *resp = (HTTP_RESPONSE *)response;
+    char buf[LBUF_SIZE], *p = NULL, *ps = NULL;
+    char *data = NULL, *zdata = NULL;
+    uLong ndata = 0, nzdata = 0;
     long long offset = 0;
-    int nhost = 0, npath = 0;
-    char buf[LBUF_SIZE], *p = NULL, *data = NULL, *zdata = NULL;
-    uLong n = 0, nzdata = 0;
-    HTTP_RESPONSE *http_response = (HTTP_RESPONSE *)response;
-    int lock = 0;
+    int i = 0, ret = -1, n = 0, nhost = 0, npath = 0;
 
-    if(linktable && response && host && path && content && ncontent > 0)
+    if(linktable && resp && host && path && content && ncontent > 0)
     {
-        memset(&urlmeta, 0, sizeof(urlmeta));
+        memset(&urlmeta, 0, sizeof(URLMETA));
+        nhost = strlen(host) + 1;    
+        npath = strlen(path) + 1;    
         p = buf;
         for(i = 0; i < HTTP_HEADER_NUM; i++)
         {
-            if(http_response->headers[i])
-            {
-                p += sprintf(p, "[%d:%s:%s]", i, http_headers[i].e, http_response->headers[i]);
-            }
+            if(resp->headers[i])
+                p += sprintf(p, "[%d:%s:%s]", i, http_headers[i].e, resp->headers[i]);
         }
-        nhost = strlen(host) + 1;
-        npath = strlen(path) + 1;
+        urlmeta.id  = linktable->doc_total;
+        urlmeta.status = URL_STATUS_INIT;
         urlmeta.hostoff = (p - buf);
-        urlmeta.pathoff =  urlmeta.hostoff + nhost;
-        urlmeta.htmloff = urlmeta.pathoff + npath;
-        urlmeta.size = urlmeta.htmloff + ncontent;
-        //fprintf(stdout, "offhost:%d offpath:%d\n", urlmeta.hostoff, urlmeta.pathoff);
-        if((p = data = (char *)calloc(1, urlmeta.size)))
-        {
-            memcpy(p, buf, urlmeta.hostoff);
-            p += urlmeta.hostoff;
-            memcpy(p, host, nhost);
-            p += nhost;
-            memcpy(p, path, npath);
-            p += npath;
-            memcpy(p, content, ncontent);
-            nzdata = n  = urlmeta.size;
-            p = data;
-            if(linktable->iszlib && (zdata = calloc(1, urlmeta.size))
-                    && zcompress(data, n, zdata, &nzdata) == 0)
-            {
-                p = zdata;
-                n = nzdata;
-                urlmeta.zsize = nzdata;
-                DEBUG_LOGGER(linktable->logger, "Compress document size:%d to size:%d ",
-                        urlmeta.size, urlmeta.zsize);
-            }
-            else
-            {
-                ERROR_LOGGER(linktable->logger, "Compress data length[%d] failed, %s",
-                        n, strerror(errno));
-                goto end;
-            }
-            if(HIO_APPEND(linktable->docio, p, n, urlmeta.offset) > 0)
-            {
-                DEBUG_LOGGER(linktable->logger, "Add meta offset:%lld zsize:%d hostoff:%d "
-                        "pathoff:%d htmloff:%d",
-                        urlmeta.offset, urlmeta.zsize, urlmeta.hostoff, 
-                        urlmeta.pathoff, urlmeta.htmloff);
-                if(HIO_APPEND(linktable->metaio, (&urlmeta), sizeof(URLMETA), offset) > 0)
-                {
-                    linktable->doc_total++;
-                    linktable->size += ncontent;
-                    linktable->zsize += n;
-                    ret = 0;
-                }
-                else
-                {
-                    ERROR_LOGGER(linktable->logger, "Adding meta document length[%d] failed, %s",
-                            urlmeta.size, strerror(errno));
-                }
-            }
-            else
-            {
-                ERROR_LOGGER(linktable->logger, "Adding document length[%d] failed, %s",
-                        urlmeta.size, strerror(errno));
-            }
+        urlmeta.pathoff = urlmeta.hostoff + nhost;
+        urlmeta.htmloff = urlmeta.hostoff + npath;
+        nzdata = ndata = urlmeta.size = urlmeta.htmloff + ncontent;
+        if((data = (char *)calloc(1, ndata)) == NULL 
+                || (zdata = (char *)calloc(1, ndata)) == NULL) goto end;
+        ps = data;
+        memcpy(ps, buf, urlmeta.hostoff);
+        ps += urlmeta.hostoff;
+        memcpy(ps, host, nhost);
+        ps += nhost;
+        memcpy(ps, host, npath);
+        ps += npath;
+        memcpy(ps, content, ncontent);
+        if(zcompress(data, nzdata, zdata, &nzdata) != 0) goto end;
+        if(HIO_APPEND(linktable->docio, zdata, nzdata, urlmeta.offset) <= 0) goto end;
+        if(HIO_APPEND(linktable->metaio, &(urlmeta), sizeof(URLMETA), offset) <= 0) goto end;
+        linktable->doc_total++;
+        ret = 0;
+        DEBUG_LOGGER(linktable->logger, "Added URLMETA[%d] hostoff:%d pathoff:%d"
+                "size:%d zsize:%d to offset:%lld",
+                urlmeta.id, urlmeta.hostoff, urlmeta.pathoff, 
+                urlmeta.size, urlmeta.zsize, offset);
 end:
-            if(zdata) free(zdata);
-            if(data) free(data);
-        }
+        if(data) free(data);
+        if(zdata) free(zdata);
     }
     return ret;
 }
 
-
+/* Resume */
 int linktable_resume(LINKTABLE *linktable)
 {
     HTTP_REQUEST req;
@@ -860,8 +826,7 @@ void *pthread_handler(void *arg)
             fd = socket(AF_INET, SOCK_STREAM, 0);
             n = sprintf(buf, "GET %s HTTP/1.0\r\nHOST: %s\r\nUser-Agent: Mozilla\r\n\r\n", 
                     request.path, request.host);
-            if(fd > 0 &&  connect(fd, (struct sockaddr *)&sa, sa_len) == 0  
-                    && write(fd, buf, n) > 0)
+            if(fd > 0 &&  connect(fd, (struct sockaddr *)&sa, sa_len) == 0 && write(fd, buf, n) > 0)
             {
                 fprintf(stdout, "---request----\r\n%s----[end]----\r\n", buf);
                 fcntl(fd, F_SETFL, O_NONBLOCK);
@@ -912,14 +877,17 @@ void *pthread_handler(void *arg)
                 }
                 if(response.respid == RESP_OK)
                 {
-                    p = (buffer->data + response.header_size);
-                    end = (char *)(char *)buffer->end;
+                    p = (char *)(buffer->data + response.header_size);
+                    end = (char *)buffer->end;
+                    DEBUG_LOGGER(linktable->logger, "Ready for add document[http://%s%s] %08x:%d",
+                                request.host, request.path, p, (end - p));
                     if(linktable->add_content(linktable, &response, 
                                 request.host, request.path, p, (end - p)) != 0)
                     {
                         ERROR_LOGGER(linktable->logger, "Adding http://%s%s content failed, %s",
                                 request.host, request.path, strerror(errno));
                     }
+                    DEBUG_LOGGER(linktable->logger, "OK");
                     linktable->update_request(linktable, request.id, LINK_STATUS_OVER);
                     DEBUG_LOGGER(linktable->logger, "OK response ");
                 }
