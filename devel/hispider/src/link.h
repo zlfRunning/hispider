@@ -18,7 +18,7 @@
 #endif
 #ifndef LBUF_SIZE
 //500k
-#define LBUF_SIZE               512000
+#define LBUF_SIZE               65536
 #endif  
 #define URL_STATUS_INIT         0x00
 #define URL_STATUS_WAIT         0x02

@@ -644,7 +644,7 @@ int linktable_add_content(LINKTABLE *linktable, void *response,
         urlmeta.status = URL_STATUS_INIT;
         urlmeta.hostoff = (p - buf);
         urlmeta.pathoff = urlmeta.hostoff + nhost;
-        urlmeta.htmloff = urlmeta.hostoff + npath;
+        urlmeta.htmloff = urlmeta.pathoff + npath;
         nzdata = ndata = urlmeta.size = urlmeta.htmloff + ncontent;
         if((data = (char *)calloc(1, ndata)) == NULL 
                 || (zdata = (char *)calloc(1, ndata)) == NULL) goto end;
@@ -653,10 +653,11 @@ int linktable_add_content(LINKTABLE *linktable, void *response,
         ps += urlmeta.hostoff;
         memcpy(ps, host, nhost);
         ps += nhost;
-        memcpy(ps, host, npath);
+        memcpy(ps, path, npath);
         ps += npath;
         memcpy(ps, content, ncontent);
         if(zcompress(data, nzdata, zdata, &nzdata) != 0) goto end;
+        urlmeta.zsize = nzdata;
         if(HIO_APPEND(linktable->docio, zdata, nzdata, urlmeta.offset) <= 0) goto end;
         if(HIO_APPEND(linktable->metaio, &(urlmeta), sizeof(URLMETA), offset) <= 0) goto end;
         linktable->doc_total++;
@@ -669,6 +670,8 @@ end:
         if(data) free(data);
         if(zdata) free(zdata);
     }
+    /*
+    */
     return ret;
 }
 
@@ -879,8 +882,8 @@ void *pthread_handler(void *arg)
                 {
                     p = (char *)(buffer->data + response.header_size);
                     end = (char *)buffer->end;
-                    DEBUG_LOGGER(linktable->logger, "Ready for add document[http://%s%s] %08x:%d",
-                                request.host, request.path, p, (end - p));
+                    DEBUG_LOGGER(linktable->logger, "Ready for add[%08x] document[http://%s%s] %08x:%d",
+                                linktable->add_content, request.host, request.path, p, (end - p));
                     if(linktable->add_content(linktable, &response, 
                                 request.host, request.path, p, (end - p)) != 0)
                     {
