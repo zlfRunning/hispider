@@ -251,7 +251,7 @@ void cb_trans_data_handler(CONN *conn, BUFFER *packet,
     URLMETA *purlmeta = NULL;
     HTTP_RESPONSE *resp = NULL;
     HTTP_REQUEST *req = NULL;
-    char buf[HTTP_BUF_SIZE];
+    char buf[LBUF_SIZE];
     char *data = NULL, *zdata = NULL, *p = NULL;
     int i = 0, c_id = 0, n = 0, nhost = 0, npath = 0, status = 0;
     unsigned long nzdata = 0, ndata = 0;

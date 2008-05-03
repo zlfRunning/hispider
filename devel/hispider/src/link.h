@@ -3,7 +3,7 @@
 #include <string.h>
 #ifndef _LINK_H
 #define _LINK_H
-#define HTTP_BUF_SIZE 262144
+#define HTTP_BUF_SIZE  65536
 #ifndef HTTP_HOST_MAX
 #define HTTP_HOST_MAX  64
 #endif
