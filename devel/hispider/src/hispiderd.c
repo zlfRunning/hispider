@@ -6,6 +6,7 @@
 #include <locale.h>
 #include <sys/stat.h>
 #include <sbase.h>
+#include <execinfo.h>
 #include "http.h"
 #include "link.h"
 #include "iniparser.h"
@@ -306,7 +307,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
 		return ret;
 	}
     //logger 
-	daemon_logger = logger_init(iniparser_getstr(dict, "DAEMON:access_log"));
+	LOGGER_INIT(daemon_logger, iniparser_getstr(dict, "DAEMON:access_log"));
     //timeout
     if((p = iniparser_getstr(dict, "DAEMON:timeout")))
         global_timeout_times = str2ll(p);
@@ -337,11 +338,11 @@ int sbase_initialize(SBASE *sbase, char *conf)
     return 0;
 }
 
-void bt_handler()
+static void bt_handler()
 {
     char* callstack[128];
-    int i, frames = backtrace(callstack, 128);
-    char** strs = backtrace_symbols(callstack, frames);
+    int i, frames = backtrace((void **)callstack, 128);
+    char** strs = backtrace_symbols((void **)callstack, frames);
     for (i = 0; i < frames; ++i) {
         fprintf(stderr, "%s\n", strs[i]);
     }

@@ -500,7 +500,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
 		return ret;
 	}
     //logger 
-	daemon_logger = logger_init(iniparser_getstr(dict, "TRANSPORT:access_log"));
+	LOGGER_INIT(daemon_logger, iniparser_getstr(dict, "TRANSPORT:access_log"));
     //daemon ip and ip
     task.daemon_ip = iniparser_getstr(dict, "TRANSPORT:daemon_ip");
     task.daemon_port = iniparser_getint(dict, "TRANSPORT:daemon_port", 3721);

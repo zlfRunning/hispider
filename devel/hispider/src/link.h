@@ -3,7 +3,7 @@
 #include <string.h>
 #ifndef _LINK_H
 #define _LINK_H
-#define HTTP_BUF_SIZE 8192
+#define HTTP_BUF_SIZE 262144
 #ifndef HTTP_HOST_MAX
 #define HTTP_HOST_MAX  64
 #endif
@@ -18,7 +18,7 @@
 #endif
 #ifndef LBUF_SIZE
 //500k
-#define LBUF_SIZE               65536
+#define LBUF_SIZE               262144
 #endif  
 #define URL_STATUS_INIT         0x00
 #define URL_STATUS_WAIT         0x02

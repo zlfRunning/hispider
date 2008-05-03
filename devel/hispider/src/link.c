@@ -838,7 +838,6 @@ void *pthread_handler(void *arg)
                 memset(&response, 0, sizeof(HTTP_RESPONSE));
                 response.respid = -1;
                 buffer->reset(buffer);
-                DEBUG_LOGGER(linktable->logger, "%d OK", __LINE__);
                 for(;;)
                 {
                     select(fd+1,&readset,NULL,NULL,NULL);
@@ -852,11 +851,10 @@ void *pthread_handler(void *arg)
                                     && strncasecmp(p, "text", 4) != 0)
                             {
                                 response.respid = RESP_NOCONTENT;
-                                fprintf(stdout, "Content-Type:%s\n", p);
+                                //fprintf(stdout, "Content-Type:%s\n", p);
                             }
                             if(response.respid != -1 && response.respid != RESP_OK)
                             {
-                                DEBUG_LOGGER(linktable->logger, "%d OK", __LINE__);
                                 shutdown(fd, SHUT_RDWR);
                                 close(fd);
                                 break;
@@ -864,7 +862,6 @@ void *pthread_handler(void *arg)
                         }
                         else 
                         {
-                            DEBUG_LOGGER(linktable->logger, "%d OK", __LINE__);
                             shutdown(fd, SHUT_RDWR);
                             close(fd);
                             break;
@@ -872,7 +869,6 @@ void *pthread_handler(void *arg)
                     }
                     usleep(10);
                 }
-                DEBUG_LOGGER(linktable->logger, "%d OK", __LINE__);
                 buffer->push(buffer, "\0", 1);
                 if(response.respid != -1)
                 {
@@ -882,15 +878,15 @@ void *pthread_handler(void *arg)
                 {
                     p = (char *)(buffer->data + response.header_size);
                     end = (char *)buffer->end;
-                    DEBUG_LOGGER(linktable->logger, "Ready for add[%08x] document[http://%s%s] %08x:%d",
-                                linktable->add_content, request.host, request.path, p, (end - p));
+                    //DEBUG_LOGGER(linktable->logger, 
+                    //        "Ready for add[%08x] document[http://%s%s] %08x:%d",
+                    //        linktable->add_content, request.host, request.path, p, (end - p));
                     if(linktable->add_content(linktable, &response, 
                                 request.host, request.path, p, (end - p)) != 0)
                     {
                         ERROR_LOGGER(linktable->logger, "Adding http://%s%s content failed, %s",
                                 request.host, request.path, strerror(errno));
                     }
-                    DEBUG_LOGGER(linktable->logger, "OK");
                     linktable->update_request(linktable, request.id, LINK_STATUS_OVER);
                     DEBUG_LOGGER(linktable->logger, "OK response ");
                 }
