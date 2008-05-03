@@ -1,6 +1,6 @@
 /* Copyright 2006 David Crawshaw, released under the new BSD license.
  * Version 2, from http://www.zentus.com/c/hash.html */
-
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>

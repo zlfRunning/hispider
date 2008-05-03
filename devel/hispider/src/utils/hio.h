@@ -46,7 +46,7 @@ typedef struct _HIO
         ? read(RD(ptr), s, ns) : RCD(ptr))
 #define HIO_SWRITE(ptr, s, ns, off) ((WCHK(ptr)==0 && lseek(WD(ptr), off, SEEK_SET) >= 0) \
         ? write(WD(ptr), s, ns) : WCD(ptr))
-#define HIO_APPEND(ptr, s, ns, off) ((WCHK(ptr)==0 && (offset = lseek(WD(ptr), 0, SEEK_END))>= 0) \
+#define HIO_APPEND(ptr, s, ns, off) ((WCHK(ptr)==0 && (off = lseek(WD(ptr), 0, SEEK_END))>= 0) \
         ? write(WD(ptr), s, ns) : WCD(ptr))
 #define HIO_CLEAN(ptr)                          \
 {                                               \

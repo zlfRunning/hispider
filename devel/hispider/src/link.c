@@ -45,7 +45,7 @@
     if(ptr)                                                     \
     {                                                           \
         MUTEX_LOCK(ptr->mutex);                                 \
-        TABLE_ADD(ptr->md5table, md5str, id);                   \
+        TABLE_ADD((ptr->md5table), md5str, id);                 \
         MUTEX_UNLOCK(ptr->mutex);                               \
     }                                                           \
 }
@@ -54,7 +54,7 @@
     if(ptr)                                                     \
     {                                                           \
         MUTEX_LOCK(ptr->mutex);                                 \
-        id = (long )TABLE_GET(ptr->md5table, md5str);           \
+        id = (long )TABLE_GET((ptr->md5table), md5str);         \
         MUTEX_UNLOCK(ptr->mutex);                               \
     }                                                           \
 }
@@ -386,13 +386,10 @@ char *linktable_getip(LINKTABLE *linktable, char *hostname)
     char *ip = NULL;
     if(linktable)
     {
-        DEBUG_LOGGER(linktable->logger, "Ready for [%s]'s ip", hostname);
-        if((ip = (char *)TABLE_GET(linktable->dnstable, hostname))) return ip;
+        if((ip = ((char *)TABLE_GET(linktable->dnstable, hostname)))) return ip; 
         DEBUG_LOGGER(linktable->logger, "Ready for [%s]'s ip", hostname);
         if((hp = gethostbyname((const char *)hostname)) == NULL) return NULL;
-        DEBUG_LOGGER(linktable->logger, "Ready for [%s]'s ip", hostname);
         MUTEX_LOCK(linktable->mutex);
-        DEBUG_LOGGER(linktable->logger, "Ready for [%s]'s ip", hostname);
         if((linktable->dnslist = (char **)realloc(linktable->dnslist, 
                         sizeof(char *) * (linktable->dnscount + 1)))
                 && (ip = linktable->dnslist[linktable->dnscount++] 
@@ -548,6 +545,8 @@ void linktable_urlhandler(LINKTABLE *linktable, long taskid)
         {
             ndata = purlmeta->size;
             nzdata = purlmeta->zsize;
+            //fprintf(stdout, "line:%d id:%d offset:%lld status:%d size:%d zsize:%d\n", __LINE__,
+            //purlmeta->id, purlmeta->offset, purlmeta->status, purlmeta->size, purlmeta->zsize);
             if(HIO_SREAD(linktable->docio, zdata, nzdata, purlmeta->offset) <= 0)
             {
                 FATAL_LOGGER(linktable->logger, "Read from %s offset:%lld failed, %s",
@@ -727,7 +726,7 @@ int linktable_resume(LINKTABLE *linktable)
             for(i = 0; i < MD5_LEN; i++)
                 p += sprintf(p, "%02x", req.md5[i]);
             ADD_TO_MD5TABLE(linktable, md5str, (long *)++n);
-            ip = linktable->getip(linktable->dnstable, req.host);
+            ip = linktable->getip(linktable, req.host);
             if(req.status == LINK_STATUS_INIT && id == -1)
             {
                 id = linktable->urlno = n;
@@ -819,7 +818,7 @@ LINKTABLE *linktable_init()
 }
 #ifdef _DEBUG_LINKTABLE
 //gen.sh 
-//gcc -o tlink -D_DEBUG_LINKTABLE link.c http.c utils/.* -I utils/ -DHAVE_PTHREAD -lpthread -lz && ./tlink www.sina.com.cn / &
+//gcc -o tlink -D_DEBUG_LINKTABLE link.c http.c utils/*.c -I utils/ -DHAVE_PTHREAD -lpthread -lz _D_DEBUG && ./tlink www.sina.com.cn / &
 #include <pthread.h>
 #include "http.h"
 #include "timer.h"
@@ -838,6 +837,9 @@ void *pth_handler(void *arg)
             DEBUG_LOGGER(ltable->logger, "start task:%d", taskid);
             ltable->urlhandler(ltable, taskid);
             DEBUG_LOGGER(ltable->logger, "Completed task:%d", taskid);
+            fprintf(stdout, "urlno:%d urlok:%d urltotal:%d docno:%d docok:%d doctotal:%d",
+                    ltable->urlno, ltable->urlok_total, ltable->url_total,
+                    ltable->docno, ltable->docok_total, ltable->doc_total);
         }
         usleep(100);
     }
