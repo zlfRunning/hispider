@@ -67,7 +67,7 @@ int linktable_set_logger(LINKTABLE *linktable, char *logfile, void *logger)
         linktable->isinsidelogger = 0;
         if(logfile) 
         {
-            linktable->logger = logger_init(logfile);
+            LOGGER_INIT(linktable->logger, logfile);
             linktable->isinsidelogger = 1;
         }
         DEBUG_LOGGER(linktable->logger, "Setting logfile %s", logfile);
@@ -726,7 +726,7 @@ int linktable_resume(LINKTABLE *linktable)
             for(i = 0; i < MD5_LEN; i++)
                 p += sprintf(p, "%02x", req.md5[i]);
             ADD_TO_MD5TABLE(linktable, md5str, (long *)++n);
-            ip = linktable->getip(linktable, req.host);
+            TABLE_ADD(linktable->dnstable, req.host, req.ip);
             if(req.status == LINK_STATUS_INIT && id == -1)
             {
                 id = linktable->urlno = n;
@@ -763,7 +763,7 @@ void linktable_clean(LINKTABLE **linktable)
         TABLE_DESTROY((*linktable)->md5table);
         TABLE_DESTROY((*linktable)->dnstable);
         MUTEX_DESTROY((*linktable)->mutex);
-        if((*linktable)->isinsidelogger) {CLOSE_LOGGER((*linktable)->logger);}
+        if((*linktable)->isinsidelogger) {LOGGER_CLEAN((*linktable)->logger);}
         if((*linktable)->tasks) free((*linktable)->tasks);
         if((*linktable)->dnslist)
         {
@@ -825,33 +825,12 @@ LINKTABLE *linktable_init()
 #include "buffer.h"
 #include "basedef.h"
 #define BUF_SIZE 8192
-void *pth_handler(void *arg)
-{
-    LINKTABLE *ltable = (LINKTABLE *)arg;
-    int taskid = -1;
-   // DEBUG_LOGGER(ltable->logger, "thread[%08x] start .....", pthread_self());
-    while(1)
-    {
-        if((taskid = ltable->get_urltask(ltable)) != -1)
-        {
-            DEBUG_LOGGER(ltable->logger, "start task:%d", taskid);
-            ltable->urlhandler(ltable, taskid);
-            DEBUG_LOGGER(ltable->logger, "Completed task:%d", taskid);
-            fprintf(stdout, "urlno:%d urlok:%d urltotal:%d docno:%d docok:%d doctotal:%d",
-                    ltable->urlno, ltable->urlok_total, ltable->url_total,
-                    ltable->docno, ltable->docok_total, ltable->doc_total);
-        }
-        usleep(100);
-    }
-    return NULL;
-}
-
-int main(int argc, char **argv)
+void *pthread_handler(void *arg)
 {
     int i = 0, n = 0;
     char *p = NULL, *end = NULL;
     BUFFER *buffer = NULL;
-    LINKTABLE *linktable = NULL;
+    LINKTABLE *linktable = (LINKTABLE *)arg;
     HTTP_RESPONSE response;
     int fd = 0;
     struct sockaddr_in sa;
@@ -863,16 +842,127 @@ int main(int argc, char **argv)
     int sid = 0;
     int flag = 0;
     long long count = 0;
+
+    buffer = buffer_init();
+    while(1)
+    {
+        fprintf(stdout, "thread[%08x] start .....logger[%08x] urlno:%d urltotal:%d\n", 
+                pthread_self(), linktable->logger, linktable->urlno, linktable->url_total);
+        if((sid = linktable->get_request(linktable, &request)) != -1)
+        {
+            fprintf(stdout, "num:%d http://%s%s %s:%d\n", sid, request.host, 
+                    request.path, request.ip, request.port);
+            memset(&sa, 0, sizeof(struct sockaddr_in));
+            sa.sin_family = AF_INET;
+            sa.sin_addr.s_addr = inet_addr(request.ip);
+            sa.sin_port = htons(request.port);
+            sa_len = sizeof(struct sockaddr);
+            fd = socket(AF_INET, SOCK_STREAM, 0);
+            n = sprintf(buf, "GET %s HTTP/1.0\r\nHOST: %s\r\nUser-Agent: Mozilla\r\n\r\n", 
+                    request.path, request.host);
+            if(fd > 0 &&  connect(fd, (struct sockaddr *)&sa, sa_len) == 0  
+                    && write(fd, buf, n) > 0)
+            {
+                fprintf(stdout, "---request----\r\n%s----[end]----\r\n", buf);
+                fcntl(fd, F_SETFL, O_NONBLOCK);
+                FD_ZERO(&readset);
+                FD_SET(fd,&readset);
+                memset(&response, 0, sizeof(HTTP_RESPONSE));
+                response.respid = -1;
+                buffer->reset(buffer);
+                DEBUG_LOGGER(linktable->logger, "%d OK", __LINE__);
+                for(;;)
+                {
+                    select(fd+1,&readset,NULL,NULL,NULL);
+                    if(FD_ISSET(fd, &readset))
+                    {
+                        if((n = read(fd, buf, BUF_SIZE)) > 0)
+                        {
+                            buffer->push(buffer, buf, n);   
+                            PARSE_RESPONSE(p, end, buffer, response);
+                            if((p = response.headers[HEAD_ENT_CONTENT_TYPE])
+                                    && strncasecmp(p, "text", 4) != 0)
+                            {
+                                response.respid = RESP_NOCONTENT;
+                                fprintf(stdout, "Content-Type:%s\n", p);
+                            }
+                            if(response.respid != -1 && response.respid != RESP_OK)
+                            {
+                                DEBUG_LOGGER(linktable->logger, "%d OK", __LINE__);
+                                shutdown(fd, SHUT_RDWR);
+                                close(fd);
+                                break;
+                            }
+                        }
+                        else 
+                        {
+                            DEBUG_LOGGER(linktable->logger, "%d OK", __LINE__);
+                            shutdown(fd, SHUT_RDWR);
+                            close(fd);
+                            break;
+                        }
+                    }
+                    usleep(10);
+                }
+                DEBUG_LOGGER(linktable->logger, "%d OK", __LINE__);
+                buffer->push(buffer, "\0", 1);
+                if(response.respid != -1)
+                {
+                    PARSE_RESPONSE(p, end, buffer, response);
+                }
+                if(response.respid == RESP_OK)
+                {
+                    p = (buffer->data + response.header_size);
+                    end = (char *)(char *)buffer->end;
+                    if(linktable->add_content(linktable, &response, 
+                                request.host, request.path, p, (end - p)) != 0)
+                    {
+                        ERROR_LOGGER(linktable->logger, "Adding http://%s%s content failed, %s",
+                                request.host, request.path, strerror(errno));
+                    }
+                    linktable->update_request(linktable, request.id, LINK_STATUS_OVER);
+                    DEBUG_LOGGER(linktable->logger, "OK response ");
+                }
+                else
+                {
+                    DEBUG_LOGGER(linktable->logger, "ERROR response ");
+                    linktable->update_request(linktable, sid, LINK_STATUS_ERROR);
+                }
+                shutdown(fd, SHUT_RDWR);
+                close(fd);
+            } 
+            else
+            {
+                fprintf(stderr, "connected failed,%s", strerror(errno));
+                linktable->update_request(linktable, sid, LINK_STATUS_DISCARD);
+            }
+        }
+        usleep(100);
+    }
+    linktable->clean(&linktable);
+    buffer->clean(&buffer);
+    return NULL;
+}
+
+
+int main(int argc, char **argv)
+{
+    int i = 0, n = 0;
+    int taskid = -1;
+    int threads_count = 1;
+    char *hostname = NULL, *path = NULL;
     pthread_t threadid = 0;
+    LINKTABLE *linktable = NULL;
 
     if(argc < 3)
     {
-        fprintf(stderr, "Usage:%s hostname path\n", argv[0]);
+        fprintf(stderr, "Usage:%s hostname path pthreads_count\n", argv[0]);
         _exit(-1);
     }
 
     hostname = argv[1];
     path = argv[2];
+    if(argc > 3 && argv[3]) threads_count = atoi(argv[3]); 
 
     if(linktable = linktable_init())
     {
@@ -881,108 +971,34 @@ int main(int argc, char **argv)
         linktable->set_urlfile(linktable, "/tmp/link.url");
         linktable->set_metafile(linktable, "/tmp/link.meta");
         linktable->set_docfile(linktable, "/tmp/link.doc");
-        linktable->set_ntask(linktable, 4);
+        linktable->set_ntask(linktable, threads_count);
         linktable->iszlib = 1;
         linktable->resume(linktable);
         linktable->addurl(linktable, hostname, path);
-        buffer = buffer_init();
-        if(pthread_create(&threadid, NULL, &pth_handler, (void *)linktable) != 0)
+        //pthreads 
+        for(i = 0; i < threads_count; i++)
         {
-            fprintf(stderr, "Create NEW thread failed, %s\n", strerror(errno));
-            _exit(-1);
+            if(pthread_create(&threadid, NULL, &pthread_handler, (void *)linktable) != 0)
+            {
+                fprintf(stderr, "Create NEW threads[%d][%08x] failed, %s\n", 
+                        i, threadid, strerror(errno));
+                _exit(-1);
+            }
         }
+        // DEBUG_LOGGER(ltable->logger, "thread[%08x] start .....", pthread_self());
         while(1)
         {
-            //DEBUG_LOGGER(linktable->logger, "thread[%08x] start .....", pthread_self());
-            if((sid = linktable->get_request(linktable, &request)) != -1)
+            if((taskid = linktable->get_urltask(linktable)) != -1)
             {
-                fprintf(stdout, "num:%d http://%s%s %s:%d\n", sid, request.host, 
-                        request.path, request.ip, request.port);
-                memset(&sa, 0, sizeof(struct sockaddr_in));
-                sa.sin_family = AF_INET;
-                sa.sin_addr.s_addr = inet_addr(request.ip);
-                sa.sin_port = htons(request.port);
-                sa_len = sizeof(struct sockaddr);
-                fd = socket(AF_INET, SOCK_STREAM, 0);
-                if(fd > 0 &&  connect(fd, (struct sockaddr *)&sa, sa_len) == 0 )
-                {
-                    fcntl(fd, F_SETFL, O_NONBLOCK);
-                    FD_ZERO(&readset);
-                    FD_SET(fd,&readset);
-                    n = sprintf(buf, "GET %s HTTP/1.0\r\nHOST: %s\r\nUser-Agent: Mozilla\r\n\r\n", 
-                            request.path, request.host);
-                    write(fd, buf, n); 
-                    fprintf(stdout, "---request----\r\n%s----end----\r\n", buf);
-                    buffer->reset(buffer);
-                    memset(&response, 0, sizeof(HTTP_RESPONSE));
-                    response.respid = -1;
-                    for(;;)
-                    {
-                        select(fd+1,&readset,NULL,NULL,NULL);
-                        if(FD_ISSET(fd, &readset))
-                        {
-                            if((n = read(fd, buf, BUF_SIZE)) > 0)
-                            {
-                                buffer->push(buffer, buf, n);   
-                                PARSE_RESPONSE(p, end, buffer, response);
-                                if((p = response.headers[HEAD_ENT_CONTENT_TYPE])
-                                        && strncasecmp(p, "text", 4) != 0)
-                                {
-                                    response.respid = RESP_NOCONTENT;
-                                    fprintf(stdout, "Content-Type:%s\n", p);
-                                }
-                                if(response.respid != -1 && response.respid != RESP_OK)
-                                {
-                                    shutdown(fd, SHUT_RDWR);
-                                    close(fd);
-                                    break;
-                                }
-                            }
-                            else 
-                            {
-                                shutdown(fd, SHUT_RDWR);
-                                close(fd);
-                                break;
-                            }
-                        }
-                        usleep(10);
-                    }
-                    buffer->push(buffer, "\0", 1);
-                    if(response.respid != -1)
-                    {
-                        PARSE_RESPONSE(p, end, buffer, response);
-                    }
-                    if(response.respid == RESP_OK)
-                    {
-                        p = (buffer->data+response.header_size);
-                        end = (char *)(char *)buffer->end;
-                        if(linktable->add_content(linktable, &response, 
-                                request.host, request.path, p, (end - p)) != 0)
-                        {
-                            ERROR_LOGGER(linktable->logger, "Adding http://%s%s content failed, %s",
-                                    request.host, request.path, strerror(errno));
-                        }
-                        linktable->update_request(linktable, request.id, LINK_STATUS_OVER);
-                        DEBUG_LOGGER(linktable->logger, "OK response ");
-                    }
-                    else
-                    {
-                        DEBUG_LOGGER(linktable->logger, "ERROR response ");
-                        linktable->update_request(linktable, sid, LINK_STATUS_ERROR);
-                    }
-                    shutdown(fd, SHUT_RDWR);
-                    close(fd);
-                } 
-                else
-                {
-                    fprintf(stderr, "connected failed,%s", strerror(errno));
-                    linktable->update_request(linktable, sid, LINK_STATUS_DISCARD);
-                }
+                DEBUG_LOGGER(linktable->logger, "start task:%d", taskid);
+                linktable->urlhandler(linktable, taskid);
+                DEBUG_LOGGER(linktable->logger, "Completed task:%d", taskid);
+                fprintf(stdout, "urlno:%d urlok:%d urltotal:%d docno:%d docok:%d doctotal:%d\n",
+                        linktable->urlno, linktable->urlok_total, linktable->url_total,
+                        linktable->docno, linktable->docok_total, linktable->doc_total);
             }
             usleep(100);
         }
-        linktable->clean(&linktable);
-        buffer->clean(&buffer);
     }
 }
 #endif
