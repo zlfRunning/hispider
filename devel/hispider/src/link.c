@@ -629,17 +629,20 @@ int linktable_add_content(LINKTABLE *linktable, void *response,
     long long offset = 0;
     int i = 0, ret = -1, n = 0, nhost = 0, npath = 0;
 
+    DEBUG_LOGGER(linktable->logger, "OK");
     if(linktable && resp && host && path && content && ncontent > 0)
     {
         memset(&urlmeta, 0, sizeof(URLMETA));
         nhost = strlen(host) + 1;    
         npath = strlen(path) + 1;    
         p = buf;
+    DEBUG_LOGGER(linktable->logger, "OK");
         for(i = 0; i < HTTP_HEADER_NUM; i++)
         {
             if(resp->headers[i])
                 p += sprintf(p, "[%d:%s:%s]", i, http_headers[i].e, resp->headers[i]);
         }
+    DEBUG_LOGGER(linktable->logger, "OK");
         urlmeta.id  = linktable->doc_total;
         urlmeta.status = URL_STATUS_INIT;
         urlmeta.hostoff = (p - buf);
@@ -648,6 +651,7 @@ int linktable_add_content(LINKTABLE *linktable, void *response,
         nzdata = ndata = urlmeta.size = urlmeta.htmloff + ncontent;
         if((data = (char *)calloc(1, ndata)) == NULL 
                 || (zdata = (char *)calloc(1, ndata)) == NULL) goto end;
+    DEBUG_LOGGER(linktable->logger, "OK");
         ps = data;
         memcpy(ps, buf, urlmeta.hostoff);
         ps += urlmeta.hostoff;
@@ -656,10 +660,14 @@ int linktable_add_content(LINKTABLE *linktable, void *response,
         memcpy(ps, path, npath);
         ps += npath;
         memcpy(ps, content, ncontent);
+    DEBUG_LOGGER(linktable->logger, "OK");
         if(zcompress(data, nzdata, zdata, &nzdata) != 0) goto end;
+    DEBUG_LOGGER(linktable->logger, "OK");
         urlmeta.zsize = nzdata;
         if(HIO_APPEND(linktable->docio, zdata, nzdata, urlmeta.offset) <= 0) goto end;
+    DEBUG_LOGGER(linktable->logger, "OK");
         if(HIO_APPEND(linktable->metaio, &(urlmeta), sizeof(URLMETA), offset) <= 0) goto end;
+    DEBUG_LOGGER(linktable->logger, "OK");
         linktable->doc_total++;
         ret = 0;
         DEBUG_LOGGER(linktable->logger, "Added URLMETA[%d] hostoff:%d pathoff:%d"
@@ -787,7 +795,7 @@ LINKTABLE *linktable_init()
 }
 #ifdef _DEBUG_LINKTABLE
 //gen.sh 
-//gcc -o tlink -D_DEBUG_LINKTABLE link.c http.c utils/*.c -I utils/ -DHAVE_PTHREAD -lpthread -lz _D_DEBUG && ./tlink www.sina.com.cn / &
+//gcc -o tlink -D_DEBUG_LINKTABLE -D_FILE_OFFSET_BITS=64 link.c http.c utils/*.c -I utils/ -DHAVE_PTHREAD -lpthread -lz -D_DEBUG && ./tlink www.sina.com.cn / 2 &
 #include <pthread.h>
 #include "http.h"
 #include "timer.h"
@@ -815,11 +823,11 @@ void *pthread_handler(void *arg)
     buffer = buffer_init();
     while(1)
     {
-        fprintf(stdout, "thread[%08x] start .....logger[%08x] urlno:%d urltotal:%d\n", 
-                pthread_self(), linktable->logger, linktable->urlno, linktable->url_total);
+        //fprintf(stdout, "thread[%08x] start .....logger[%08x] urlno:%d urltotal:%d\n", 
+        //        pthread_self(), linktable->logger, linktable->urlno, linktable->url_total);
         if((sid = linktable->get_request(linktable, &request)) != -1)
         {
-            fprintf(stdout, "num:%d http://%s%s %s:%d\n", sid, request.host, 
+            DEBUG_LOGGER(linktable->logger, "num:%d http://%s%s %s:%d\n", sid, request.host, 
                     request.path, request.ip, request.port);
             memset(&sa, 0, sizeof(struct sockaddr_in));
             sa.sin_family = AF_INET;
@@ -838,6 +846,7 @@ void *pthread_handler(void *arg)
                 memset(&response, 0, sizeof(HTTP_RESPONSE));
                 response.respid = -1;
                 buffer->reset(buffer);
+                DEBUG_LOGGER(linktable->logger, "OK");
                 for(;;)
                 {
                     select(fd+1,&readset,NULL,NULL,NULL);
@@ -869,18 +878,21 @@ void *pthread_handler(void *arg)
                     }
                     usleep(10);
                 }
+                DEBUG_LOGGER(linktable->logger, "OK");
                 buffer->push(buffer, "\0", 1);
+                DEBUG_LOGGER(linktable->logger, "OK");
                 if(response.respid != -1)
                 {
                     PARSE_RESPONSE(p, end, buffer, response);
                 }
+                DEBUG_LOGGER(linktable->logger, "OK");
                 if(response.respid == RESP_OK)
                 {
                     p = (char *)(buffer->data + response.header_size);
                     end = (char *)buffer->end;
-                    //DEBUG_LOGGER(linktable->logger, 
-                    //        "Ready for add[%08x] document[http://%s%s] %08x:%d",
-                    //        linktable->add_content, request.host, request.path, p, (end - p));
+                    DEBUG_LOGGER(linktable->logger, 
+                            "Ready for add[%08x] document[http://%s%s] %08x:%d",
+                            linktable->add_content, request.host, request.path, p, (end - p));
                     if(linktable->add_content(linktable, &response, 
                                 request.host, request.path, p, (end - p)) != 0)
                     {
@@ -894,6 +906,7 @@ void *pthread_handler(void *arg)
                 {
                     DEBUG_LOGGER(linktable->logger, "ERROR response ");
                     linktable->update_request(linktable, sid, LINK_STATUS_ERROR);
+                    DEBUG_LOGGER(linktable->logger, "OK");
                 }
                 shutdown(fd, SHUT_RDWR);
                 close(fd);
@@ -960,7 +973,8 @@ int main(int argc, char **argv)
                 DEBUG_LOGGER(linktable->logger, "start task:%d", taskid);
                 linktable->urlhandler(linktable, taskid);
                 DEBUG_LOGGER(linktable->logger, "Completed task:%d", taskid);
-                fprintf(stdout, "urlno:%d urlok:%d urltotal:%d docno:%d docok:%d doctotal:%d\n",
+                DEBUG_LOGGER(linktable->logger, 
+                        "urlno:%d urlok:%d urltotal:%d docno:%d docok:%d doctotal:%d\n",
                         linktable->urlno, linktable->urlok_total, linktable->url_total,
                         linktable->docno, linktable->docok_total, linktable->doc_total);
             }
