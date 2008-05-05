@@ -232,8 +232,6 @@ int sbase_initialize(SBASE *sbase, char *conf)
 	serv->service_type = iniparser_getint(dict, "DAEMON:service_type", 0);
 	/* INET protocol family */
 	n = iniparser_getint(dict, "DAEMON:inet_family", 0);
-	/* INET protocol family */
-	n = iniparser_getint(dict, "DAEMON:inet_family", 0);
 	switch(n)
 	{
 		case 0:
