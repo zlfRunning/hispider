@@ -12,14 +12,14 @@ int main()
         for(i = 0; i < 100000; i++);
         TIMER_SAMPLE(timer);
         fprintf(stdout, "last_sec:%ld last_usec:%lld last_sec_used:%ld last_usec_used:%lld\n",
-                PT_SEC(timer), PT_USEC(timer), PT_SEC_USED(timer), PT_USEC_USED(timer));
+                PT_L_SEC(timer), PT_L_USEC(timer), PT_LU_SEC(timer), PT_LU_USEC(timer));
         TIMER_RESET(timer);
         fprintf(stdout, "last_sec:%ld last_usec:%lld last_sec_used:%ld last_usec_used:%lld\n",
-                PT_SEC(timer), PT_USEC(timer), PT_SEC_USED(timer), PT_USEC_USED(timer));
+                PT_L_SEC(timer), PT_L_SEC(timer), PT_LU_SEC(timer), PT_LU_USEC(timer));
         for(i = 0; i < 10000000; i++);
         TIMER_SAMPLE(timer);
         fprintf(stdout, "last_sec:%ld last_usec:%lld last_sec_used:%ld last_usec_used:%lld\n",
-                PT_SEC(timer), PT_USEC(timer), PT_SEC_USED(timer), PT_USEC_USED(timer));
+                PT_L_SEC(timer), PT_L_USEC(timer), PT_LU_SEC(timer), PT_LU_USEC(timer));
         TIMER_CLEAN(timer);
     }
 }

@@ -4,7 +4,14 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+#ifdef HAVE_PTHREAD
 #include "mutex.h"
+#else
+#define MUTEX_INIT(ptr)
+#define MUTEX_LOCK(ptr)
+#define MUTEX_UNLOCK(ptr)
+#define MUTEX_DESTROY(ptr)
+#endif
 
 #ifndef _TIMER_H
 #define _TIMER_H
@@ -28,10 +35,12 @@ typedef struct _TIMER
 	void *mutex;
 }TIMER;
 #define PT(ptr) ((TIMER *)ptr)
-#define PT_SEC(ptr) ((PT(ptr))?PT(ptr)->last_sec:0)
-#define PT_SEC_USED(ptr) ((PT(ptr))?PT(ptr)->last_sec_used:0)
-#define PT_USEC(ptr) ((PT(ptr))?PT(ptr)->last_usec:0)
-#define PT_USEC_USED(ptr) ((PT(ptr))?PT(ptr)->last_usec_used:0)
+#define PT_SEC_U(ptr) ((PT(ptr))?PT(ptr)->sec_used:0)
+#define PT_USEC_U(ptr) ((PT(ptr))?PT(ptr)->usec_used:0)
+#define PT_L_SEC(ptr) ((PT(ptr))?PT(ptr)->last_sec:0)
+#define PT_LU_SEC(ptr) ((PT(ptr))?PT(ptr)->last_sec_used:0)
+#define PT_L_USEC(ptr) ((PT(ptr))?PT(ptr)->last_usec:0)
+#define PT_LU_USEC(ptr) ((PT(ptr))?PT(ptr)->last_usec_used:0)
 #define TIMER_INIT(ptr)                                                         \
 {                                                                               \
     if((ptr = (calloc(1, sizeof(TIMER)))))                                      \
