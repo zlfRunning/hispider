@@ -824,6 +824,7 @@ LINKTABLE *linktable_init()
 typedef struct _DCON
 {
     char http_header[DCON_BUF_SIZE];
+    char *tp;
     char *p ;
     char *ps;
     char *content;
@@ -866,13 +867,16 @@ void ev_handler(int ev_fd, short flag, void *arg);
                 *(conn->ps) = '\0';                                                         \
                 (conn->content) = (conn->ps + 4);                                           \
                 http_response_parse(conn->buffer, conn->ps, &(conn->resp));                 \
-                if((conn->resp.headers[HEAD_ENT_CONTENT_TYPE])                              \
-                && strncasecmp(conn->resp.headers[HEAD_ENT_CONTENT_TYPE], "text", 4) != 0)  \
+                if((conn->tp = conn->resp.headers[HEAD_ENT_CONTENT_TYPE]) == NULL           \
+                    || strncasecmp(conn->tp, "text", 4) != 0)                               \
                 {                                                                           \
                     conn->resp.respid = RESP_NOCONTENT;                                     \
                     conn->req.status = LINK_STATUS_DISCARD;                                 \
                     conn->status = DCON_STATUS_DISCARD;                                     \
                     linktable->update_request(linktable, conn->req.id, conn->req.status);   \
+                    ERROR_LOGGER(linktable->logger, "Invalid type[%s] to http://%s%s",      \
+                            conn->resp.headers[HEAD_ENT_CONTENT_TYPE],                      \
+                            conn->req.host, conn->req.path);                                \
                     DCON_CLOSE(conn);                                                       \
                     break;                                                                  \
                 }                                                                           \
@@ -916,12 +920,15 @@ void ev_handler(int ev_fd, short flag, void *arg);
     }                                                                                       \
     else                                                                                    \
     {                                                                                       \
+        DEBUG_LOGGER(linktable->logger, "Reading from connection[%s:%d] via %d faild, %s",  \
+                conn->req.ip, conn->req.port, conn->fd, strerror(errno));                   \
         DCON_OVER(conn);                                                                    \
     }                                                                                       \
 }                                                                                           
 #define DCON_REQ(conn)                                                                      \
 {                                                                                           \
-    conn->n = sprintf(conn->http_header, "GET %s HTTP/1.0\r\nHost: %s\r\n"                  \
+    conn->n = sprintf(conn->http_header, "GET %s HTTP/1.0\r\n"                              \
+            "Host: %s\r\nConnection: close\r\n"                                             \
             "User-Agent: Mozilla\r\n\r\n", conn->req.path, conn->req.host);                 \
     if(write(conn->fd, conn->http_header, conn->n) > 0)                                     \
     {                                                                                       \
@@ -942,8 +949,9 @@ void ev_handler(int ev_fd, short flag, void *arg);
         conn->sa.sin_addr.s_addr = inet_addr(request.ip);                                   \
         conn->sa.sin_port = htons(request.port);                                            \
         conn->sa_len = sizeof(struct sockaddr);                                             \
-        if(connect(conn->fd, (struct sockaddr *)&(conn->sa), conn->sa_len) == 0)            \
+        if(fcntl(conn->fd, F_SETFL, O_NONBLOCK) == 0)                                       \
         {                                                                                   \
+            connect(conn->fd, (struct sockaddr *)&(conn->sa), conn->sa_len);                \
             conn->p  = conn->buffer;                                                        \
             memset(conn->buffer, 0, conn_buf_size);                                         \
             conn->left = conn_buf_size;                                                     \
@@ -954,9 +962,13 @@ void ev_handler(int ev_fd, short flag, void *arg);
             conn->event->set(conn->event, conn->fd, E_READ|E_WRITE|E_PERSIST,               \
                 (void *)conn, (void *)&ev_handler);                                         \
             evbase->add(evbase, conn->event);                                               \
+            DEBUG_LOGGER(linktable->logger, "adding connection[%s:%d] via %d",              \
+                    conn->req.ip, conn->req.port, conn->fd);                                \
         }                                                                                   \
         else                                                                                \
         {                                                                                   \
+            ERROR_LOGGER(linktable->logger, "Connecting to %s:%d host[%s] failed, %s",      \
+                    conn->req.ip, conn->req.port, conn->req.host, strerror(errno));         \
             close(conn->fd);                                                                \
             linktable->update_request(linktable, request.id, LINK_STATUS_DISCARD);          \
             conn->status = DCON_STATUS_WAIT;                                                \
@@ -990,7 +1002,9 @@ void ev_handler(int ev_fd, short flag, void *arg);
         n = 0;                                                                              \
         while(n < nconns )                                                                  \
         {                                                                                   \
-            conns[n++].buffer = (char *)calloc(1, conn_buf_size);                           \
+            conns[n].buffer = (char *)calloc(1, conn_buf_size);                             \
+            conns[n].event = ev_init();                                                     \
+            n++;                                                                            \
         }                                                                                   \
     }                                                                                       \
 }
@@ -1022,6 +1036,7 @@ void *pthread_handler(void *arg)
 
     if((evbase = evbase_init()))
     {
+        DCONS_INIT(i);
         while(1)
         {
             if(running_conns < nconns)
@@ -1031,6 +1046,9 @@ void *pthread_handler(void *arg)
                 {
                     if(linktable->get_request(linktable, &request) != -1)
                     {
+                        DEBUG_LOGGER(linktable->logger, "New request[http://%s%s] [%s:%d] "
+                                "via conns[%d][%08x]", request.host, request.path,
+                                request.ip, request.port, i, conn);
                         NEW_DCON(conn, request);
                     }
                     else
@@ -1039,6 +1057,7 @@ void *pthread_handler(void *arg)
                     }
                 }
             }
+            evbase->loop(evbase, 0, NULL);
             usleep(100);
         }
     }
