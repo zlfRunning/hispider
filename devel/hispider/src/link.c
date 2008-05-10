@@ -41,21 +41,21 @@
         }                                                       \
     }                                                           \
 }
-#define ADD_TO_MD5TABLE(ptr, key, nkey, pp)                     \
+#define ADD_TO_MD5TABLE(ptr, k, nk, pp)                         \
 {                                                               \
     if(ptr)                                                     \
     {                                                           \
         MUTEX_LOCK(ptr->mutex);                                 \
-        TRIETAB_ADD((ptr->md5table), key, nkey, pp);            \
+        TRIETAB_ADD((ptr->md5table), k, nk, pp);                \
         MUTEX_UNLOCK(ptr->mutex);                               \
     }                                                           \
 }
-#define GET_FROM_MD5TABLE(ptr, key, nkey, pp)                   \
+#define GET_FROM_MD5TABLE(ptr, k, nk, pp)                       \
 {                                                               \
     if(ptr)                                                     \
     {                                                           \
         MUTEX_LOCK(ptr->mutex);                                 \
-        TRIETAB_GET((ptr->md5table), key, nkey, pp);            \
+        TRIETAB_GET((ptr->md5table), k, nk, pp);                \
         MUTEX_UNLOCK(ptr->mutex);                               \
     }                                                           \
 }
@@ -313,7 +313,7 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
 
     if(linktable)
     {
-        DEBUG_LOGGER(linktable->logger, "New URL:http://%s%s", host, path);
+        //DEBUG_LOGGER(linktable->logger, "New URL:http://%s%s", host, path);
         //check dns
         if((n = sprintf(url, "http://%s%s", host, path)) > 0)
         {
@@ -323,7 +323,7 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
             if(ptr) 
             {
                 id = (long )ptr;
-                DEBUG_LOGGER(linktable->logger, "URL[%d] is exists", id);
+                DEBUG_LOGGER(linktable->logger, "URL:[http://%s%s][%d] is exists", host, path, id);
                 ret = 0; 
                 goto err_end;
             }
@@ -368,10 +368,15 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
             }
             ptr = (void *)id;
             ADD_TO_MD5TABLE(linktable, req.md5, MD5_LEN, ptr);
+            if(ptr)
+            {
             linktable->url_total++;
             DEBUG_LOGGER(linktable->logger, "New[%d] URL:http://%s%s TOTAL:%d STATUS:%d", 
                     id, host, path, linktable->url_total, req.status);
+            //GET_FROM_MD5TABLE(linktable, req.md5, MD5_LEN, ptr);
+            //DEBUG_LOGGER(linktable->logger, "Got id[%d] URL:http://%s%s", (long)ptr, host, path);
             ret = 0;
+            }
         }
     }
 err_end:
@@ -383,10 +388,15 @@ char *linktable_iptab(LINKTABLE *linktable, char *hostname, char *ipstr)
 {
     struct hostent *hp = NULL;
     char *ip = NULL;
+
     if(linktable)
     {
         TRIETAB_GET(linktable->dnstable, hostname, strlen(hostname), ip);
-        if(ip) return ip;
+        if(ip) 
+        {
+            DEBUG_LOGGER(linktable->logger, "DNS [%s:%s] is exists", hostname, ip);
+            return ip;
+        }
         DEBUG_LOGGER(linktable->logger, "Ready for parsing [%s]'s ip", hostname);
         if(ipstr == NULL) 
         {
@@ -710,6 +720,7 @@ int linktable_resume(LINKTABLE *linktable)
     long n = 0;
     char *p = NULL, md5str[MD5_LEN * 2 +1];
     char *ip = NULL;
+    void *ptr = NULL;
 
     if(linktable)
     {
@@ -718,6 +729,7 @@ int linktable_resume(LINKTABLE *linktable)
         while(HIO_READ(linktable->lnkio, &req, sizeof(HTTP_REQUEST)) > 0)
         {
             linktable->iptab(linktable->dnstable, req.host, req.ip);
+            ADD_TO_MD5TABLE(linktable, req.md5, MD5_LEN, ptr);
             if(req.status == LINK_STATUS_INIT && id == -1)
             {
                 id = linktable->urlno = n;
@@ -816,6 +828,7 @@ LINKTABLE *linktable_init()
 #include "timer.h"
 #include "buffer.h"
 #include "basedef.h"
+#define DCON_TIMEOUT  30000000
 #define DCON_BUF_SIZE 65536
 #define DCON_STATUS_WAIT        0
 #define DCON_STATUS_WORKING     1
@@ -829,6 +842,8 @@ typedef struct _DCON
     char *ps;
     char *content;
     char *buffer;
+    void *timer;
+    int data_size;
     int left;
     int n ;
     struct sockaddr_in sa;
@@ -878,8 +893,15 @@ void ev_handler(int ev_fd, short flag, void *arg);
                             conn->resp.headers[HEAD_ENT_CONTENT_TYPE],                      \
                             conn->req.host, conn->req.path);                                \
                     DCON_CLOSE(conn);                                                       \
-                    break;                                                                  \
                 }                                                                           \
+                if((conn->tp = conn->resp.headers[HEAD_ENT_CONTENT_LENGTH]))                \
+                {                                                                           \
+                    conn->data_size = atoi(conn->tp);                                       \
+                    DEBUG_LOGGER(linktable->logger, "Ready for Reading %d bytes "           \
+                        "from [%s:%d] via %d [http://%s%s]", conn->data_size, conn->req.ip, \
+                            conn->req.port, conn->fd, conn->req.host, conn->req.path);      \
+                }                                                                           \
+                break;                                                                      \
             }                                                                               \
             else conn->ps++;                                                                \
         }                                                                                   \
@@ -917,6 +939,10 @@ void ev_handler(int ev_fd, short flag, void *arg);
         conn->left -= conn->n;                                                              \
         conn->p += conn->n;                                                                 \
         DCON_PACKET(conn);                                                                  \
+        if(conn->content && (conn->p - conn->content) >= conn->data_size)                   \
+        {                                                                                   \
+            DCON_OVER(conn);                                                                \
+        }                                                                                   \
     }                                                                                       \
     else                                                                                    \
     {                                                                                       \
@@ -930,9 +956,11 @@ void ev_handler(int ev_fd, short flag, void *arg);
     conn->n = sprintf(conn->http_header, "GET %s HTTP/1.0\r\n"                              \
             "Host: %s\r\nConnection: close\r\n"                                             \
             "User-Agent: Mozilla\r\n\r\n", conn->req.path, conn->req.host);                 \
-    if(write(conn->fd, conn->http_header, conn->n) > 0)                                     \
+    if((conn->n = write(conn->fd, conn->http_header, conn->n)) > 0)                         \
     {                                                                                       \
         conn->event->del(conn->event, E_WRITE);                                             \
+        DEBUG_LOGGER(linktable->logger, "Wrote %d bytes request to http://%s%s] via %d ",   \
+                conn->n, conn->req.host, conn->req.path, conn->fd);                         \
     }                                                                                       \
     else                                                                                    \
     {                                                                                       \
@@ -940,6 +968,7 @@ void ev_handler(int ev_fd, short flag, void *arg);
         DCON_CLOSE(conn);                                                                   \
     }                                                                                       \
 }
+//if(fcntl(conn->fd, F_SETFL, O_NONBLOCK) == 0)                                       
 #define NEW_DCON(conn, request)                                                             \
 {                                                                                           \
     if((conn->fd = socket(AF_INET, SOCK_STREAM, 0)) > 0)                                    \
@@ -949,6 +978,8 @@ void ev_handler(int ev_fd, short flag, void *arg);
         conn->sa.sin_addr.s_addr = inet_addr(request.ip);                                   \
         conn->sa.sin_port = htons(request.port);                                            \
         conn->sa_len = sizeof(struct sockaddr);                                             \
+        DEBUG_LOGGER(linktable->logger, "Ready for connecting to [%s][%s:%d] via %d",       \
+                request.host, request.ip, request.port, conn->fd);                          \
         if(fcntl(conn->fd, F_SETFL, O_NONBLOCK) == 0)                                       \
         {                                                                                   \
             connect(conn->fd, (struct sockaddr *)&(conn->sa), conn->sa_len);                \
@@ -958,12 +989,14 @@ void ev_handler(int ev_fd, short flag, void *arg);
             memset(&(conn->resp), 0, sizeof(HTTP_RESPONSE));                                \
             conn->content = NULL;                                                           \
             conn->resp.respid = -1;                                                         \
+            conn->data_size = 0;                                                            \
+            TIMER_RESET(conn->timer);                                                       \
             memcpy(&(conn->req), &(request), sizeof(HTTP_REQUEST));                         \
             conn->event->set(conn->event, conn->fd, E_READ|E_WRITE|E_PERSIST,               \
                 (void *)conn, (void *)&ev_handler);                                         \
             evbase->add(evbase, conn->event);                                               \
-            DEBUG_LOGGER(linktable->logger, "adding connection[%s:%d] via %d",              \
-                    conn->req.ip, conn->req.port, conn->fd);                                \
+            DEBUG_LOGGER(linktable->logger, "Added connection[%s][%s:%d] via %d",           \
+                    conn->req.host, conn->req.ip, conn->req.port, conn->fd);                \
         }                                                                                   \
         else                                                                                \
         {                                                                                   \
@@ -981,6 +1014,15 @@ void ev_handler(int ev_fd, short flag, void *arg);
     n = 0;                                                                                  \
     while(n < nconns)                                                                       \
     {                                                                                       \
+        if(conns[n].status == DCON_STATUS_WORKING                                           \
+                && TIMER_CHECK(conns[n].timer, DCON_TIMEOUT) == 0)                          \
+        {                                                                                   \
+            conn = &(conns[n]);                                                             \
+            ERROR_LOGGER(linktable->logger, "Connection[%s:%d] via %d to [%s:%s] TIMEOUT",  \
+                conn->req.ip, conn->req.port, conn->fd, conn->req.host, conn->req.path);    \
+            DCON_OVER(conn);                                                                \
+            conn = NULL;                                                                    \
+        }                                                                                   \
         if(conns[n].status == DCON_STATUS_WAIT)                                             \
         {                                                                                   \
             conns[n].status = DCON_STATUS_WORKING;                                          \
@@ -1004,6 +1046,7 @@ void ev_handler(int ev_fd, short flag, void *arg);
         {                                                                                   \
             conns[n].buffer = (char *)calloc(1, conn_buf_size);                             \
             conns[n].event = ev_init();                                                     \
+            TIMER_INIT(conns[n].timer);                                                     \
             n++;                                                                            \
         }                                                                                   \
     }                                                                                       \
@@ -1021,8 +1064,15 @@ void ev_handler(int ev_fd, short flag, void *arg)
         }
         if(flag & E_READ)
         {
+            DEBUG_LOGGER(linktable->logger, "Ready for reading from [%s][%s:%d] via %d",
+                    conn->req.host, conn->req.ip, conn->req.port, conn->fd);
             DCON_READ(conn);
+            DEBUG_LOGGER(linktable->logger, "Read over from [%s:%d] via %d [http://%s%s] "
+                    "data_size:%d content_size:%d left:%d ", conn->req.ip,
+                    conn->req.port, conn->fd, conn->req.host, conn->req.path,
+                    conn->data_size, (conn->p - conn->content), conn->left);
         }
+        TIMER_SAMPLE(conn->timer);
     }
     return ;
 }
