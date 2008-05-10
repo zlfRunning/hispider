@@ -128,7 +128,7 @@ void trietab_CLEAN(void *ptr);
             if(HBND(ptr))                                                                   \
             {                                                                               \
                 HN_FIND(HBND(ptr), PSH(ptr), MINHB(ptr), MAXHB(ptr), NHB(ptr));             \
-                if(NHB(ptr) < 0 || NHB(ptr) == HCNT(HBND(ptr))                              \
+                if(NHB(ptr) < 0 || NHB(ptr) >= HCNT(HBND(ptr))                              \
                         || HNPC(HBND(ptr), NHB(ptr)) != PSH(ptr))                           \
                 {                                                                           \
                     HN_ADD(HBND(ptr), PSH(ptr), MINHB(ptr), MAXHB(ptr), NHB(ptr));          \
@@ -156,7 +156,7 @@ void trietab_CLEAN(void *ptr);
             if(HBND(ptr))                                                                   \
             {                                                                               \
                 HN_FIND(HBND(ptr), PSH(ptr), MINHB(ptr), MAXHB(ptr), NHB(ptr));             \
-                if(NHB(ptr) < 0 || || NHB(ptr) == HCNT(HBND(ptr))                           \
+                if(NHB(ptr) < 0 || NHB(ptr) >= HCNT(HBND(ptr))                              \
                         || HNPC(HBND(ptr), NHB(ptr)) != PSH(ptr))                           \
                 {                                                                           \
                     HBND(ptr) = NULL;                                                       \
@@ -215,7 +215,7 @@ void trietab_CLEAN(void *ptr);
             if(HBND(ptr))                                                                   \
             {                                                                               \
                 HN_FIND(HBND(ptr), PSH(ptr), MINHB(ptr), MAXHB(ptr), NHB(ptr));             \
-                if(NHB(ptr) < 0 || NHB(ptr) == HCNT(HBND(ptr))                              \
+                if(NHB(ptr) < 0 || NHB(ptr) >= HCNT(HBND(ptr))                              \
                         HNPC(HBND(ptr), NHB(ptr)) != PSH(ptr))                              \
                 {                                                                           \
                     HBND(ptr) = NULL;                                                       \
