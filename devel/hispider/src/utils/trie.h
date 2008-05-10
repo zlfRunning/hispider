@@ -156,7 +156,8 @@ void trietab_CLEAN(void *ptr);
             if(HBND(ptr))                                                                   \
             {                                                                               \
                 HN_FIND(HBND(ptr), PSH(ptr), MINHB(ptr), MAXHB(ptr), NHB(ptr));             \
-                if(NHB(ptr) < 0 || HNPC(HBND(ptr), NHB(ptr)) != PSH(ptr))                   \
+                if(NHB(ptr) < 0 || || NHB(ptr) == HCNT(HBND(ptr))                           \
+                        || HNPC(HBND(ptr), NHB(ptr)) != PSH(ptr))                           \
                 {                                                                           \
                     HBND(ptr) = NULL;                                                       \
                     break;                                                                  \
@@ -214,7 +215,8 @@ void trietab_CLEAN(void *ptr);
             if(HBND(ptr))                                                                   \
             {                                                                               \
                 HN_FIND(HBND(ptr), PSH(ptr), MINHB(ptr), MAXHB(ptr), NHB(ptr));             \
-                if(NHB(ptr) < 0 || HNPC(HBND(ptr), NHB(ptr)) != PSH(ptr))                   \
+                if(NHB(ptr) < 0 || NHB(ptr) == HCNT(HBND(ptr))                              \
+                        HNPC(HBND(ptr), NHB(ptr)) != PSH(ptr))                              \
                 {                                                                           \
                     HBND(ptr) = NULL;                                                       \
                     break;                                                                  \

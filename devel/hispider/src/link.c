@@ -324,6 +324,7 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
             memset(&req, 0, sizeof(HTTP_REQUEST));
             DEBUG_LOGGER(linktable->logger, "ready for addurl:http://%s%s",  host, path);
             md5((unsigned char *)url, n, req.md5);
+            DEBUG_LOGGER(linktable->logger, "ready for addurl:http://%s%s",  host, path);
             GET_FROM_MD5TABLE(linktable, req.md5, MD5_LEN, ptr);
             DEBUG_LOGGER(linktable->logger, "ready for addurl:http://%s%s",  host, path);
             if(ptr) 
