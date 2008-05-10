@@ -229,7 +229,7 @@ int linktable_add(LINKTABLE *linktable, unsigned char *host, unsigned char *path
     unsigned char *p = NULL, *ps = NULL, *last = NULL;
     void *timer = NULL;
 
-    if(linktable && host && path && href && (ehref - href) < HTTP_PATH_MAX)
+    if(linktable && host && path && href && (ehref - href) > 0 && (ehref - href) < HTTP_PATH_MAX)
     {
         memset(lhost, 0, HTTP_HOST_MAX);
         memset(lpath, 0, HTTP_PATH_MAX);
@@ -258,7 +258,7 @@ int linktable_add(LINKTABLE *linktable, unsigned char *host, unsigned char *path
             //delete file:// mail:// ftp:// news:// rss:// eg. 
             p = href;
             while(p < ehref && (*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z')) p++;
-            if(memcmp(p, "://", 3) == 0) return -1;
+            if(p < (ehref - 3) && memcmp(p, "://", 3) == 0) return -1;
             strcpy((char *)lhost, (char *)host);
             p = path;
             ps = lpath;
@@ -278,19 +278,22 @@ int linktable_add(LINKTABLE *linktable, unsigned char *host, unsigned char *path
             while(p < ehref)
             {
                 //while(p < ehref && (*p == '/' && *(p+1) == '/')) ++p;
-                if(*(unsigned char *)p > 127 || *p == 0x20)
-                    {ps += sprintf((char *)ps, "%%%02X", *p++);}
+                if(*((unsigned char *)p) > 127 || *p == 0x20)
+                    ps += sprintf((char *)ps, "%%%02X", *p++);
                 else *ps++ = *p++;
             }
             *ps = '\0';
             ps = lpath;
+            //auto complete home page / 
             if(*ps == '\0') *ps = '/';
         }
         if(lhost[0] == '\0' || lpath[0] == '\0') return -1;
+        DEBUG_LOGGER(linktable->logger, "addurl:http://%s%s ", lhost, lpath);
         TIMER_INIT(timer);
         linktable->addurl(linktable, (char *)lhost, (char *)lpath);
         TIMER_SAMPLE(timer);
-        DEBUG_LOGGER(linktable->logger, "addurl:http://%s%s time used:%lld ", lhost, lpath, PT_LU_USEC(timer));
+        DEBUG_LOGGER(linktable->logger, "addurl:http://%s%s time used:%lld ", 
+                lhost, lpath, PT_LU_USEC(timer));
         TIMER_CLEAN(timer);
     }
     return 0;
@@ -1171,6 +1174,14 @@ int main(int argc, char **argv)
                         "urlno:%d urlok:%d urltotal:%d docno:%d docok:%d doctotal:%d\n",
                         linktable->urlno, linktable->urlok_total, linktable->url_total,
                         linktable->docno, linktable->docok_total, linktable->doc_total);
+            }
+            else 
+            {
+                ERROR_LOGGER(linktable->logger, 
+                        "urlno:%d urlok:%d urltotal:%d docno:%d docok:%d doctotal:%d\n",
+                        linktable->urlno, linktable->urlok_total, linktable->url_total,
+                        linktable->docno, linktable->docok_total, linktable->doc_total);
+
             }
             usleep(100);
         }
