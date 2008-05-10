@@ -59,7 +59,7 @@ void cb_serv_heartbeat_handler(void *arg)
          //       linktable->docno, linktable->doc_total);
         //request
         //task
-        if((taskid = linktable->get_urltask(linktable)) != -1)
+        if((taskid = linktable->get_task(linktable)) != -1)
         {
             serv->newtask(serv, (void *)&cb_serv_task_handler, (void *)taskid);
             DEBUG_LOGGER(daemon_logger, "linktable->docno:%d doc_total:%d", 
@@ -78,7 +78,7 @@ void cb_serv_task_handler(void *arg)
     if(taskid >= 0)
     {
         DEBUG_LOGGER(daemon_logger, "start task:%d", taskid);
-        linktable->urlhandler(linktable, taskid);
+        linktable->taskhandler(linktable, taskid);
         DEBUG_LOGGER(daemon_logger, "Completed task:%d", taskid);
         //fprintf(stdout, "%d:task:%d\n", __LINE__, taskid);
     }
@@ -167,19 +167,19 @@ end:
 void cb_serv_data_handler(CONN *conn, BUFFER *packet, 
         CHUNK *chunk, BUFFER *cache)
 {
-    URLMETA *urlmeta = NULL;
+    DOCMETA *docmeta = NULL;
     char *zdata = NULL, *p = NULL;
     int id = 0, status = 0, ret = 0;
 
     if(conn && chunk->buf && chunk->buf->data)
     {
-        urlmeta = (URLMETA *)chunk->buf->data;                
-        zdata = (char *)chunk->buf->data + sizeof(URLMETA);
-        status = urlmeta->status;
-        id = urlmeta->id;
+        docmeta = (DOCMETA *)chunk->buf->data;                
+        zdata = (char *)chunk->buf->data + sizeof(DOCMETA);
+        status = docmeta->status;
+        id = docmeta->id;
         ret |= linktable->update_request(linktable, id, status);
-        if(urlmeta->zsize > 0)
-            ret |= linktable->add_zcontent(linktable, urlmeta, zdata, urlmeta->zsize);
+        if(docmeta->zsize > 0)
+            ret |= linktable->add_zcontent(linktable, docmeta, zdata, docmeta->zsize);
         if(ret != -1) 
             p = "HTTP/1.0 200 OK\r\n\r\n";
         else 
@@ -201,7 +201,7 @@ void cb_serv_oob_handler(CONN *conn, BUFFER *oob)
 int sbase_initialize(SBASE *sbase, char *conf)
 {
 	char *logfile = NULL, *s = NULL, *p = NULL, *hostname = NULL, *path = NULL, 
-         *docfile = NULL, *md5file = NULL, *urlfile = NULL, *metafile = NULL;
+         *docfile = NULL, *lnkfile = NULL, *urlfile = NULL, *metafile = NULL;
 	int n = 0, ntask = 0;
 	int ret = 0;
 
@@ -310,7 +310,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
     if((p = iniparser_getstr(dict, "DAEMON:timeout")))
         global_timeout_times = str2ll(p);
     //linktable files
-	md5file = iniparser_getstr(dict, "DAEMON:md5file");
+	lnkfile = iniparser_getstr(dict, "DAEMON:lnkfile");
     metafile = iniparser_getstr(dict, "DAEMON:metafile");
     urlfile = iniparser_getstr(dict, "DAEMON:urlfile");
     docfile = iniparser_getstr(dict, "DAEMON:docfile");
@@ -326,7 +326,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
     }
     linktable->iszlib = iniparser_getint(dict, "DAEMON:iszlib", 1);
     linktable->set_logger(linktable, NULL, daemon_logger);
-    linktable->set_md5file(linktable, md5file);
+    linktable->set_lnkfile(linktable, lnkfile);
     linktable->set_urlfile(linktable, urlfile);
     linktable->set_metafile(linktable, metafile);
     linktable->set_docfile(linktable, docfile);

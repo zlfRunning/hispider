@@ -31,7 +31,7 @@ typedef struct _TASK
     int ntask_working;
     int ntask_over;
     HTTP_REQUEST *requests;
-    URLMETA *tasks;
+    DOCMETA *tasks;
     char **results;
 }TASK;
 static TASK task = {0};
@@ -49,7 +49,7 @@ static TASK task = {0};
 #define DCONN(tp, n) (tp.conns[n] = NULL)
 #define NEWREQ(tp, n)                                       \
 {                                                           \
-    memset(&(tp.tasks[n]), 0, sizeof(URLMETA));             \
+    memset(&(tp.tasks[n]), 0, sizeof(DOCMETA));             \
     tp.conns[n]->c_id = n;                                  \
     tp.conns[n]->start_cstate(tp.conns[n]);                 \
     transport->newtransaction(transport, tp.conns[n], n);   \
@@ -74,7 +74,7 @@ static TASK task = {0};
 }
 #define RESETTASK(tp, n)                                    \
 {                                                           \
-    memset(&(tp.tasks[n]), 0, sizeof(URLMETA));             \
+    memset(&(tp.tasks[n]), 0, sizeof(DOCMETA));             \
     memset(&(tp.requests[n]), 0, sizeof(HTTP_REQUEST));     \
     if(tp.results[n]){free(tp.results[n]); tp.results[n] = NULL;} \
     DEBUG_LOGGER(daemon_logger, "RESET TASK[%d]", n);       \
@@ -248,7 +248,7 @@ void cb_trans_packet_handler(CONN *conn, BUFFER *packet)
 void cb_trans_data_handler(CONN *conn, BUFFER *packet, 
         CHUNK *chunk, BUFFER *cache)
 {
-    URLMETA *purlmeta = NULL;
+    DOCMETA *pdocmeta = NULL;
     HTTP_RESPONSE *resp = NULL;
     HTTP_REQUEST *req = NULL;
     char buf[LBUF_SIZE];
@@ -271,9 +271,9 @@ void cb_trans_data_handler(CONN *conn, BUFFER *packet,
         {
             if(task.requests[c_id].status == LINK_STATUS_WORKING)
             {
-                purlmeta = &(task.tasks[c_id]);
+                pdocmeta = &(task.tasks[c_id]);
                 req = &(task.requests[c_id]); 
-                memset(purlmeta, 0, sizeof(URLMETA));
+                memset(pdocmeta, 0, sizeof(DOCMETA));
                 req->status = LINK_STATUS_ERROR;
                 resp = (HTTP_RESPONSE *)cache->data;
                 p = buf;
@@ -286,35 +286,35 @@ void cb_trans_data_handler(CONN *conn, BUFFER *packet,
                 }
                 nhost = strlen(req->host) + 1;
                 npath = strlen(req->path) + 1;
-                purlmeta->hostoff = (p - buf);
-                purlmeta->pathoff =  purlmeta->hostoff + nhost;
-                purlmeta->htmloff = purlmeta->pathoff + npath;
-                purlmeta->size = purlmeta->htmloff + chunk->buf->size;
-                if((data = (char *)calloc(1, purlmeta->size)))
+                pdocmeta->hostoff = (p - buf);
+                pdocmeta->pathoff =  pdocmeta->hostoff + nhost;
+                pdocmeta->htmloff = pdocmeta->pathoff + npath;
+                pdocmeta->size = pdocmeta->htmloff + chunk->buf->size;
+                if((data = (char *)calloc(1, pdocmeta->size)))
                 {
                     p = data;
-                    memcpy(p, buf, purlmeta->hostoff);
-                    p += purlmeta->hostoff;
+                    memcpy(p, buf, pdocmeta->hostoff);
+                    p += pdocmeta->hostoff;
                     memcpy(p, req->host, nhost);
                     p += nhost;
                     memcpy(p, req->path, npath);
                     p += npath;
                     memcpy(p, chunk->buf->data, chunk->buf->size);
                     p += chunk->buf->size;
-                    ndata = purlmeta->size;
+                    ndata = pdocmeta->size;
                     DEBUG_LOGGER(daemon_logger, 
                             "nhost:%d npath:%d hostoff:%d htmloff:%d off:%d dsize:%d ndata:%d", 
-                            nhost, npath, purlmeta->hostoff, purlmeta->htmloff, 
+                            nhost, npath, pdocmeta->hostoff, pdocmeta->htmloff, 
                             (p - data), chunk->buf->size, ndata);
                     if((zdata = (char *)calloc(1, ndata)))
                     {
-                        nzdata = purlmeta->size;
+                        nzdata = pdocmeta->size;
                         if(zcompress(data, ndata, zdata, &(nzdata)) == 0)
                         {
                             DEBUG_LOGGER(daemon_logger, "compress %d  to %d body:%d ",
                                     ndata, nzdata, chunk->buf->size);
                             req->status = LINK_STATUS_OVER;
-                            purlmeta->zsize = nzdata;
+                            pdocmeta->zsize = nzdata;
                             task.results[c_id] = zdata;
                         }
                     }
@@ -353,9 +353,9 @@ void cb_trans_transaction_handler(CONN *conn, int tid)
             {
                 p = buf;
                 n = sprintf(p, "PUT / HTTP/1.0\r\nContent-Length: %d\r\n\r\n", 
-                        (sizeof(URLMETA) + task.tasks[tid].zsize)); 
+                        (sizeof(DOCMETA) + task.tasks[tid].zsize)); 
                 conn->push_chunk(conn, buf, n);
-                conn->push_chunk(conn, &(task.tasks[tid]), sizeof(URLMETA));
+                conn->push_chunk(conn, &(task.tasks[tid]), sizeof(DOCMETA));
                 if(task.results[tid])
                 {
                     conn->push_chunk(conn, task.results[tid], task.tasks[tid].zsize);
@@ -511,7 +511,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
     //linktable files
     task.ntask_limit = iniparser_getint(dict, "TRANSPORT:ntask", 128);
     if((task.requests = (HTTP_REQUEST *)calloc(task.ntask_limit, sizeof(HTTP_REQUEST)))
-        && (task.tasks = (URLMETA *)calloc(task.ntask_limit, sizeof(URLMETA)))
+        && (task.tasks = (DOCMETA *)calloc(task.ntask_limit, sizeof(DOCMETA)))
         && (task.conns = (CONN **)calloc(task.ntask_limit, sizeof(CONN *)))
         && (task.results = (char **)calloc(task.ntask_limit, sizeof(char *))))
     {

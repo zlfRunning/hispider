@@ -51,7 +51,7 @@ typedef struct _HTTP_REQUEST
     char path[HTTP_PATH_MAX];
     unsigned char md5[MD5_LEN];
 }HTTP_REQUEST;
-typedef struct _URLMETA
+typedef struct _DOCMETA
 {
     int status;
     int id;
@@ -61,14 +61,14 @@ typedef struct _URLMETA
     int pathoff;
     int htmloff;
     long long offset;
-}URLMETA;
+}DOCMETA;
 typedef struct _LINKTABLE
 {
     int dnscount;
     char **dnslist;
     void *dnstable;
     void *md5table;
-    void *md5io;
+    void *lnkio;
     void *urlio;
     void *metaio;
     void *docio;
@@ -77,8 +77,8 @@ typedef struct _LINKTABLE
     long urlno;
     long url_total;
     long urlok_total;
-    URLMETA *tasks;
-    URLMETA task;
+    DOCMETA *tasks;
+    DOCMETA task;
     int  iszlib;
     int  ntask;
     long  docno;
@@ -89,7 +89,7 @@ typedef struct _LINKTABLE
     int  isinsidelogger;
 
     int     (*set_logger)(struct _LINKTABLE *, char *logfile, void *logger);
-    int     (*set_md5file)(struct _LINKTABLE *, char *md5file);
+    int     (*set_lnkfile)(struct _LINKTABLE *, char *lnkfile);
     int     (*set_urlfile)(struct _LINKTABLE *, char *urlfile);
     int     (*set_metafile)(struct _LINKTABLE *, char *metafile);
     int     (*set_docfile)(struct _LINKTABLE *, char *docfile);
@@ -97,14 +97,14 @@ typedef struct _LINKTABLE
     int     (*add)(struct _LINKTABLE *, unsigned char *host, unsigned char *path, 
             unsigned char *href, unsigned char *ehref); 
     int     (*addurl)(struct _LINKTABLE *, char *host, char *path); 
-    long    (*get_urltask)(struct _LINKTABLE *);
-    long    (*get_urltask_one)(struct _LINKTABLE *);
-    void    (*urlhandler)(struct _LINKTABLE *, long id); 
+    long    (*get_task)(struct _LINKTABLE *);
+    long    (*get_task_one)(struct _LINKTABLE *);
+    void    (*taskhandler)(struct _LINKTABLE *, long id); 
     int     (*set_ntask)(struct _LINKTABLE *, int ntask);
-    char*   (*getip)(struct _LINKTABLE *, char *host);
+    char*   (*iptab)(struct _LINKTABLE *, char *host, char *ip);
     int     (*get_request)(struct _LINKTABLE *, HTTP_REQUEST *req);
     int     (*update_request)(struct _LINKTABLE *, int sid, int status);
-    int     (*add_zcontent)(struct _LINKTABLE *, URLMETA *, char *, int);
+    int     (*add_zcontent)(struct _LINKTABLE *, DOCMETA *, char *, int);
     int     (*add_content)(struct _LINKTABLE *, void *response, char *host, char *path,
                 char *content, int ncontent);
     int     (*resume)(struct _LINKTABLE *);
