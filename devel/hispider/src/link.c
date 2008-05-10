@@ -873,6 +873,25 @@ void ev_handler(int ev_fd, short flag, void *arg);
    conn->status = DCON_STATUS_WAIT;                                                         \
    running_conns--;                                                                         \
 }
+#define DCON_DATA(conn)                                                                     \
+{                                                                                           \
+    if(conn->content && conn->resp.respid == RESP_OK)                                       \
+    {                                                                                       \
+        *(conn->p) = '\0';                                                                  \
+        if(linktable->add_content(linktable, &(conn->resp), conn->req.host,                 \
+                    conn->req.path, conn->content, (conn->p - conn->content)) != 0)         \
+        {                                                                                   \
+            ERROR_LOGGER(linktable->logger, "Adding http://%s%s content failed, %s",        \
+                    conn->req.host, conn->req.path, strerror(errno));                       \
+            conn->req.status = LINK_STATUS_ERROR;                                           \
+        }                                                                                   \
+        else                                                                                \
+        {                                                                                   \
+            conn->req.status = LINK_STATUS_OVER;                                            \
+        }                                                                                   \
+    }                                                                                       \
+    linktable->update_request(linktable, conn->req.id, conn->req.status);                   \
+}
 #define DCON_PACKET(conn)                                                                   \
 {                                                                                           \
     conn->ps = conn->buffer;                                                                \
@@ -896,7 +915,6 @@ void ev_handler(int ev_fd, short flag, void *arg);
                     ERROR_LOGGER(linktable->logger, "Invalid type[%s] req[%d] http://%s%s", \
                             conn->resp.headers[HEAD_ENT_CONTENT_TYPE],  conn->req.id,       \
                             conn->req.host, conn->req.path);                                \
-                    DCON_CLOSE(conn);                                                       \
                 }                                                                           \
                 if((conn->tp = conn->resp.headers[HEAD_ENT_CONTENT_LENGTH]))                \
                 {                                                                           \
@@ -911,28 +929,9 @@ void ev_handler(int ev_fd, short flag, void *arg);
         }                                                                                   \
     }                                                                                       \
 }
-#define DCON_DATA(conn)                                                                     \
-{                                                                                           \
-    DCON_PACKET(conn);                                                                      \
-    if(conn->content && conn->resp.respid == RESP_OK)                                       \
-    {                                                                                       \
-        *(conn->p) = '\0';                                                                  \
-        if(linktable->add_content(linktable, &(conn->resp), conn->req.host,                 \
-                    conn->req.path, conn->content, (conn->p - conn->content)) != 0)         \
-        {                                                                                   \
-            ERROR_LOGGER(linktable->logger, "Adding http://%s%s content failed, %s",        \
-                    conn->req.host, conn->req.path, strerror(errno));                       \
-            conn->req.status = LINK_STATUS_ERROR;                                           \
-        }                                                                                   \
-        else                                                                                \
-        {                                                                                   \
-            conn->req.status = LINK_STATUS_OVER;                                            \
-        }                                                                                   \
-    }                                                                                       \
-    linktable->update_request(linktable, conn->req.id, conn->req.status);                   \
-}
 #define DCON_OVER(conn)                                                                     \
 {                                                                                           \
+    DCON_PACKET(conn);                                                                      \
     DCON_DATA(conn);                                                                        \
     DCON_CLOSE(conn);                                                                       \
 }
@@ -943,8 +942,12 @@ void ev_handler(int ev_fd, short flag, void *arg);
         conn->left -= conn->n;                                                              \
         conn->p += conn->n;                                                                 \
         DCON_PACKET(conn);                                                                  \
-        if(conn->content && conn->data_size > 0                                             \
-                && (conn->p - conn->content) == conn->data_size)                            \
+        if(conn->status != DCON_STATUS_WORKING)                                             \
+        {                                                                                   \
+            DCON_OVER(conn);                                                                \
+        }                                                                                   \
+        else if(conn->content && conn->data_size > 0                                        \
+                && (conn->p - conn->content) >= conn->data_size)                            \
         {                                                                                   \
             DCON_OVER(conn);                                                                \
         }                                                                                   \
@@ -969,7 +972,7 @@ void ev_handler(int ev_fd, short flag, void *arg);
     }                                                                                       \
     else                                                                                    \
     {                                                                                       \
-        ERROR_LOGGER(linktable, "Writting request[%d] to http://%s%s] via %d failed, %s",   \
+        ERROR_LOGGER(linktable->logger,"Writting request[%d] to http://%s%s] via %d failed, %s",\
                 conn->req.id, conn->req.host, conn->req.path, conn->fd, strerror(errno));   \
         linktable->update_request(linktable, conn->req.id, LINK_STATUS_ERROR);              \
         DCON_CLOSE(conn);                                                                   \
@@ -1183,11 +1186,12 @@ int main(int argc, char **argv)
             }
             else 
             {
+                /*
                 ERROR_LOGGER(linktable->logger, 
                         "urlno:%d urlok:%d urltotal:%d docno:%d docok:%d doctotal:%d\n",
                         linktable->urlno, linktable->urlok_total, linktable->url_total,
                         linktable->docno, linktable->docok_total, linktable->doc_total);
-
+                */
             }
             usleep(100);
         }
