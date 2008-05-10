@@ -289,12 +289,13 @@ int linktable_add(LINKTABLE *linktable, unsigned char *host, unsigned char *path
         }
         if(lhost[0] == '\0' || lpath[0] == '\0') return -1;
         DEBUG_LOGGER(linktable->logger, "addurl:http://%s%s ", lhost, lpath);
-        TIMER_INIT(timer);
         linktable->addurl(linktable, (char *)lhost, (char *)lpath);
-        TIMER_SAMPLE(timer);
-        DEBUG_LOGGER(linktable->logger, "addurl:http://%s%s time used:%lld ", 
-                lhost, lpath, PT_LU_USEC(timer));
-        TIMER_CLEAN(timer);
+        DEBUG_LOGGER(linktable->logger, "addurl:http://%s%s ", lhost, lpath);
+        //TIMER_INIT(timer);
+        //TIMER_SAMPLE(timer);
+        //DEBUG_LOGGER(linktable->logger, "addurl:http://%s%s time used:%lld ", 
+        //        lhost, lpath, PT_LU_USEC(timer));
+        //TIMER_CLEAN(timer);
     }
     return 0;
 }
@@ -321,8 +322,10 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
         if((n = sprintf(url, "http://%s%s", host, path)) > 0)
         {
             memset(&req, 0, sizeof(HTTP_REQUEST));
+            DEBUG_LOGGER(linktable->logger, "ready for addurl:http://%s%s",  host, path);
             md5((unsigned char *)url, n, req.md5);
             GET_FROM_MD5TABLE(linktable, req.md5, MD5_LEN, ptr);
+            DEBUG_LOGGER(linktable->logger, "ready for addurl:http://%s%s",  host, path);
             if(ptr) 
             {
                 id = (long )ptr;
@@ -331,6 +334,7 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
                 goto err_end;
             }
             //\n end
+            DEBUG_LOGGER(linktable->logger, "ready for addurl:http://%s%s",  host, path);
             url[n] = '\n';
             if(HIO_APPEND(linktable->urlio, url, n+1, offset) <= 0) 
             {
@@ -338,6 +342,7 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
             }
             url[n] = '\0';
             //host
+            DEBUG_LOGGER(linktable->logger, "ready for addurl:http://%s%s",  host, path);
             ps = req.host;
             p = host;
             n = HTTP_HOST_MAX;
@@ -347,9 +352,11 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
                 if(n-- <= 0) {goto err_end;}
             }
             //port
+            DEBUG_LOGGER(linktable->logger, "ready for addurl:http://%s%s",  host, path);
             req.port = 80;
             if(*p == ':') req.port = atoi(++p);
             //ip
+            DEBUG_LOGGER(linktable->logger, "ready for addurl:http://%s%s",  host, path);
             if((ip = linktable->iptab(linktable, req.host, NULL)) == NULL) 
                 goto err_end; 
             p = ip;
