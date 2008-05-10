@@ -394,6 +394,7 @@ char *linktable_iptab(LINKTABLE *linktable, char *hostname, char *ipstr)
 
     if(linktable)
     {
+        DEBUG_LOGGER(linktable->logger, "Ready for parsing [%s]'s ip", hostname);
         TRIETAB_GET(linktable->dnstable, hostname, strlen(hostname), ip);
         if(ip) 
         {
@@ -892,8 +893,8 @@ void ev_handler(int ev_fd, short flag, void *arg);
                     conn->req.status = LINK_STATUS_DISCARD;                                 \
                     conn->status = DCON_STATUS_DISCARD;                                     \
                     linktable->update_request(linktable, conn->req.id, conn->req.status);   \
-                    ERROR_LOGGER(linktable->logger, "Invalid type[%s] to http://%s%s",      \
-                            conn->resp.headers[HEAD_ENT_CONTENT_TYPE],                      \
+                    ERROR_LOGGER(linktable->logger, "Invalid type[%s] req[%d] http://%s%s", \
+                            conn->resp.headers[HEAD_ENT_CONTENT_TYPE],  conn->req.id,       \
                             conn->req.host, conn->req.path);                                \
                     DCON_CLOSE(conn);                                                       \
                 }                                                                           \
@@ -901,8 +902,8 @@ void ev_handler(int ev_fd, short flag, void *arg);
                 {                                                                           \
                     conn->data_size = atoi(conn->tp);                                       \
                     DEBUG_LOGGER(linktable->logger, "Ready for Reading %d bytes "           \
-                        "from [%s:%d] via %d [http://%s%s]", conn->data_size, conn->req.ip, \
-                            conn->req.port, conn->fd, conn->req.host, conn->req.path);      \
+                        "[%d] [%s:%d] via %d [http://%s%s]", conn->data_size, conn->req.id, \
+                conn->req.ip, conn->req.port, conn->fd, conn->req.host, conn->req.path);    \
                 }                                                                           \
                 break;                                                                      \
             }                                                                               \
@@ -942,7 +943,8 @@ void ev_handler(int ev_fd, short flag, void *arg);
         conn->left -= conn->n;                                                              \
         conn->p += conn->n;                                                                 \
         DCON_PACKET(conn);                                                                  \
-        if(conn->content && (conn->p - conn->content) >= conn->data_size)                   \
+        if(conn->content && conn->data_size > 0                                             \
+                && (conn->p - conn->content) == conn->data_size)                            \
         {                                                                                   \
             DCON_OVER(conn);                                                                \
         }                                                                                   \
@@ -962,11 +964,13 @@ void ev_handler(int ev_fd, short flag, void *arg);
     if((conn->n = write(conn->fd, conn->http_header, conn->n)) > 0)                         \
     {                                                                                       \
         conn->event->del(conn->event, E_WRITE);                                             \
-        DEBUG_LOGGER(linktable->logger, "Wrote %d bytes request to http://%s%s] via %d ",   \
-                conn->n, conn->req.host, conn->req.path, conn->fd);                         \
+        DEBUG_LOGGER(linktable->logger, "Wrote %d bytes request[%d] to http://%s%s] via %d",\
+                conn->n, conn->req.id, conn->req.host, conn->req.path, conn->fd);           \
     }                                                                                       \
     else                                                                                    \
     {                                                                                       \
+        ERROR_LOGGER(linktable, "Writting request[%d] to http://%s%s] via %d failed, %s",   \
+                conn->req.id, conn->req.host, conn->req.path, conn->fd, strerror(errno));   \
         linktable->update_request(linktable, conn->req.id, LINK_STATUS_ERROR);              \
         DCON_CLOSE(conn);                                                                   \
     }                                                                                       \
@@ -1021,8 +1025,9 @@ void ev_handler(int ev_fd, short flag, void *arg);
                 && TIMER_CHECK(conns[n].timer, DCON_TIMEOUT) == 0)                          \
         {                                                                                   \
             conn = &(conns[n]);                                                             \
-            ERROR_LOGGER(linktable->logger, "Connection[%s:%d] via %d to [%s:%s] TIMEOUT",  \
-                conn->req.ip, conn->req.port, conn->fd, conn->req.host, conn->req.path);    \
+            ERROR_LOGGER(linktable->logger, "Connection[%s:%d] via %d [%d] [%s:%s] TIMEOUT",\
+                conn->req.ip, conn->req.port, conn->fd, conn->req.id,                       \
+                    conn->req.host, conn->req.path);                                        \
             DCON_OVER(conn);                                                                \
             conn = NULL;                                                                    \
         }                                                                                   \
@@ -1067,11 +1072,12 @@ void ev_handler(int ev_fd, short flag, void *arg)
         }
         if(flag & E_READ)
         {
-            DEBUG_LOGGER(linktable->logger, "Ready for reading from [%s][%s:%d] via %d",
-                    conn->req.host, conn->req.ip, conn->req.port, conn->fd);
+            DEBUG_LOGGER(linktable->logger, "Ready for reading [%d] [http://%s%s][%s:%d] via %d",
+                    conn->req.id, conn->req.host, conn->req.path,
+                    conn->req.ip, conn->req.port, conn->fd);
             DCON_READ(conn);
-            DEBUG_LOGGER(linktable->logger, "Read over from [%s:%d] via %d [http://%s%s] "
-                    "data_size:%d content_size:%d left:%d ", conn->req.ip,
+            DEBUG_LOGGER(linktable->logger, "Read over [%d] [%s:%d] via %d [http://%s%s] "
+                    "data_size:%d content_size:%d left:%d ", conn->req.id, conn->req.ip,
                     conn->req.port, conn->fd, conn->req.host, conn->req.path,
                     conn->data_size, (conn->p - conn->content), conn->left);
         }
@@ -1099,8 +1105,8 @@ void *pthread_handler(void *arg)
                 {
                     if(linktable->get_request(linktable, &request) != -1)
                     {
-                        DEBUG_LOGGER(linktable->logger, "New request[http://%s%s] [%s:%d] "
-                                "via conns[%d][%08x]", request.host, request.path,
+                        DEBUG_LOGGER(linktable->logger, "New request[%d][http://%s%s] [%s:%d] "
+                                "via conns[%d][%08x]", request.id, request.host, request.path,
                                 request.ip, request.port, i, conn);
                         NEW_DCON(conn, request);
                     }
