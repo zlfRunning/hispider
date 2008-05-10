@@ -689,9 +689,9 @@ int linktable_add_content(LINKTABLE *linktable, void *response,
         linktable->doc_total++;
         ret = 0;
         DEBUG_LOGGER(linktable->logger, "Added DOCMETA[%d] hostoff:%d pathoff:%d"
-                "size:%d zsize:%d to offset:%lld",
+                "size:%d zsize:%d to offset:%lld meta:%s",
                 docmeta.id, docmeta.hostoff, docmeta.pathoff, 
-                docmeta.size, docmeta.zsize, offset);
+                docmeta.size, docmeta.zsize, offset, data);
 end:
         if(data) free(data);
         if(zdata) free(zdata);
@@ -811,130 +811,237 @@ LINKTABLE *linktable_init()
 //gen.sh 
 //gcc -o tlink -D_DEBUG_LINKTABLE -D_FILE_OFFSET_BITS=64 link.c http.c utils/*.c -I utils/ -DHAVE_PTHREAD -lpthread -lz -D_DEBUG && ./tlink www.sina.com.cn / 2 &
 #include <pthread.h>
+#include <evbase.h>
 #include "http.h"
 #include "timer.h"
 #include "buffer.h"
 #include "basedef.h"
-#define BUF_SIZE 8192
-void *pthread_handler(void *arg)
+#define DCON_BUF_SIZE 65536
+#define DCON_STATUS_WAIT        0
+#define DCON_STATUS_WORKING     1
+#define DCON_STATUS_DISCARD     2
+#define DCON_STATUS_OVER        4
+typedef struct _DCON
 {
-    int i = 0, n = 0;
-    char *p = NULL, *end = NULL;
-    BUFFER *buffer = NULL;
-    LINKTABLE *linktable = (LINKTABLE *)arg;
-    HTTP_RESPONSE response;
-    int fd = 0;
+    char http_header[DCON_BUF_SIZE];
+    char *p ;
+    char *ps;
+    char *content;
+    char *buffer;
+    int left;
+    int n ;
     struct sockaddr_in sa;
     socklen_t sa_len;
-    fd_set readset;
-    char buf[BUF_SIZE];
-    char *path = NULL, *hostname = NULL;
-    HTTP_REQUEST request;
-    int sid = 0;
-    int flag = 0;
-    long long count = 0;
+    int fd ;
+    int status;
+    EVENT *event;
+    HTTP_REQUEST req;
+    HTTP_RESPONSE resp;
+}DCON;
+static LINKTABLE *linktable     = NULL;
+static EVBASE *evbase           = NULL;
+static DCON *conns              = NULL;
+static int nconns               = 32;
+static int running_conns        = 0;
+static int conn_buf_size        = 2097152;
+void ev_handler(int ev_fd, short flag, void *arg);
+#define DCON_CLOSE(conn)                                                                    \
+{                                                                                           \
+   conn->event->destroy(conn->event);                                                       \
+   shutdown(conn->fd, SHUT_RD|SHUT_WR);                                                     \
+   close(conn->fd);                                                                         \
+   conn->status = DCON_STATUS_WAIT;                                                         \
+   running_conns--;                                                                         \
+}
+#define DCON_PACKET(conn)                                                                   \
+{                                                                                           \
+    conn->ps = conn->buffer;                                                                \
+    if(conn->content == NULL && conn->status == DCON_STATUS_WORKING)                        \
+    {                                                                                       \
+        while(conn->ps < conn->p)                                                           \
+        {                                                                                   \
+            if(conn->ps < (conn->p - 4) && *(conn->ps) == '\r' && *(conn->ps+1) == '\n'     \
+                    && *(conn->ps+2) == '\r' && *(conn->ps+3) == '\n')                      \
+            {                                                                               \
+                *(conn->ps) = '\0';                                                         \
+                (conn->content) = (conn->ps + 4);                                           \
+                http_response_parse(conn->buffer, conn->ps, &(conn->resp));                 \
+                if((conn->resp.headers[HEAD_ENT_CONTENT_TYPE])                              \
+                && strncasecmp(conn->resp.headers[HEAD_ENT_CONTENT_TYPE], "text", 4) != 0)  \
+                {                                                                           \
+                    conn->resp.respid = RESP_NOCONTENT;                                     \
+                    conn->req.status = LINK_STATUS_DISCARD;                                 \
+                    conn->status = DCON_STATUS_DISCARD;                                     \
+                    linktable->update_request(linktable, conn->req.id, conn->req.status);   \
+                    DCON_CLOSE(conn);                                                       \
+                    break;                                                                  \
+                }                                                                           \
+            }                                                                               \
+            else conn->ps++;                                                                \
+        }                                                                                   \
+    }                                                                                       \
+}
+#define DCON_DATA(conn)                                                                     \
+{                                                                                           \
+    DCON_PACKET(conn);                                                                      \
+    if(conn->content && conn->resp.respid == RESP_OK)                                       \
+    {                                                                                       \
+        *(conn->p) = '\0';                                                                  \
+        if(linktable->add_content(linktable, &(conn->resp), conn->req.host,                 \
+                    conn->req.path, conn->content, (conn->p - conn->content)) != 0)         \
+        {                                                                                   \
+            ERROR_LOGGER(linktable->logger, "Adding http://%s%s content failed, %s",        \
+                    conn->req.host, conn->req.path, strerror(errno));                       \
+            conn->req.status = LINK_STATUS_ERROR;                                           \
+        }                                                                                   \
+        else                                                                                \
+        {                                                                                   \
+            conn->req.status = LINK_STATUS_OVER;                                            \
+        }                                                                                   \
+    }                                                                                       \
+    linktable->update_request(linktable, conn->req.id, conn->req.status);                   \
+}
+#define DCON_OVER(conn)                                                                     \
+{                                                                                           \
+    DCON_DATA(conn);                                                                        \
+    DCON_CLOSE(conn);                                                                       \
+}
+#define DCON_READ(conn)                                                                     \
+{                                                                                           \
+    if((conn->n = read(conn->fd, conn->p, conn->left)) > 0)                                 \
+    {                                                                                       \
+        conn->left -= conn->n;                                                              \
+        conn->p += conn->n;                                                                 \
+        DCON_PACKET(conn);                                                                  \
+    }                                                                                       \
+    else                                                                                    \
+    {                                                                                       \
+        DCON_OVER(conn);                                                                    \
+    }                                                                                       \
+}                                                                                           
+#define DCON_REQ(conn)                                                                      \
+{                                                                                           \
+    conn->n = sprintf(conn->http_header, "GET %s HTTP/1.0\r\nHost: %s\r\n"                  \
+            "User-Agent: Mozilla\r\n\r\n", conn->req.path, conn->req.host);                 \
+    if(write(conn->fd, conn->http_header, conn->n) > 0)                                     \
+    {                                                                                       \
+        conn->event->del(conn->event, E_WRITE);                                             \
+    }                                                                                       \
+    else                                                                                    \
+    {                                                                                       \
+        linktable->update_request(linktable, conn->req.id, LINK_STATUS_ERROR);              \
+        DCON_CLOSE(conn);                                                                   \
+    }                                                                                       \
+}
+#define NEW_DCON(conn, request)                                                             \
+{                                                                                           \
+    if((conn->fd = socket(AF_INET, SOCK_STREAM, 0)) > 0)                                    \
+    {                                                                                       \
+        memset(&(conn->sa), 0, sizeof(struct sockaddr_in));                                 \
+        conn->sa.sin_family = AF_INET;                                                      \
+        conn->sa.sin_addr.s_addr = inet_addr(request.ip);                                   \
+        conn->sa.sin_port = htons(request.port);                                            \
+        conn->sa_len = sizeof(struct sockaddr);                                             \
+        if(connect(conn->fd, (struct sockaddr *)&(conn->sa), conn->sa_len) == 0)            \
+        {                                                                                   \
+            conn->p  = conn->buffer;                                                        \
+            memset(conn->buffer, 0, conn_buf_size);                                         \
+            conn->left = conn_buf_size;                                                     \
+            memset(&(conn->resp), 0, sizeof(HTTP_RESPONSE));                                \
+            conn->content = NULL;                                                           \
+            conn->resp.respid = -1;                                                         \
+            memcpy(&(conn->req), &(request), sizeof(HTTP_REQUEST));                         \
+            conn->event->set(conn->event, conn->fd, E_READ|E_WRITE|E_PERSIST,               \
+                (void *)conn, (void *)&ev_handler);                                         \
+            evbase->add(evbase, conn->event);                                               \
+        }                                                                                   \
+        else                                                                                \
+        {                                                                                   \
+            close(conn->fd);                                                                \
+            linktable->update_request(linktable, request.id, LINK_STATUS_DISCARD);          \
+            conn->status = DCON_STATUS_WAIT;                                                \
+            running_conns--;                                                                \
+        }                                                                                   \
+    }                                                                                       \
+}
+#define DCON_POP(conn, n)                                                                   \
+{                                                                                           \
+    n = 0;                                                                                  \
+    while(n < nconns)                                                                       \
+    {                                                                                       \
+        if(conns[n].status == DCON_STATUS_WAIT)                                             \
+        {                                                                                   \
+            conns[n].status = DCON_STATUS_WORKING;                                          \
+            conn = &(conns[n]);                                                             \
+            running_conns++;                                                                \
+            break;                                                                          \
+        }else ++n;                                                                          \
+    }                                                                                       \
+}
+#define DCON_FREE(conn)                                                                     \
+{                                                                                           \
+    conn->status = DCON_STATUS_WAIT;                                                        \
+    running_conns--;                                                                        \
+}
+#define DCONS_INIT(n)                                                                       \
+{                                                                                           \
+    if((conns = (DCON *)calloc(nconns, sizeof(DCON))))                                      \
+    {                                                                                       \
+        n = 0;                                                                              \
+        while(n < nconns )                                                                  \
+        {                                                                                   \
+            conns[n++].buffer = (char *)calloc(1, conn_buf_size);                           \
+        }                                                                                   \
+    }                                                                                       \
+}
 
-    buffer = buffer_init();
-    while(1)
+/* event handler */
+void ev_handler(int ev_fd, short flag, void *arg)
+{
+    DCON *conn = (DCON *)arg;
+    if(conn && ev_fd == conn->fd)
     {
-        //fprintf(stdout, "thread[%08x] start .....logger[%08x] urlno:%d urltotal:%d\n", 
-        //        pthread_self(), linktable->logger, linktable->urlno, linktable->url_total);
-        if((sid = linktable->get_request(linktable, &request)) != -1)
+        if(flag & E_WRITE)
         {
-            DEBUG_LOGGER(linktable->logger, "num:%d http://%s%s %s:%d\n", sid, request.host, 
-                    request.path, request.ip, request.port);
-            memset(&sa, 0, sizeof(struct sockaddr_in));
-            sa.sin_family = AF_INET;
-            sa.sin_addr.s_addr = inet_addr(request.ip);
-            sa.sin_port = htons(request.port);
-            sa_len = sizeof(struct sockaddr);
-            fd = socket(AF_INET, SOCK_STREAM, 0);
-            n = sprintf(buf, "GET %s HTTP/1.0\r\nHOST: %s\r\nUser-Agent: Mozilla\r\n\r\n", 
-                    request.path, request.host);
-            if(fd > 0 &&  connect(fd, (struct sockaddr *)&sa, sa_len) == 0 && write(fd, buf, n) > 0)
-            {
-                fprintf(stdout, "---request----\r\n%s----[end]----\r\n", buf);
-                fcntl(fd, F_SETFL, O_NONBLOCK);
-                FD_ZERO(&readset);
-                FD_SET(fd,&readset);
-                memset(&response, 0, sizeof(HTTP_RESPONSE));
-                response.respid = -1;
-                buffer->reset(buffer);
-                DEBUG_LOGGER(linktable->logger, "OK");
-                for(;;)
-                {
-                    select(fd+1,&readset,NULL,NULL,NULL);
-                    if(FD_ISSET(fd, &readset))
-                    {
-                        if((n = read(fd, buf, BUF_SIZE)) > 0)
-                        {
-                            buffer->push(buffer, buf, n);   
-                            PARSE_RESPONSE(p, end, buffer, response);
-                            if((p = response.headers[HEAD_ENT_CONTENT_TYPE])
-                                    && strncasecmp(p, "text", 4) != 0)
-                            {
-                                response.respid = RESP_NOCONTENT;
-                                //fprintf(stdout, "Content-Type:%s\n", p);
-                            }
-                            if(response.respid != -1 && response.respid != RESP_OK)
-                            {
-                                shutdown(fd, SHUT_RDWR);
-                                close(fd);
-                                break;
-                            }
-                        }
-                        else 
-                        {
-                            shutdown(fd, SHUT_RDWR);
-                            close(fd);
-                            break;
-                        }
-                    }
-                    usleep(10);
-                }
-                DEBUG_LOGGER(linktable->logger, "OK");
-                buffer->push(buffer, "\0", 1);
-                DEBUG_LOGGER(linktable->logger, "OK");
-                if(response.respid != -1)
-                {
-                    PARSE_RESPONSE(p, end, buffer, response);
-                }
-                DEBUG_LOGGER(linktable->logger, "OK");
-                if(response.respid == RESP_OK)
-                {
-                    p = (char *)(buffer->data + response.header_size);
-                    end = (char *)buffer->end;
-                    DEBUG_LOGGER(linktable->logger, 
-                            "Ready for add[%08x] document[http://%s%s] %08x:%d",
-                            linktable->add_content, request.host, request.path, p, (end - p));
-                    if(linktable->add_content(linktable, &response, 
-                                request.host, request.path, p, (end - p)) != 0)
-                    {
-                        ERROR_LOGGER(linktable->logger, "Adding http://%s%s content failed, %s",
-                                request.host, request.path, strerror(errno));
-                    }
-                    linktable->update_request(linktable, request.id, LINK_STATUS_OVER);
-                    DEBUG_LOGGER(linktable->logger, "OK response ");
-                }
-                else
-                {
-                    DEBUG_LOGGER(linktable->logger, "ERROR response ");
-                    linktable->update_request(linktable, sid, LINK_STATUS_ERROR);
-                    DEBUG_LOGGER(linktable->logger, "OK");
-                }
-                shutdown(fd, SHUT_RDWR);
-                close(fd);
-            } 
-            else
-            {
-                fprintf(stderr, "connected failed,%s", strerror(errno));
-                linktable->update_request(linktable, sid, LINK_STATUS_DISCARD);
-            }
+            DCON_REQ(conn);
         }
-        usleep(100);
+        if(flag & E_READ)
+        {
+            DCON_READ(conn);
+        }
     }
-    linktable->clean(&linktable);
-    buffer->clean(&buffer);
+    return ;
+}
+
+void *pthread_handler(void *arg)
+{
+    LINKTABLE *linktable = (LINKTABLE *)arg;
+    HTTP_REQUEST request;
+    DCON *conn = NULL;
+    int i = 0;
+
+    if((evbase = evbase_init()))
+    {
+        while(1)
+        {
+            if(running_conns < nconns)
+            {
+                DCON_POP(conn, i);
+                if(conn)
+                {
+                    if(linktable->get_request(linktable, &request) != -1)
+                    {
+                        NEW_DCON(conn, request);
+                    }
+                    else
+                    {
+                        DCON_FREE(conn);
+                    }
+                }
+            }
+            usleep(100);
+        }
+    }
     return NULL;
 }
 
@@ -943,20 +1050,18 @@ int main(int argc, char **argv)
 {
     int i = 0, n = 0;
     int taskid = -1;
-    int threads_count = 1;
     char *hostname = NULL, *path = NULL;
     pthread_t threadid = 0;
-    LINKTABLE *linktable = NULL;
 
     if(argc < 3)
     {
-        fprintf(stderr, "Usage:%s hostname path pthreads_count\n", argv[0]);
+        fprintf(stderr, "Usage:%s hostname path connections\n", argv[0]);
         _exit(-1);
     }
 
     hostname = argv[1];
     path = argv[2];
-    if(argc > 3 && argv[3]) threads_count = atoi(argv[3]); 
+    if(argc > 3 && argv[3]) nconns = atoi(argv[3]); 
 
     if(linktable = linktable_init())
     {
@@ -965,11 +1070,17 @@ int main(int argc, char **argv)
         linktable->set_urlfile(linktable, "/tmp/link.url");
         linktable->set_metafile(linktable, "/tmp/link.meta");
         linktable->set_docfile(linktable, "/tmp/link.doc");
-        linktable->set_ntask(linktable, threads_count);
+        linktable->set_ntask(linktable, 32);
         linktable->iszlib = 1;
         linktable->resume(linktable);
         linktable->addurl(linktable, hostname, path);
+        if(pthread_create(&threadid, NULL, &pthread_handler, (void *)linktable) != 0)
+        {
+            fprintf(stderr, "creating thread failed, %s\n", strerror(errno));
+            _exit(-1);
+        }
         //pthreads 
+        /*
         for(i = 0; i < threads_count; i++)
         {
             if(pthread_create(&threadid, NULL, &pthread_handler, (void *)linktable) != 0)
@@ -978,7 +1089,7 @@ int main(int argc, char **argv)
                         i, threadid, strerror(errno));
                 _exit(-1);
             }
-        }
+        }*/
         // DEBUG_LOGGER(ltable->logger, "thread[%08x] start .....", pthread_self());
         while(1)
         {
