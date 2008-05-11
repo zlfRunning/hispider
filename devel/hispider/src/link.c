@@ -1040,8 +1040,8 @@ void ev_handler(int ev_fd, short flag, void *arg);
                 conn->req.ip, conn->req.port, conn->fd, conn->req.id,                       \
                     conn->req.host, conn->req.path);                                        \
             DCON_OVER(conn);                                                                \
-            conn = NULL;                                                                    \
         }                                                                                   \
+        conn = NULL;                                                                        \
         if(conns[n].status == DCON_STATUS_WAIT)                                             \
         {                                                                                   \
             conns[n].status = DCON_STATUS_WORKING;                                          \
@@ -1102,6 +1102,7 @@ void *pthread_handler(void *arg)
     LINKTABLE *linktable = (LINKTABLE *)arg;
     HTTP_REQUEST request;
     DCON *conn = NULL;
+    long long total = 0;
     int i = 0;
 
     if((evbase = evbase_init()))
@@ -1109,22 +1110,19 @@ void *pthread_handler(void *arg)
         DCONS_INIT(i);
         while(1)
         {
-            if(running_conns < nconns)
+            DCON_POP(conn, i);
+            if(conn)
             {
-                DCON_POP(conn, i);
-                if(conn)
+                if(linktable->get_request(linktable, &request) != -1)
                 {
-                    if(linktable->get_request(linktable, &request) != -1)
-                    {
-                        DEBUG_LOGGER(linktable->logger, "New request[%d][http://%s%s] [%s:%d] "
-                                "via conns[%d][%08x]", request.id, request.host, request.path,
-                                request.ip, request.port, i, conn);
-                        NEW_DCON(conn, request);
-                    }
-                    else
-                    {
-                        DCON_FREE(conn);
-                    }
+                    DEBUG_LOGGER(linktable->logger, "New request[%d][http://%s%s] [%s:%d] "
+                            "via conns[%d][%08x]", request.id, request.host, request.path,
+                            request.ip, request.port, i, conn);
+                    NEW_DCON(conn, request);
+                }
+                else
+                {
+                    DCON_FREE(conn);
                 }
             }
             evbase->loop(evbase, 0, NULL);
