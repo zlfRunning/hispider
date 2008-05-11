@@ -840,7 +840,7 @@ LINKTABLE *linktable_init()
 #include "timer.h"
 #include "buffer.h"
 #include "basedef.h"
-#define DCON_TIMEOUT  30000000
+#define DCON_TIMEOUT  20000000
 #define DCON_BUF_SIZE 65536
 #define DCON_STATUS_WAIT        0
 #define DCON_STATUS_WORKING     1
@@ -969,6 +969,8 @@ void ev_handler(int ev_fd, short flag, void *arg);
 }                                                                                           
 #define DCON_REQ(conn)                                                                      \
 {                                                                                           \
+    if(conn->status == DCON_STATUS_WORKING)                                                 \
+    {                                                                                       \
     conn->n = sprintf(conn->http_header, "GET %s HTTP/1.0\r\n"                              \
             "Host: %s\r\nConnection: close\r\n"                                             \
             "User-Agent: Mozilla\r\n\r\n", conn->req.path, conn->req.host);                 \
@@ -984,6 +986,7 @@ void ev_handler(int ev_fd, short flag, void *arg);
                 conn->req.id, conn->req.host, conn->req.path, conn->fd, strerror(errno));   \
         linktable->update_request(linktable, conn->req.id, LINK_STATUS_ERROR);              \
         DCON_CLOSE(conn);                                                                   \
+    }                                                                                       \
     }                                                                                       \
 }
 //if(fcntl(conn->fd, F_SETFL, O_NONBLOCK) == 0)                                       
@@ -1077,10 +1080,6 @@ void ev_handler(int ev_fd, short flag, void *arg)
     DCON *conn = (DCON *)arg;
     if(conn && ev_fd == conn->fd)
     {
-        if(flag & E_WRITE)
-        {
-            DCON_REQ(conn);
-        }
         if(flag & E_READ)
         {
             DEBUG_LOGGER(linktable->logger, "Ready for reading [%d] [http://%s%s][%s:%d] via %d",
@@ -1092,6 +1091,11 @@ void ev_handler(int ev_fd, short flag, void *arg)
                     conn->req.port, conn->fd, conn->req.host, conn->req.path,
                     conn->data_size, (conn->p - conn->content), conn->left);
         }
+        if(flag & E_WRITE)
+        {
+            DCON_REQ(conn);
+        }
+
         TIMER_SAMPLE(conn->timer);
     }
     return ;
