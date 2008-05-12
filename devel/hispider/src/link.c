@@ -845,7 +845,8 @@ LINKTABLE *linktable_init()
 #define DCON_STATUS_WAIT        0
 #define DCON_STATUS_WORKING     1
 #define DCON_STATUS_DISCARD     2
-#define DCON_STATUS_OVER        4
+#define DCON_STATUS_ERROR       4
+#define DCON_STATUS_OVER        8
 typedef struct _DCON
 {
     char http_header[DCON_BUF_SIZE];
@@ -875,14 +876,19 @@ static int conn_buf_size        = 2097152;
 void ev_handler(int ev_fd, short flag, void *arg);
 #define DCON_CLOSE(conn)                                                                    \
 {                                                                                           \
-   conn->event->destroy(conn->event);                                                       \
-   shutdown(conn->fd, SHUT_RD|SHUT_WR);                                                     \
-   close(conn->fd);                                                                         \
-   conn->status = DCON_STATUS_WAIT;                                                         \
-   running_conns--;                                                                         \
+    if(conn->fd > 0)                                                                        \
+    {                                                                                       \
+        conn->event->destroy(conn->event);                                                  \
+        shutdown(conn->fd, SHUT_RD|SHUT_WR);                                                \
+        close(conn->fd);                                                                    \
+        conn->status = DCON_STATUS_WAIT;                                                    \
+        running_conns--;                                                                    \
+        conn->fd = -1;                                                                      \
+    }                                                                                       \
 }
 #define DCON_DATA(conn)                                                                     \
 {                                                                                           \
+    conn->status = DCON_STATUS_OVER;                                                        \
     if(conn->content && conn->resp.respid == RESP_OK)                                       \
     {                                                                                       \
         *(conn->p) = '\0';                                                                  \
@@ -941,7 +947,6 @@ void ev_handler(int ev_fd, short flag, void *arg);
 {                                                                                           \
     DCON_PACKET(conn);                                                                      \
     DCON_DATA(conn);                                                                        \
-    DCON_CLOSE(conn);                                                                       \
 }
 #define DCON_READ(conn)                                                                     \
 {                                                                                           \
@@ -950,11 +955,7 @@ void ev_handler(int ev_fd, short flag, void *arg);
         conn->left -= conn->n;                                                              \
         conn->p += conn->n;                                                                 \
         DCON_PACKET(conn);                                                                  \
-        if(conn->status != DCON_STATUS_WORKING)                                             \
-        {                                                                                   \
-            DCON_OVER(conn);                                                                \
-        }                                                                                   \
-        else if(conn->content && conn->data_size > 0                                        \
+        if(conn->content && conn->data_size > 0                                             \
                 && (conn->p - conn->content) >= conn->data_size)                            \
         {                                                                                   \
             DCON_OVER(conn);                                                                \
@@ -971,22 +972,24 @@ void ev_handler(int ev_fd, short flag, void *arg);
 {                                                                                           \
     if(conn->status == DCON_STATUS_WORKING)                                                 \
     {                                                                                       \
-    conn->n = sprintf(conn->http_header, "GET %s HTTP/1.0\r\n"                              \
-            "Host: %s\r\nConnection: close\r\n"                                             \
-            "User-Agent: Mozilla\r\n\r\n", conn->req.path, conn->req.host);                 \
-    if((conn->n = write(conn->fd, conn->http_header, conn->n)) > 0)                         \
-    {                                                                                       \
-        conn->event->del(conn->event, E_WRITE);                                             \
-        DEBUG_LOGGER(linktable->logger, "Wrote %d bytes request[%d] to http://%s%s] via %d",\
-                conn->n, conn->req.id, conn->req.host, conn->req.path, conn->fd);           \
-    }                                                                                       \
-    else                                                                                    \
-    {                                                                                       \
-        ERROR_LOGGER(linktable->logger,"Writting request[%d] to http://%s%s] via %d failed, %s",\
-                conn->req.id, conn->req.host, conn->req.path, conn->fd, strerror(errno));   \
-        linktable->update_request(linktable, conn->req.id, LINK_STATUS_ERROR);              \
-        DCON_CLOSE(conn);                                                                   \
-    }                                                                                       \
+        conn->n = sprintf(conn->http_header, "GET %s HTTP/1.0\r\n"                          \
+                "Host: %s\r\nConnection: close\r\n"                                         \
+                "User-Agent: Mozilla\r\n\r\n", conn->req.path, conn->req.host);             \
+        if((conn->n = write(conn->fd, conn->http_header, conn->n)) > 0)                     \
+        {                                                                                   \
+            conn->event->del(conn->event, E_WRITE);                                         \
+            DEBUG_LOGGER(linktable->logger, "Wrote %d bytes request[%d] "                   \
+                    "to http://%s%s] via %d",                                               \
+                    conn->n, conn->req.id, conn->req.host, conn->req.path, conn->fd);       \
+        }                                                                                   \
+        else                                                                                \
+        {                                                                                   \
+            ERROR_LOGGER(linktable->logger,"Writting request[%d] to http://%s%s] "          \
+                    "via %d failed, %s", conn->req.id, conn->req.host, conn->req.path,      \
+                    conn->fd, strerror(errno));                                             \
+            linktable->update_request(linktable, conn->req.id, LINK_STATUS_ERROR);          \
+            conn->status = DCON_STATUS_ERROR;                                               \
+        }                                                                                   \
     }                                                                                       \
 }
 //if(fcntl(conn->fd, F_SETFL, O_NONBLOCK) == 0)                                       
@@ -1024,6 +1027,7 @@ void ev_handler(int ev_fd, short flag, void *arg);
             ERROR_LOGGER(linktable->logger, "Connecting to %s:%d host[%s] failed, %s",      \
                     conn->req.ip, conn->req.port, conn->req.host, strerror(errno));         \
             close(conn->fd);                                                                \
+            conn->fd = -1;                                                                  \
             linktable->update_request(linktable, request.id, LINK_STATUS_DISCARD);          \
             conn->status = DCON_STATUS_WAIT;                                                \
             running_conns--;                                                                \
@@ -1043,6 +1047,7 @@ void ev_handler(int ev_fd, short flag, void *arg);
                 conn->req.ip, conn->req.port, conn->fd, conn->req.id,                       \
                     conn->req.host, conn->req.path);                                        \
             DCON_OVER(conn);                                                                \
+            DCON_CLOSE(conn);                                                               \
         }                                                                                   \
         conn = NULL;                                                                        \
         if(conns[n].status == DCON_STATUS_WAIT)                                             \
@@ -1095,7 +1100,12 @@ void ev_handler(int ev_fd, short flag, void *arg)
         {
             DCON_REQ(conn);
         }
-
+        if(conn->status != DCON_STATUS_WORKING)
+        {
+            DEBUG_LOGGER(linktable->logger, "Ready close request[%d] connection[%s:%d] via %d",
+                conn->req.id, conn->req.ip, conn->req.port, conn->fd);
+            DCON_CLOSE(conn);
+        }
         TIMER_SAMPLE(conn->timer);
     }
     return ;
@@ -1129,6 +1139,7 @@ void *pthread_handler(void *arg)
                     DCON_FREE(conn);
                 }
             }
+            //fprintf(stdout, "running_conns:%d\n", running_conns);
             evbase->loop(evbase, 0, NULL);
             usleep(100);
         }
