@@ -709,6 +709,8 @@ int linktable_add_content(LINKTABLE *linktable, void *response,
         DEBUG_LOGGER(linktable->logger, "Ready for append docmeta to metafile");
         if(HIO_APPEND(linktable->metaio, &(docmeta), sizeof(DOCMETA), offset) <= 0) goto end;
         linktable->doc_total++;
+        linktable->size += docmeta.size;
+        linktable->zsize += docmeta.zsize;
         ret = 0;
         DEBUG_LOGGER(linktable->logger, "Added DOCMETA[%d] hostoff:%d pathoff:%d"
                 "size:%d zsize:%d to offset:%lld meta:%s",
@@ -762,6 +764,8 @@ int linktable_resume(LINKTABLE *linktable)
             }
             if(docmeta.status == URL_STATUS_OVER) linktable->docok_total++;
             linktable->doc_total++;
+            linktable->size += docmeta.size;
+            linktable->zsize += docmeta.zsize;
         }
     }
 }
@@ -1201,9 +1205,11 @@ int main(int argc, char **argv)
                 linktable->taskhandler(linktable, taskid);
                 DEBUG_LOGGER(linktable->logger, "Completed task:%d", taskid);
                 DEBUG_LOGGER(linktable->logger, 
-                        "urlno:%d urlok:%d urltotal:%d docno:%d docok:%d doctotal:%d\n",
+                        "urlno:%d urlok:%d urltotal:%d docno:%d docok:%d "
+                        "doctotal:%d size:%lld zsize:%lld\n",
                         linktable->urlno, linktable->urlok_total, linktable->url_total,
-                        linktable->docno, linktable->docok_total, linktable->doc_total);
+                        linktable->docno, linktable->docok_total, 
+                        linktable->doc_total, linktable->size, linktable->zsize);
             }
             else 
             {
