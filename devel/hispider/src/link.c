@@ -844,13 +844,14 @@ LINKTABLE *linktable_init()
 #include "timer.h"
 #include "buffer.h"
 #include "basedef.h"
-#define DCON_TIMEOUT  20000000
+#define DCON_TIMEOUT  5000000
 #define DCON_BUF_SIZE 65536
-#define DCON_STATUS_WAIT        0
-#define DCON_STATUS_WORKING     1
-#define DCON_STATUS_DISCARD     2
-#define DCON_STATUS_ERROR       4
-#define DCON_STATUS_OVER        8
+#define DCON_STATUS_WAIT        0x00
+#define DCON_STATUS_READY       0x01
+#define DCON_STATUS_WORKING     0x02
+#define DCON_STATUS_DISCARD     0x04
+#define DCON_STATUS_ERROR       0x08
+#define DCON_STATUS_OVER        0x10
 typedef struct _DCON
 {
     char http_header[DCON_BUF_SIZE];
@@ -882,7 +883,11 @@ void ev_handler(int ev_fd, short flag, void *arg);
 {                                                                                           \
     if(conn->fd > 0)                                                                        \
     {                                                                                       \
+        DEBUG_LOGGER(linktable->logger, "Ready destroy event[%d] on[%s:%d]",                \
+                conn->fd, conn->req.ip, conn->req.port);                                    \
         conn->event->destroy(conn->event);                                                  \
+        DEBUG_LOGGER(linktable->logger, "Over destroy event[%d] on[%s:%d]",                 \
+                conn->fd, conn->req.ip, conn->req.port);                                    \
         shutdown(conn->fd, SHUT_RD|SHUT_WR);                                                \
         close(conn->fd);                                                                    \
         conn->status = DCON_STATUS_WAIT;                                                    \
@@ -1008,9 +1013,10 @@ void ev_handler(int ev_fd, short flag, void *arg);
         conn->sa_len = sizeof(struct sockaddr);                                             \
         DEBUG_LOGGER(linktable->logger, "Ready for connecting to [%s][%s:%d] via %d",       \
                 request.host, request.ip, request.port, conn->fd);                          \
-        if(fcntl(conn->fd, F_SETFL, O_NONBLOCK) == 0)                                       \
+        fcntl(conn->fd, F_SETFL, O_NONBLOCK);                                               \
+        if(connect(conn->fd, (struct sockaddr *)&(conn->sa), conn->sa_len) == 0             \
+            || errno == EINPROGRESS )                                                       \
         {                                                                                   \
-            connect(conn->fd, (struct sockaddr *)&(conn->sa), conn->sa_len);                \
             conn->p  = conn->buffer;                                                        \
             memset(conn->buffer, 0, conn_buf_size);                                         \
             conn->left = conn_buf_size;                                                     \
@@ -1056,7 +1062,7 @@ void ev_handler(int ev_fd, short flag, void *arg);
         conn = NULL;                                                                        \
         if(conns[n].status == DCON_STATUS_WAIT)                                             \
         {                                                                                   \
-            conns[n].status = DCON_STATUS_WORKING;                                          \
+            conns[n].status = DCON_STATUS_READY;                                            \
             conn = &(conns[n]);                                                             \
             running_conns++;                                                                \
             break;                                                                          \
@@ -1087,8 +1093,31 @@ void ev_handler(int ev_fd, short flag, void *arg);
 void ev_handler(int ev_fd, short flag, void *arg)
 {
     DCON *conn = (DCON *)arg;
+    int ret = -1;
+    int error;
+    socklen_t len;
+
     if(conn && ev_fd == conn->fd)
     {
+        if(conn->status == DCON_STATUS_READY)
+        {
+            ret = getsockopt(conn->fd, SOL_SOCKET, SO_ERROR, &error, &len);
+            if(ret != 0 || error != 0)
+            {
+                ERROR_LOGGER(linktable->logger, "Connecting to [http://%s%s] [%s:%d] "
+                        "request[%d] via %d failed, [%d]%s", conn->req.host, conn->req.path,
+                        conn->req.ip, conn->req.port, conn->req.id, 
+                        conn->fd, error, strerror(errno));
+                conn->req.status = LINK_STATUS_ERROR;
+                linktable->update_request(linktable, conn->req.id, conn->req.status);
+                DCON_CLOSE(conn);
+                return;
+            }
+            else
+            {
+                conn->status = DCON_STATUS_WORKING;
+            }
+        }
         if(flag & E_READ)
         {
             DEBUG_LOGGER(linktable->logger, "Ready for reading [%d] [http://%s%s][%s:%d] via %d",
@@ -1125,6 +1154,7 @@ void *pthread_handler(void *arg)
 
     if((evbase = evbase_init()))
     {
+        evbase->set_logfile(evbase, "/tmp/link.evlog");
         DCONS_INIT(i);
         while(1)
         {
@@ -1145,7 +1175,7 @@ void *pthread_handler(void *arg)
             }
             //fprintf(stdout, "running_conns:%d\n", running_conns);
             evbase->loop(evbase, 0, NULL);
-            usleep(100);
+            usleep(10);
         }
     }
     return NULL;
@@ -1220,7 +1250,7 @@ int main(int argc, char **argv)
                         linktable->docno, linktable->docok_total, linktable->doc_total);
                 */
             }
-            usleep(100);
+            usleep(10);
         }
     }
 }
