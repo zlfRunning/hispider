@@ -1094,7 +1094,7 @@ void ev_handler(int ev_fd, short flag, void *arg)
 {
     DCON *conn = (DCON *)arg;
     int ret = -1;
-    int error;
+    int error = 0;
     socklen_t len;
 
     if(conn && ev_fd == conn->fd)
