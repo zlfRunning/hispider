@@ -1120,14 +1120,18 @@ void ev_handler(int ev_fd, short flag, void *arg)
         }
         if(flag & E_READ)
         {
+            /*
             DEBUG_LOGGER(linktable->logger, "Ready for reading [%d] [http://%s%s][%s:%d] via %d",
                     conn->req.id, conn->req.host, conn->req.path,
                     conn->req.ip, conn->req.port, conn->fd);
+            */
             DCON_READ(conn);
+            /*
             DEBUG_LOGGER(linktable->logger, "Read over [%d] [%s:%d] via %d [http://%s%s] "
                     "data_size:%d content_size:%d left:%d ", conn->req.id, conn->req.ip,
                     conn->req.port, conn->fd, conn->req.host, conn->req.path,
                     conn->data_size, (conn->p - conn->content), conn->left);
+            */
         }
         if(flag & E_WRITE)
         {
