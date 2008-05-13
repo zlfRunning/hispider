@@ -1094,15 +1094,15 @@ void ev_handler(int ev_fd, short flag, void *arg)
 {
     DCON *conn = (DCON *)arg;
     int ret = -1;
-    int error = 0;
-    socklen_t len;
+    int error  = 0;
+    socklen_t len = sizeof(int);
 
     if(conn && ev_fd == conn->fd)
     {
         if(conn->status == DCON_STATUS_READY)
         {
             ret = getsockopt(conn->fd, SOL_SOCKET, SO_ERROR, &error, &len);
-            if(ret != 0 || error != 0)
+            if(ret == -1 || error != 0)
             {
                 ERROR_LOGGER(linktable->logger, "Connecting to [http://%s%s] [%s:%d] "
                         "request[%d] via %d failed, [%d]%s", conn->req.host, conn->req.path,
@@ -1154,7 +1154,6 @@ void *pthread_handler(void *arg)
 
     if((evbase = evbase_init()))
     {
-        evbase->set_logfile(evbase, "/tmp/link.evlog");
         DCONS_INIT(i);
         while(1)
         {
@@ -1201,11 +1200,11 @@ int main(int argc, char **argv)
 
     if(linktable = linktable_init())
     {
-        linktable->set_logger(linktable, "/tmp/link.log", NULL);
-        linktable->set_lnkfile(linktable, "/tmp/link.lnk");
-        linktable->set_urlfile(linktable, "/tmp/link.url");
-        linktable->set_metafile(linktable, "/tmp/link.meta");
-        linktable->set_docfile(linktable, "/tmp/link.doc");
+        linktable->set_logger(linktable, "/data/tmp/link.log", NULL);
+        linktable->set_lnkfile(linktable, "/data/tmp/link.lnk");
+        linktable->set_urlfile(linktable, "/data/tmp/link.url");
+        linktable->set_metafile(linktable, "/data/tmp/link.meta");
+        linktable->set_docfile(linktable, "/data/tmp/link.doc");
         linktable->set_ntask(linktable, 32);
         linktable->iszlib = 1;
         linktable->resume(linktable);
