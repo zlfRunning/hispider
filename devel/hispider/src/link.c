@@ -893,6 +893,7 @@ void ev_handler(int ev_fd, short flag, void *arg);
 #define DCON_DATA(conn)                                                                     \
 {                                                                                           \
     conn->status = DCON_STATUS_OVER;                                                        \
+    conn->req.status = LINK_STATUS_ERROR;                                                   \
     if(conn->content && conn->resp.respid == RESP_OK)                                       \
     {                                                                                       \
         *(conn->p) = '\0';                                                                  \
@@ -901,7 +902,6 @@ void ev_handler(int ev_fd, short flag, void *arg);
         {                                                                                   \
             ERROR_LOGGER(linktable->logger, "Adding http://%s%s content failed, %s",        \
                     conn->req.host, conn->req.path, strerror(errno));                       \
-            conn->req.status = LINK_STATUS_ERROR;                                           \
         }                                                                                   \
         else                                                                                \
         {                                                                                   \
