@@ -2,6 +2,14 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef HAVE_PTHREAD
+#include "mutex.h"
+#else
+#define MUTEX_INIT(ptr)
+#define MUTEX_LOCK(ptr)
+#define MUTEX_UNLOCK(ptr)
+#define MUTEX_DESTROY(ptr)
+#endif
 #ifndef _HIO_H
 #define _HIO_H
 #ifndef HIO_PATH_MAX
@@ -31,6 +39,7 @@ typedef struct _HIO
         if(WD(ptr) > 0) close(WD(ptr));     \
         RD(ptr) = -1;                       \
         WD(ptr) = -1;                       \
+        MUTEX_INIT(PH(ptr)->mutex);         \
     }                                       \
 }
 #define RCHK(ptr) ((PH(ptr) == NULL \
@@ -42,6 +51,8 @@ typedef struct _HIO
 #define HIO_WSEEK(ptr, off) ((WCHK(ptr) == 0) ? lseek(WD(ptr), off, SEEK_SET) : WCD(ptr))
 #define HIO_READ(ptr, s, ns) ((RCHK(ptr) == 0) ? read(RD(ptr), s, ns) : RCD(ptr))
 #define HIO_WRITE(ptr, s, ns) ((WCHK(ptr) == 0) ? write(WD(ptr), s, ns) : WCD(ptr))
+#define HIO_LOCK(ptr) {MUTEX_LOCK(PH(ptr)->mutex);}
+#define HIO_UNLOCK(ptr) {MUTEX_UNLOCK(PH(ptr)->mutex);}
 #define HIO_SREAD(ptr, s, ns, off) ((RCHK(ptr) == 0 && lseek(RD(ptr), off, SEEK_SET) >= 0) \
         ? read(RD(ptr), s, ns) : RCD(ptr))
 #define HIO_SWRITE(ptr, s, ns, off) ((WCHK(ptr)==0 && lseek(WD(ptr), off, SEEK_SET) >= 0) \
@@ -52,6 +63,7 @@ typedef struct _HIO
 {                                               \
     if(ptr)                                     \
     {                                           \
+        MUTEX_DESTROY(PH(ptr)->mutex);          \
         close(RD(ptr));                         \
         close(WD(ptr));                         \
         free(ptr);                              \

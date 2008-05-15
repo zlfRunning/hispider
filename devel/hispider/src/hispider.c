@@ -124,8 +124,7 @@ void cb_trans_heartbeat_handler(void *arg)
         //        task.ntask_total, task.ntask_wait, task.ntask_over);
         for(i = 0; i < task.ntask_limit; i++)
         {
-            if(task.requests[i].status == LINK_STATUS_INIT
-                    && (conn = NCONN(task, i)))
+            if(task.requests[i].status == LINK_STATUS_INIT && (conn = NCONN(task, i)))
             {
                 task.requests[i].status = LINK_STATUS_REQUEST;
                 NEWREQ(task, i);
@@ -138,8 +137,7 @@ void cb_trans_heartbeat_handler(void *arg)
                     conn->start_cstate(conn);
                     conn->c_id = i;
                     conn->set_timeout(conn, task.timeout);
-                    DEBUG_LOGGER(daemon_logger, 
-                            "Set timeout[%lld] on %s:%d via %d",
+                    DEBUG_LOGGER(daemon_logger, "Set timeout[%lld] on %s:%d via %d",
                             task.timeout, conn->ip, conn->port, conn->fd);
                     task.requests[i].status = LINK_STATUS_WORKING;
                     transport->newtransaction(transport, conn, i);

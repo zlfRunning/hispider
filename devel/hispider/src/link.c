@@ -186,7 +186,7 @@ int linktable_parse(LINKTABLE *linktable, char *host, char *path, char *content,
                 link = p;
                 if(pref){while(p < end && *p != '\'' && *p != '"')++p;}
                 else {while(p < end && *p != 0x20 && *p != 0x09 && *p != '>')++p;}
-                //DEBUG_LOGGER(linktable->logger, "left:%d\n",(end - p));
+                DEBUG_LOGGER(linktable->logger, "left:%d\n",(end - p));
                 //fprintf(stdout, "%s\n", p);
                 if((n = (p - link)) > 0)
                 {
@@ -439,6 +439,7 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST *req)
     if(linktable && req && linktable->urlno < linktable->url_total)
     {
         offset = (linktable->urlno * sizeof(HTTP_REQUEST));
+        //HIO_LOCK(linktable->lnkio);
         if(HIO_RSEEK(linktable->lnkio, offset) >= 0)
         {
             while(HIO_READ(linktable->lnkio, req, sizeof(HTTP_REQUEST)) > 0)
@@ -450,7 +451,9 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST *req)
                     break;
                 }
             }
+            ERROR_LOGGER(linktable->logger, "Reading link file failed,%s", strerror(errno));
         }
+        //HIO_UNLOCK(linktable->lnkio);
     }
     return ret;
 }
@@ -649,6 +652,7 @@ int linktable_add_zcontent(LINKTABLE *linktable, DOCMETA *pdocmeta, char *zdata,
         linktable->doc_total++;
         linktable->size += docmeta.size;
         linktable->zsize += docmeta.zsize;
+        ret = 0;
         DEBUG_LOGGER(linktable->logger, "Added DOCMETA[%d] hostoff:%d pathoff:%d"
                 "size:%d zsize:%d offset:%lld to metaoff:[%lld]",
                 docmeta.id, docmeta.hostoff, docmeta.pathoff, 

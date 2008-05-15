@@ -180,6 +180,7 @@ void cb_serv_data_handler(CONN *conn, BUFFER *packet,
         ret |= linktable->update_request(linktable, id, status);
         if(docmeta->zsize > 0)
             ret |= linktable->add_zcontent(linktable, docmeta, zdata, docmeta->zsize);
+        DEBUG_LOGGER(linktable->logger, "HTTP REQUEST handler ret[%d]", ret);
         if(ret != -1) 
             p = "HTTP/1.0 200 OK\r\n\r\n";
         else 
@@ -202,7 +203,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
 {
 	char *logfile = NULL, *s = NULL, *p = NULL, *hostname = NULL, *path = NULL, 
          *docfile = NULL, *lnkfile = NULL, *urlfile = NULL, *metafile = NULL;
-	int n = 0, ntask = 0;
+	int n = 0, ntask = 0, max_connections = 0;
 	int ret = 0;
 
 	if((dict = iniparser_new(conf)) == NULL)
@@ -214,6 +215,9 @@ int sbase_initialize(SBASE *sbase, char *conf)
 	//fprintf(stdout, "Parsing SBASE...\n");
 	sbase->working_mode = iniparser_getint(dict, "SBASE:working_mode", WORKING_PROC);
 	sbase->max_procthreads = iniparser_getint(dict, "SBASE:max_procthreads", 1);
+	max_connections = iniparser_getint(dict, "SBASE:max_connections", MAX_CONNECTIONS);
+    if(max_connections <= 0 ) max_connections =  MAX_CONNECTIONS;
+    sbase->setrlimit(sbase, "RLIMIT_NOFILE", RLIMIT_NOFILE, max_connections);
 	if(sbase->max_procthreads > MAX_PROCTHREADS) sbase->max_procthreads = MAX_PROCTHREADS;
 	sbase->sleep_usec = iniparser_getint(dict, "SBASE:sleep_usec", MIN_SLEEP_USEC);
 	if((logfile = iniparser_getstr(dict, "SBASE:logfile")) == NULL) logfile = SBASE_LOG;
