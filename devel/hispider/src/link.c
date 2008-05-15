@@ -393,7 +393,7 @@ char *linktable_iptab(LINKTABLE *linktable, char *hostname, char *ipstr)
 
     if(linktable)
     {
-        DEBUG_LOGGER(linktable->logger, "Ready for parsing [%s]'s ip", hostname);
+        //DEBUG_LOGGER(linktable->logger, "Ready for parsing [%s]'s ip", hostname);
         TRIETAB_GET(linktable->dnstable, hostname, strlen(hostname), ip);
         if(ip) 
         {
@@ -415,12 +415,12 @@ char *linktable_iptab(LINKTABLE *linktable, char *hostname, char *ipstr)
         if(ip)
         {
             MUTEX_LOCK(linktable->mutex);
-
             if((linktable->dnslist = (char **)realloc(linktable->dnslist, 
                             sizeof(char *) * (linktable->dnscount + 1))))
             {
                 linktable->dnslist[linktable->dnscount] = ip;
                 TRIETAB_ADD(linktable->dnstable, hostname, strlen(hostname), ip);
+                linktable->dnscount++;
             }
             MUTEX_UNLOCK(linktable->mutex);
         }
@@ -451,7 +451,7 @@ int linktable_get_request(LINKTABLE *linktable, HTTP_REQUEST *req)
                     break;
                 }
             }
-            ERROR_LOGGER(linktable->logger, "Reading link file failed,%s", strerror(errno));
+            //ERROR_LOGGER(linktable->logger, "Reading link file failed,%s", strerror(errno));
         }
         //HIO_UNLOCK(linktable->lnkio);
     }

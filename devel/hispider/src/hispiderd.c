@@ -32,6 +32,8 @@ static const char *__html__body__  =
 "<tr><td align=left ><li><font color=red size=72 >Doc Size:%lld </font></li></td></tr>\n"
 "<tr><td align=left ><li><font color=red size=72 >Doc Zsize:%lld </font></li></td></tr>\n"
 "<tr><td align=left ><li><font color=red size=72 >DNS count:%d </font></li></td></tr>\n"
+"<tr><td align=left ><li><font color=red size=72 >Time Used:%lld (usec)</font></li></td></tr>\n"
+"<tr><td align=left ><li><font color=red size=72 >Speed:%lld (k/s)</font></li></td></tr>\n"
 "</table><br><hr  noshade><em>\n"
 "<font color=white ><a href='http://code.google.com/p/hispider' >"
 "Hispider</a> Powered By <a href='http://code.google.com/p/hispider'>"
@@ -43,6 +45,7 @@ SERVICE *serv = NULL;
 static dictionary *dict = NULL;
 static LOGGER *daemon_logger = NULL;
 static LINKTABLE *linktable = NULL;
+static void *timer = NULL;
 static long long global_timeout_times = 60000000;
 
 //daemon task handler 
@@ -62,8 +65,8 @@ void cb_serv_heartbeat_handler(void *arg)
         if((taskid = linktable->get_task(linktable)) != -1)
         {
             serv->newtask(serv, (void *)&cb_serv_task_handler, (void *)taskid);
-            DEBUG_LOGGER(daemon_logger, "linktable->docno:%d doc_total:%d", 
-                    linktable->docno, linktable->doc_total);
+            //DEBUG_LOGGER(daemon_logger, "linktable->docno:%d doc_total:%d", 
+            //        linktable->docno, linktable->doc_total);
         }
         //DEBUG_LOGGER(daemon_logger, "end heartbeat docno:%d doctotal:%d", 
           //      linktable->docno, linktable->doc_total);
@@ -108,11 +111,13 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
         if(http_req.reqid == HTTP_GET)
         {
             p = buf;
+            TIMER_SAMPLE(timer);
             m = sprintf(p, __html__body__, linktable->url_total, 
                     linktable->urlno, linktable->urlok_total, 
                     linktable->doc_total, linktable->docno,
                     linktable->docok_total, linktable->size, 
-                    linktable->zsize, linktable->dnscount);
+                    linktable->zsize, linktable->dnscount, 
+                    PT_USEC_U(timer), (linktable->size/PT_USEC_U(timer)) * 100000ll);
             n = sprintf(header, "HTTP/1.0 200 OK \r\nContent-Type: text/html\r\n"
                     "Content-Length: %d\r\n\r\n", m);
             conn->push_chunk(conn, header, n);
@@ -337,6 +342,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
     linktable->set_ntask(linktable, ntask);
     linktable->resume(linktable);
     linktable->addurl(linktable, hostname, path);
+    TIMER_INIT(timer);
     return 0;
 }
 
