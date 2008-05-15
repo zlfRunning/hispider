@@ -581,8 +581,9 @@ void linktable_taskhandler(LINKTABLE *linktable, long taskid)
                 && (zdata = (char *)calloc(1, pdocmeta->zsize)))
         {
             nzdata = pdocmeta->zsize;
-            //fprintf(stdout, "line:%d id:%d offset:%lld status:%d size:%d zsize:%d\n", __LINE__,
-            //pdocmeta->id, pdocmeta->offset, pdocmeta->status, pdocmeta->size, pdocmeta->zsize);
+            DEBUG_LOGGER(linktable->logger, "ready reading id:%d offset:%lld "
+                    "status:%d size:%d zsize:%d",pdocmeta->id, pdocmeta->offset, 
+                    pdocmeta->status, pdocmeta->size, pdocmeta->zsize);
             DEBUG_LOGGER(linktable->logger, "Ready for reading data from docfile");
             if(HIO_SREAD(linktable->docio, zdata, nzdata, pdocmeta->offset) <= 0)
             {
@@ -644,6 +645,7 @@ int linktable_add_zcontent(LINKTABLE *linktable, DOCMETA *pdocmeta, char *zdata,
         memcpy(&docmeta, pdocmeta, sizeof(DOCMETA));
         docmeta.id = linktable->doc_total;
         docmeta.status = URL_STATUS_INIT;
+        docmeta.offset = offset;
         if(HIO_APPEND(linktable->metaio, &(docmeta), sizeof(DOCMETA), offset) <= 0)
         {
             FATAL_LOGGER(linktable->logger, "Write DOCMETA[%d]  failed, %s",
@@ -651,10 +653,12 @@ int linktable_add_zcontent(LINKTABLE *linktable, DOCMETA *pdocmeta, char *zdata,
             goto end;
         }
         linktable->doc_total++;
+        linktable->size += docmeta.size;
+        linktable->zsize += docmeta.zsize;
         DEBUG_LOGGER(linktable->logger, "Added DOCMETA[%d] hostoff:%d pathoff:%d"
-                "size:%d zsize:%d to offset:%lld",
+                "size:%d zsize:%d offset:%lld to metaoff:[%lld]",
                 docmeta.id, docmeta.hostoff, docmeta.pathoff, 
-                docmeta.size, docmeta.zsize, offset);
+                docmeta.size, docmeta.zsize, docmeta.offset, offset);
     }
 end:
     return ret;
@@ -1120,18 +1124,14 @@ void ev_handler(int ev_fd, short flag, void *arg)
         }
         if(flag & E_READ)
         {
-            /*
             DEBUG_LOGGER(linktable->logger, "Ready for reading [%d] [http://%s%s][%s:%d] via %d",
                     conn->req.id, conn->req.host, conn->req.path,
                     conn->req.ip, conn->req.port, conn->fd);
-            */
             DCON_READ(conn);
-            /*
             DEBUG_LOGGER(linktable->logger, "Read over [%d] [%s:%d] via %d [http://%s%s] "
                     "data_size:%d content_size:%d left:%d ", conn->req.id, conn->req.ip,
                     conn->req.port, conn->fd, conn->req.host, conn->req.path,
                     conn->data_size, (conn->p - conn->content), conn->left);
-            */
         }
         if(flag & E_WRITE)
         {
@@ -1178,7 +1178,7 @@ void *pthread_handler(void *arg)
             }
             //fprintf(stdout, "running_conns:%d\n", running_conns);
             evbase->loop(evbase, 0, NULL);
-            usleep(10);
+            usleep(100);
         }
     }
     return NULL;
@@ -1204,11 +1204,11 @@ int main(int argc, char **argv)
 
     if(linktable = linktable_init())
     {
-        linktable->set_logger(linktable, "/data/tmp/link.log", NULL);
-        linktable->set_lnkfile(linktable, "/data/tmp/link.lnk");
-        linktable->set_urlfile(linktable, "/data/tmp/link.url");
-        linktable->set_metafile(linktable, "/data/tmp/link.meta");
-        linktable->set_docfile(linktable, "/data/tmp/link.doc");
+        linktable->set_logger(linktable, "/tmp/link.log", NULL);
+        linktable->set_lnkfile(linktable, "/tmp/link.lnk");
+        linktable->set_urlfile(linktable, "/tmp/link.url");
+        linktable->set_metafile(linktable, "/tmp/link.meta");
+        linktable->set_docfile(linktable, "/tmp/link.doc");
         linktable->set_ntask(linktable, 32);
         linktable->iszlib = 1;
         linktable->resume(linktable);
@@ -1253,7 +1253,7 @@ int main(int argc, char **argv)
                         linktable->docno, linktable->docok_total, linktable->doc_total);
                 */
             }
-            usleep(10);
+            usleep(100);
         }
     }
 }

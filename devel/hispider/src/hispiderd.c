@@ -18,7 +18,7 @@
 static const char *__html__body__  = 
 "<HTML><HEAD>\n"
 "<TITLE>Hispider Running Status</TITLE>\n"
-"<meta http-equiv='refresh' content='2; URL=/'>\n</HEAD>\n"
+"<meta http-equiv='refresh' content='10; URL=/'>\n</HEAD>\n"
 "<meta http-equiv='content-type' content='text/html; charset=UTF-8'>\n"
 "<BODY bgcolor='#000000' align=center >\n"
 "<h1><font color=white >Hispider Running Status</font></h1>\n"
