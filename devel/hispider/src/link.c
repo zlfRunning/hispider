@@ -153,14 +153,11 @@ int linktable_parse(LINKTABLE *linktable, char *host, char *path, char *content,
     int n = 0, pref = 0;
     void *timer = NULL;
     void *times = NULL;
-    long long total = 0;
     int count = 0;
 
     if(linktable && host && path && content && end)	
     {
         p = content;
-        TIMER_INIT(timer);
-        TIMER_INIT(times);
         while(p < end)
         {
             if(p < (end - 1) && *p == '<' && (*(p+1) == 'a' || *(p+1) == 'A'))
@@ -197,12 +194,8 @@ int linktable_parse(LINKTABLE *linktable, char *host, char *path, char *content,
                     {
                         DEBUG_LOGGER(linktable->logger, 
                                 "Ready for adding URL from page[%s%s] %d", host, path, n);
-                        TIMER_RESET(times);
                         linktable->add(linktable, (unsigned char *)host, 
-                                (unsigned char *)path,  (unsigned char *)link,
-                                (unsigned char *)p);
-                        TIMER_SAMPLE(times);
-                        total += PT_LU_USEC(times);
+                                (unsigned char *)path,  (unsigned char *)link,(unsigned char *)p);
                         count++;
                         //fprintf(stdout, "%s\n", link);
                     }
@@ -211,9 +204,7 @@ int linktable_parse(LINKTABLE *linktable, char *host, char *path, char *content,
             }
             ++p;
         }	
-        TIMER_SAMPLE(timer);
-        DEBUG_LOGGER(linktable->logger, "Parsed http://%s%s count:%d times:%lld time:%lld", host, path, count, total, PT_LU_USEC(timer));
-        TIMER_CLEAN(timer);
+        DEBUG_LOGGER(linktable->logger, "Parsed http://%s%s count:%d", host, path, count);
         return 0;
     }
     return -1;
@@ -604,8 +595,11 @@ void linktable_taskhandler(LINKTABLE *linktable, long taskid)
             p = data + pdocmeta->htmloff;
             end = data + pdocmeta->size;
             if(ndata != pdocmeta->size) 
+            {
                 FATAL_LOGGER(linktable->logger, "invalid decompress ndata:%d size:%d", 
                         ndata, pdocmeta->size);
+                goto end;
+            }
             linktable->parse(linktable, host, path, p, end);
             linktable->docok_total++;
             status = URL_STATUS_OVER;
