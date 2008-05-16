@@ -367,7 +367,7 @@ void cb_trans_transaction_handler(CONN *conn, int tid)
             {
                 p = buf;
                 n = sprintf(p, "GET %s HTTP/1.0\r\nHOST: %s\r\n"
-                        "Connection:close\r\nUser-Agent: Mozilla\r\n\r\n",
+                        "Connection:close\r\nUser-Agent: Hispider\r\n\r\n",
                         task.requests[tid].path, task.requests[tid].host);
                 conn->push_chunk(conn, buf, n);
                 DEBUG_LOGGER(daemon_logger, "ready for visit:http://%s%s "

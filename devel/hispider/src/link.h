@@ -68,6 +68,10 @@ typedef struct _LINKTABLE
     char **dnslist;
     void *dnstable;
     void *md5table;
+    int  whitecount;
+    void *whitelist;
+    int  blackcount;
+    void *blacklist;
     void *lnkio;
     void *urlio;
     void *metaio;
@@ -96,6 +100,8 @@ typedef struct _LINKTABLE
     int     (*parse)(struct _LINKTABLE *, char *host, char *path, char *content, char *end);
     int     (*add)(struct _LINKTABLE *, unsigned char *host, unsigned char *path, 
             unsigned char *href, unsigned char *ehref); 
+    int     (*add_white_host)(struct _LINKTABLE *, char *host);
+    int     (*add_black_host)(struct _LINKTABLE *, char *host);
     int     (*addurl)(struct _LINKTABLE *, char *host, char *path); 
     long    (*get_task)(struct _LINKTABLE *);
     long    (*get_task_one)(struct _LINKTABLE *);

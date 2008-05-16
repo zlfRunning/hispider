@@ -385,6 +385,14 @@ err_end:
     return ret;
 }
 
+int linktable_add_white_host(LINKTABLE *linktable, char *host)
+{
+}
+
+int linktable_add_black_host(LINKTABLE *linktable, char *host)
+{
+}
+
 /* get link DNS */
 char *linktable_iptab(LINKTABLE *linktable, char *hostname, char *ipstr)
 {
@@ -814,6 +822,8 @@ LINKTABLE *linktable_init()
         linktable->task.id = -1;
         linktable->md5table         = TRIETAB_INIT();
         linktable->dnstable         = TRIETAB_INIT();
+        linktable->whitelist        = TRIETAB_INIT();
+        linktable->blacklist        = TRIETAB_INIT();
         linktable->set_logger       = linktable_set_logger;
         linktable->set_lnkfile      = linktable_set_lnkfile;
         linktable->set_urlfile      = linktable_set_urlfile;
@@ -823,6 +833,8 @@ LINKTABLE *linktable_init()
         linktable->parse            = linktable_parse; 
         linktable->add              = linktable_add; 
         linktable->addurl           = linktable_addurl; 
+        linktable->add_white_host   = linktable_add_white_host; 
+        linktable->add_black_host   = linktable_add_black_host; 
         linktable->iptab            = linktable_iptab; 
         linktable->get_request      = linktable_get_request; 
         linktable->update_request   = linktable_update_request; 
@@ -985,7 +997,7 @@ void ev_handler(int ev_fd, short flag, void *arg);
     {                                                                                       \
         conn->n = sprintf(conn->http_header, "GET %s HTTP/1.0\r\n"                          \
                 "Host: %s\r\nConnection: close\r\n"                                         \
-                "User-Agent: Mozilla\r\n\r\n", conn->req.path, conn->req.host);             \
+                "User-Agent: Hispider\r\n\r\n", conn->req.path, conn->req.host);            \
         if((conn->n = write(conn->fd, conn->http_header, conn->n)) > 0)                     \
         {                                                                                   \
             conn->event->del(conn->event, E_WRITE);                                         \
