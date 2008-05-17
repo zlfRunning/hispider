@@ -38,9 +38,19 @@
 #define LINK_STATUS_OVER        0x30
 #define LINK_STATUS_REQUEST     0x40
 #define LINK_STATUS_COMPLETE    0x50
+#define LINK_STATUS_DNSQUERY    0x60
+#define LINK_STATUS_DNSWAIT     0x70
 #ifndef MD5_LEN
 #define MD5_LEN 16
 #endif
+typedef struct _LNK
+{
+    int status;
+    int id;
+    long long offset;
+    int nurl;
+    unsigned char md5[MD5_LEN];
+}LNK;
 typedef struct _HTTP_REQUEST
 {
     int status;

@@ -348,12 +348,14 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
             req.port = 80;
             if(*p == ':') req.port = atoi(++p);
             //ip
+            /*
             DEBUG_LOGGER(linktable->logger, "ready for addurl:http://%s%s",  host, path);
             if((ip = linktable->iptab(linktable, req.host, NULL)) == NULL) 
                 goto err_end; 
             p = ip;
             ps = req.ip;
             while(*p != '\0') *ps++ = *p++;
+            */
             //path
             ps = req.path;
             p = path;
@@ -752,7 +754,7 @@ int linktable_resume(LINKTABLE *linktable)
         if(HIO_RSEEK(linktable->lnkio, 0) < 0) return;
         while(HIO_READ(linktable->lnkio, &req, sizeof(HTTP_REQUEST)) > 0)
         {
-            linktable->iptab(linktable->dnstable, req.host, req.ip);
+            //linktable->iptab(linktable->dnstable, req.host, req.ip);
             ADD_TO_MD5TABLE(linktable, req.md5, MD5_LEN, ptr);
             if(req.status == LINK_STATUS_INIT && id == -1)
             {

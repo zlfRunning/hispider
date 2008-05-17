@@ -59,7 +59,7 @@ static TASK task = {0};
 #define NEWTASK(tp, n, rq)                                  \
 {                                                           \
     memcpy(&(tp.requests[n]), rq, sizeof(HTTP_REQUEST));    \
-    tp.requests[n].status = LINK_STATUS_WAIT;               \
+    tp.requests[n].status = LINK_STATUS_DNSQUERY;           \
     tp.tasks[n].id = tp.requests[n].id;                     \
     DEBUG_LOGGER(daemon_logger, "NEW TASK[%d] %s:%d id:%d",           \
             n, tp.requests[n].ip, tp.requests[n].port,  tp.tasks[n].id);        \
@@ -116,6 +116,7 @@ void cb_trans_task_handler(void *arg);
 void cb_trans_heartbeat_handler(void *arg)
 {
     int  n = 0, tid = 0, i = 0;
+    long taskid = 0;
     CONN *conn = NULL;
 
     if(transport)
@@ -143,6 +144,12 @@ void cb_trans_heartbeat_handler(void *arg)
                     transport->newtransaction(transport, conn, i);
                 }
             }
+            if(task.requests[i].status == LINK_STATUS_DNSQUERY)
+            {
+                taskid = i;
+                transport->newtask(transport, (void *)&cb_trans_task_handler, (void *)taskid);
+                task.requests[i].status = LINK_STATUS_DNSWAIT;
+            }
             if(task.requests[i].status == LINK_STATUS_OVER)
             {
                 if((conn = NCONN(task, i)))
@@ -162,6 +169,22 @@ void cb_trans_heartbeat_handler(void *arg)
 //daemon task handler 
 void cb_trans_task_handler(void *arg)
 {
+    long taskid = (long )arg;
+    struct hostent *hp = NULL;
+
+    if(taskid >= 0 && taskid < task.ntask_limit)
+    {
+        if((hp = gethostbyname((const char *)task.requests[taskid].host)) == NULL)
+        {
+           ENDTASK(task, taskid, LINK_STATUS_ERROR); 
+        }
+        else
+        {
+            sprintf(task.requests[taskid].ip, "%s", inet_ntoa(*((struct in_addr *)(hp->h_addr))));
+            task.requests[taskid].status = LINK_STATUS_WAIT;
+        }
+        return ;
+    }
 }
 
 int cb_trans_packet_reader(CONN *conn, BUFFER *buffer)
