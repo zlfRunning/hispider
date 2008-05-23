@@ -87,11 +87,11 @@ void cb_serv_task_handler(void *arg)
     }
 }
 
-int cb_serv_packet_reader(CONN *conn, BUFFER *buffer)
+int cb_serv_packet_reader(CONN *conn, SDATA *buffer)
 {
 }
 
-void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
+void cb_serv_packet_handler(CONN *conn, SDATA *packet)
 {
     HTTP_REQUEST request;
     HTTP_REQ http_req;
@@ -103,7 +103,7 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
     if(conn)
     {
         p = packet->data;
-        end = packet->end;
+        end = packet->data + packet->ndata;
         memset(&http_req, 0, sizeof(HTTP_REQ));
         http_req.reqid = -1;
         if(http_request_parse(p, end, &http_req) == -1) goto end ;
@@ -149,8 +149,7 @@ void cb_serv_packet_handler(CONN *conn, BUFFER *packet)
                 DEBUG_LOGGER(daemon_logger, "ready for PUT %s bytes", 
                         http_req.headers[HEAD_ENT_CONTENT_LENGTH]);
                 n = atoi(http_req.headers[HEAD_ENT_CONTENT_LENGTH]);
-                conn->cache->reset(conn->cache);
-                conn->cache->push(conn->cache, &http_req, sizeof(HTTP_REQ));
+                conn->save_cache(conn->cache, &http_req, sizeof(HTTP_REQ));
                 conn->recv_chunk(conn, n);
             }
             else
@@ -169,17 +168,16 @@ end:
     return ;
 }
 
-void cb_serv_data_handler(CONN *conn, BUFFER *packet, 
-        CHUNK *chunk, BUFFER *cache)
+void cb_serv_data_handler(CONN *conn, SDATA *packet, SDATA *cache, SDATA *chunk)
 {
     DOCMETA *docmeta = NULL;
     char *zdata = NULL, *p = NULL;
     int id = 0, status = 0, ret = 0;
 
-    if(conn && chunk->buf && chunk->buf->data)
+    if(conn && chunk->data)
     {
-        docmeta = (DOCMETA *)chunk->buf->data;                
-        zdata = (char *)chunk->buf->data + sizeof(DOCMETA);
+        docmeta = (DOCMETA *)chunk->data;                
+        zdata = (char *)chunk->data + sizeof(DOCMETA);
         status = docmeta->status;
         id = docmeta->id;
         ret |= linktable->update_request(linktable, id, status);
@@ -199,7 +197,7 @@ void cb_serv_transaction_handler(CONN *conn, int tid)
 {
 }
 
-void cb_serv_oob_handler(CONN *conn, BUFFER *oob)
+void cb_serv_oob_handler(CONN *conn, SDATA *oob)
 {
 }
 
@@ -301,12 +299,12 @@ int sbase_initialize(SBASE *sbase, char *conf)
 	*s++ = 0;
 	serv->packet_delimiter_length = strlen(serv->packet_delimiter);
 	serv->buffer_size = iniparser_getint(dict, "DAEMON:buffer_size", SB_BUF_SIZE);
-	serv->cb_packet_reader = &cb_serv_packet_reader;
-	serv->cb_packet_handler = &cb_serv_packet_handler;
-	serv->cb_data_handler = &cb_serv_data_handler;
-	serv->cb_transaction_handler = &cb_serv_transaction_handler;
-	serv->cb_oob_handler = &cb_serv_oob_handler;
 	serv->cb_heartbeat_handler = &cb_serv_heartbeat_handler;
+	serv->ops.cb_packet_reader = &cb_serv_packet_reader;
+	serv->ops.cb_packet_handler = &cb_serv_packet_handler;
+	serv->ops.cb_data_handler = &cb_serv_data_handler;
+	serv->ops.cb_transaction_handler = &cb_serv_transaction_handler;
+	serv->ops.cb_oob_handler = &cb_serv_oob_handler;
         /* server */
 	if((ret = sbase->add_service(sbase, serv)) != 0)
 	{

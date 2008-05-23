@@ -12,7 +12,7 @@
 #include "logger.h"
 #include "common.h"
 #include "timer.h"
-#define HTTP_CHUNK_MAX 1048576
+#define HTTP_SDATA_MAX 1048576
 #define SBASE_LOG "/tmp/sbase.log"
 
 static SBASE *sbase = NULL;
@@ -36,7 +36,7 @@ typedef struct _TASK
 }TASK;
 static TASK task = {0};
 #define NCONN(tp, n) ((tp.conns[n])?(tp.conns[n])\
-        :(tp.conns[n] = transport->newconn(transport, tp.daemon_ip, tp.daemon_port)))
+        :(tp.conns[n] = transport->newconn(transport, -1, tp.daemon_ip, tp.daemon_port, -1, NULL)))
 #define OCONN(tp, n)                                        \
 {                                                           \
     if(tp.conns[n])                                         \
@@ -100,9 +100,9 @@ void cb_trans_error_handler(CONN *conn)
         }
         else
         {
-            if(conn->packet->data && conn->cache->data)
+            if(((SDATA *)(conn->packet))->data && ((SDATA *)(conn->cache))->data)
             {
-                return conn->cb_data_handler(conn, conn->packet, conn->chunk, conn->cache);
+                return conn->ops.cb_data_handler(conn, (SDATA *)conn->packet, (SDATA *)conn->cache, (SDATA *)conn->chunk);
             }
             ENDTASK(task, c_id, LINK_STATUS_ERROR);
         }
@@ -132,8 +132,8 @@ void cb_trans_heartbeat_handler(void *arg)
             }
             if(task.requests[i].status == LINK_STATUS_WAIT)
             {
-                if((conn = transport->newconn(transport, task.requests[i].ip, 
-                                task.requests[i].port)))
+                if((conn = transport->newconn(transport, -1, task.requests[i].ip, 
+                                task.requests[i].port, -1, NULL)))
                 {
                     conn->start_cstate(conn);
                     conn->c_id = i;
@@ -187,11 +187,11 @@ void cb_trans_task_handler(void *arg)
     }
 }
 
-int cb_trans_packet_reader(CONN *conn, BUFFER *buffer)
+int cb_trans_packet_reader(CONN *conn, SDATA *buffer)
 {
 }
 
-void cb_trans_packet_handler(CONN *conn, BUFFER *packet)
+void cb_trans_packet_handler(CONN *conn, SDATA *packet)
 {
     HTTP_RESPONSE response;
     char *p = NULL, *end = NULL;
@@ -202,7 +202,7 @@ void cb_trans_packet_handler(CONN *conn, BUFFER *packet)
         memset(&response, 0, sizeof(HTTP_RESPONSE));
         response.respid = -1;
         p   = (char *)packet->data;
-        end = (char *)packet->end;
+        end = (char *)packet->data + packet->ndata;
         if(http_response_parse(p, end, &response) == -1)  return ;
         c_id = conn->c_id;
         if(conn == task.conns[c_id])
@@ -246,13 +246,13 @@ void cb_trans_packet_handler(CONN *conn, BUFFER *packet)
                         if(response.headers[HEAD_ENT_CONTENT_LENGTH])
                         {
                             len = atoi(response.headers[HEAD_ENT_CONTENT_LENGTH]);       
-                            conn->cache->push(conn->cache, &response, sizeof(HTTP_RESPONSE));
+                            conn->save_cache(conn->cache, &response, sizeof(HTTP_RESPONSE));
                             conn->recv_chunk(conn, len);
                         }
                         else
                         {
-                            conn->cache->push(conn->cache, &response, sizeof(HTTP_RESPONSE));
-                            conn->recv_chunk(conn, HTTP_CHUNK_MAX);
+                            conn->save_cache(conn->cache, &response, sizeof(HTTP_RESPONSE));
+                            conn->recv_chunk(conn, HTTP_SDATA_MAX);
                         }
                         return ;
                     }
@@ -266,8 +266,7 @@ void cb_trans_packet_handler(CONN *conn, BUFFER *packet)
     return ;
 }
 
-void cb_trans_data_handler(CONN *conn, BUFFER *packet, 
-        CHUNK *chunk, BUFFER *cache)
+void cb_trans_data_handler(CONN *conn, SDATA *packet, SDATA *cache, SDATA *chunk)
 {
     DOCMETA *pdocmeta = NULL;
     HTTP_RESPONSE *resp = NULL;
@@ -277,14 +276,14 @@ void cb_trans_data_handler(CONN *conn, BUFFER *packet,
     int i = 0, c_id = 0, n = 0, nhost = 0, npath = 0, status = 0;
     unsigned long nzdata = 0, ndata = 0;
 
-    if(conn && chunk->buf)
+    if(conn && chunk->data)
     {
         c_id = conn->c_id;
         if(conn == task.conns[c_id])
         {
             if(task.requests[c_id].status == LINK_STATUS_REQUEST)
             {
-                NEWTASK(task, c_id, chunk->buf->data);
+                NEWTASK(task, c_id, chunk->data);
             }
             return ;
         }
@@ -310,7 +309,7 @@ void cb_trans_data_handler(CONN *conn, BUFFER *packet,
                 pdocmeta->hostoff = (p - buf);
                 pdocmeta->pathoff =  pdocmeta->hostoff + nhost;
                 pdocmeta->htmloff = pdocmeta->pathoff + npath;
-                pdocmeta->size = pdocmeta->htmloff + chunk->buf->size;
+                pdocmeta->size = pdocmeta->htmloff + chunk->ndata;
                 if((data = (char *)calloc(1, pdocmeta->size)))
                 {
                     p = data;
@@ -320,20 +319,20 @@ void cb_trans_data_handler(CONN *conn, BUFFER *packet,
                     p += nhost;
                     memcpy(p, req->path, npath);
                     p += npath;
-                    memcpy(p, chunk->buf->data, chunk->buf->size);
-                    p += chunk->buf->size;
+                    memcpy(p, chunk->data, chunk->ndata);
+                    p += chunk->ndata;
                     ndata = pdocmeta->size;
                     DEBUG_LOGGER(daemon_logger, 
                             "nhost:%d npath:%d hostoff:%d htmloff:%d off:%d dsize:%d ndata:%d", 
                             nhost, npath, pdocmeta->hostoff, pdocmeta->htmloff, 
-                            (p - data), chunk->buf->size, ndata);
+                            (p - data), chunk->ndata, ndata);
                     if((zdata = (char *)calloc(1, ndata)))
                     {
                         nzdata = pdocmeta->size;
                         if(zcompress(data, ndata, zdata, &(nzdata)) == 0)
                         {
                             DEBUG_LOGGER(daemon_logger, "compress %d  to %d body:%d ",
-                                    ndata, nzdata, chunk->buf->size);
+                                    ndata, nzdata, chunk->ndata);
                             req->status = LINK_STATUS_OVER;
                             pdocmeta->zsize = nzdata;
                             task.results[c_id] = zdata;
@@ -406,7 +405,7 @@ void cb_trans_transaction_handler(CONN *conn, int tid)
     return ;
 }
 
-void cb_trans_oob_handler(CONN *conn, BUFFER *oob)
+void cb_trans_oob_handler(CONN *conn, SDATA *oob)
 {
 }
 
@@ -507,13 +506,13 @@ int sbase_initialize(SBASE *sbase, char *conf)
 	*s++ = 0;
 	transport->packet_delimiter_length = strlen(transport->packet_delimiter);
 	transport->buffer_size = iniparser_getint(dict, "TRANSPORT:buffer_size", SB_BUF_SIZE);
-	transport->cb_packet_reader = &cb_trans_packet_reader;
-	transport->cb_packet_handler = &cb_trans_packet_handler;
-	transport->cb_data_handler = &cb_trans_data_handler;
-	transport->cb_transaction_handler = &cb_trans_transaction_handler;
-	transport->cb_oob_handler = &cb_trans_oob_handler;
 	transport->cb_heartbeat_handler = &cb_trans_heartbeat_handler;
-	transport->cb_error_handler = &cb_trans_error_handler;
+	transport->ops.cb_packet_reader = &cb_trans_packet_reader;
+	transport->ops.cb_packet_handler = &cb_trans_packet_handler;
+	transport->ops.cb_data_handler = &cb_trans_data_handler;
+	transport->ops.cb_transaction_handler = &cb_trans_transaction_handler;
+	transport->ops.cb_oob_handler = &cb_trans_oob_handler;
+	transport->ops.cb_error_handler = &cb_trans_error_handler;
         /* server */
 	if((ret = sbase->add_service(sbase, transport)) != 0)
 	{
