@@ -11,7 +11,6 @@
 #include "link.h"
 #include "md5.h"
 #include "trie.h"
-#include "ilist.h"
 #include "basedef.h"
 #include "zstream.h"
 #include "mutex.h"
@@ -858,7 +857,6 @@ LINKTABLE *linktable_init()
 #include <evbase.h>
 #include "http.h"
 #include "timer.h"
-#include "buffer.h"
 #include "basedef.h"
 #define DCON_TIMEOUT  5000000
 #define DCON_BUF_SIZE 65536

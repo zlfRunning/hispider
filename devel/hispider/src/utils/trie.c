@@ -102,6 +102,8 @@ static RECORD recdlist[] = {
 #define INUM 250
 static int ilist[] = {
 232,19,158,38,175,197,114,68,188,109,120,80,102,47,102,143,142,79,160,52,3,124,114,32,70,18,189,123,116,190,247,56,17,157,230,3,139,79,204,66,22,167,208,141,155,125,158,16,54,157,56,53,118,49,163,35,84,116,30,193,22,211,24,89,251,223,42,123,228,43,13,211,160,178,15,154,233,126,200,14,30,19,234,106,32,185,15,104,6,228,183,173,125,202,177,131,16,162,158,159,216,57,71,143,122,143,112,87,189,144,239,236,95,180,30,98,232,214,53,197,135,82,39,148,205,228,83,235,181,162,217,40,97,52,67,171,90,217,201,56,80,186,53,12,76,140,215,199,170,121,47,13,0,39,144,8,4,80,190,216,123,146,8,155,183,109,225,194,46,19,206,189,163,213,34,70,185,39,238,87,40,232,122,39,47,60,46,190,208,250,209,173,145,180,180,44,67,206,69,192,219,115,68,101,87,180,76,218,74,187,198,37,140,95,122,36,213,172,196,195,10,203,125,126,72,4,64,186,51,121,202,80,29,79,245,189,142,75,238,239,230,205,0,231,63,217,101,208,204,96,39,128,123,227,126,39};
+//usage
+//gcc -o t trie.c timer.c -D_DEBUG_TRIE -D_FILE_OFFSET_BITS=64 && ./t ./wordict.txt ./temp.txt
 int main(int argc, char **argv)
 {
     void *trietab = NULL;
@@ -123,8 +125,9 @@ int main(int argc, char **argv)
     unsigned char slist[256];
     char *txtfile = NULL;
     char *content = NULL;
-    int fd = -1, pos = 0;
+    int fd = -1, pos = 0, nforward = 0;
     struct stat st;
+    long word_id = 0;
 
     /*
     pnode = &(hnode);
@@ -170,6 +173,7 @@ int main(int argc, char **argv)
                 TIMER_SAMPLE(timer);
                 pdata = (void *)wordid++;
                 TRIETAB_ADD(trietab, buf, n, pdata);
+                //TRIETAB_RADD(trietab, buf, n, pdata);
                 TIMER_SAMPLE(timer);
                 /*
                    if(pdata)
@@ -189,9 +193,11 @@ int main(int argc, char **argv)
                 n = p - buf;
                 TIMER_SAMPLE(timer);
                 TRIETAB_GET(trietab, buf, n, pdata);
+                //word_id = (long) pdata;
+                //TRIETAB_RGET(trietab, buf, n, pdata);
+                //if(((long)pdata) != word_id) fprintf(stdout, "%d:%d\n", word_id, (long)pdata);
                 TIMER_SAMPLE(timer);
                 query_total += PT_LU_USEC(timer);
-                if(pdata) fprintf(stdout, "%d\n", (long)pdata);
             }
             fprintf(stdout, "wordid:%d count:%d size:%d\n"
                     "insert_usec:%lld insert_avg:%f\n"
@@ -203,32 +209,48 @@ int main(int argc, char **argv)
             if(txtfile && (fd = open(txtfile, O_RDONLY, 0644)) > 0)
             {
                 fstat(fd, &st);
-                if(st.st_size > 0 && (content = (char *)malloc(st.st_size)))
+                if(st.st_size > 0 && (content = (char *)malloc(st.st_size)) 
+                        && read(fd, content, st.st_size) > 0)
                 {
                     p = content;
                     end = content + st.st_size;
-
+                    
                     TIMER_SAMPLE(timer);
                     while(p < end)
                     {
-                        TRIETAB_MIN_FIND(trietab, p, (end - p), pdata, pos);
-                        fprintf(stdout, "%d:%d:%d\n", (long)pdata, pos, st.st_size);
+                        while(p < end && (*p == 0x20 || *p == '\r' 
+                                    || *p == '\n' || *p == '\t'))++p;
+                        if(((unsigned char )*p) >= 252) nforward = 6;
+                        else if(((unsigned char )*p) >= 248) nforward = 5;
+                        else if(((unsigned char )*p) >= 240) nforward = 4;
+                        else if(((unsigned char )*p) >= 224) nforward = 3;
+                        else if(((unsigned char )*p) >= 192) nforward = 2;
+                        else nforward = 1;
+                        TRIETAB_MAX_FIND(trietab, p, (end - p), pdata, pos);
+                        //fprintf(stdout, "%d:%d:%d\n", (long)pdata, pos, st.st_size);
                         if(pdata && pos >= 0)
                         {
-                            memcpy(buf, p, pos+1);
-                            buf[pos+1] = '\0';
-                            fprintf(stdout, "%d:%s\n", (long *)pdata, buf);
-                            p += (pos+1);
+                            //fprintf(stdout, "%d:%d:%s", pos, (long *)pdata, p);
+                            //break;
+                            //memcpy(buf, p, pos);
+                            //buf[pos] = '\0';
+                            //fprintf(stdout, "%d:%s\n", (long *)pdata, buf);
+                            p += (pos);
                         }
                         else
                         {
-                            p++;
+                            p += nforward;
                         }
                     }
                     TIMER_SAMPLE(timer);
+                    fprintf(stdout, "segment text size:%lld time:%lld\n", 
+                            st.st_size, (seg_total = PT_LU_USEC(timer)));
+
+		   /*
                     fprintf(stdout, "segment text size:%lld time:%lld avg:%f\n", 
                             st.st_size, (seg_total = PT_LU_USEC(timer)), 
                             (double)(seg_total/st.st_size));
+			*/
                     free(content);
                     content = NULL;
                 }

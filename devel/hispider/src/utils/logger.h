@@ -11,6 +11,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include "mutex.h"
+
 #ifndef _LOGGER_H
 #define _LOGGER_H
 #ifdef __cplusplus
@@ -53,25 +54,25 @@ typedef struct _LOGGER
 #define THREADID() (0)
 #endif
 #define PL(ptr) ((LOGGER *)ptr)
-#define PLF(ptr) ((LOGGER *)ptr)->file
-#define PLP(ptr) ((LOGGER *)ptr)->p
-#define PLTV(ptr) ((LOGGER *)ptr)->tv
-#define PLTP(ptr) ((LOGGER *)ptr)->timep
-#define PLID(ptr) ((LOGGER *)ptr)->id
-#define PLFD(ptr) ((LOGGER *)ptr)->fd
-#define PLB(ptr) ((LOGGER *)ptr)->buf
-#define PLPS(ptr) ((LOGGER *)ptr)->ps
+#define PLF(ptr) (PL(ptr)->file)
+#define PLP(ptr) (PL(ptr)->p)
+#define PLTV(ptr) (PL(ptr)->tv)
+#define PLTP(ptr) (PL(ptr)->timep)
+#define PLID(ptr) (PL(ptr)->id)
+#define PLFD(ptr) (PL(ptr)->fd)
+#define PLB(ptr) (PL(ptr)->buf)
+#define PLPS(ptr) (PL(ptr)->ps)
 #define LOGGER_INIT(ptr, lp)                                                        \
-{                                                                                   \
+do{                                                                                   \
     if((ptr = (LOGGER *)calloc(1, sizeof(LOGGER))))                                 \
     {                                                                               \
         MUTEX_INIT(PL(ptr)->mutex);                                                 \
         strcpy(PLF(ptr), lp);                                                       \
         PLFD(ptr) = open(PLF(ptr), O_CREAT|O_WRONLY|O_APPEND, 0644);                \
     }                                                                               \
-}
+}while(0)
 #define LOGGER_ADD(ptr, __level__, format...)                                       \
-{                                                                                   \
+do{                                                                                   \
     if(ptr)                                                                         \
     {                                                                               \
     MUTEX_LOCK(PL(ptr)->mutex);                                                     \
@@ -88,7 +89,7 @@ typedef struct _LOGGER
     write(PLFD(ptr), PLB(ptr), (PLPS(ptr) - PLB(ptr)));                             \
     MUTEX_UNLOCK(PL(ptr)->mutex);                                                   \
     }                                                                               \
-}
+}while(0)
 #ifdef _DEBUG
 #define DEBUG_LOGGER(ptr, format...) {LOGGER_ADD(ptr, __DEBUG__, format);}
 #else
@@ -98,7 +99,7 @@ typedef struct _LOGGER
 #define ERROR_LOGGER(ptr, format...) {LOGGER_ADD(ptr, __ERROR__, format);}
 #define FATAL_LOGGER(ptr, format...) {LOGGER_ADD(ptr, __FATAL__, format);}
 #define LOGGER_CLEAN(ptr)                                                           \
-{                                                                                   \
+do{                                                                                   \
     if(ptr)                                                                         \
     {                                                                               \
         close(PLFD(ptr));                                                           \
@@ -106,7 +107,7 @@ typedef struct _LOGGER
         free(ptr);                                                                  \
         ptr = NULL;                                                                 \
     }                                                                               \
-}
+}while(0)
 #ifdef __cplusplus
  }
 #endif

@@ -87,11 +87,11 @@ void cb_serv_task_handler(void *arg)
     }
 }
 
-int cb_serv_packet_reader(CONN *conn, SDATA *buffer)
+int cb_serv_packet_reader(CONN *conn, CB_DATA *buffer)
 {
 }
 
-void cb_serv_packet_handler(CONN *conn, SDATA *packet)
+int cb_serv_packet_handler(CONN *conn, CB_DATA *packet)
 {
     HTTP_REQUEST request;
     HTTP_REQ http_req;
@@ -123,7 +123,7 @@ void cb_serv_packet_handler(CONN *conn, SDATA *packet)
             conn->push_chunk(conn, header, n);
             conn->push_chunk(conn, buf, m);
             //conn->over(conn);
-            return ;
+            return 0;
         }
         if(http_req.reqid == HTTP_TASK)
         {
@@ -140,7 +140,7 @@ void cb_serv_packet_handler(CONN *conn, SDATA *packet)
                 p = "HTTP/1.0 500 Internal Server Error\r\n\r\n";
                 conn->push_chunk(conn, p, strlen(p));
             }
-            return ;
+            return 0;
         }
         if(http_req.reqid == HTTP_PUT)
         {
@@ -159,16 +159,16 @@ void cb_serv_packet_handler(CONN *conn, SDATA *packet)
                 p = "HTTP/1.0 400 Bad Request\r\n\r\n";
                 conn->push_chunk(conn, p, strlen(p));
             }
-            return ;
+            return 0;
         }
 end:
         //DEBUG_LOGGER(daemon_logger, "%s", packet->data);
         conn->over(conn);
     }
-    return ;
+    return 0;
 }
 
-void cb_serv_data_handler(CONN *conn, SDATA *packet, SDATA *cache, SDATA *chunk)
+int cb_serv_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
     DOCMETA *docmeta = NULL;
     char *zdata = NULL, *p = NULL;
@@ -193,11 +193,11 @@ void cb_serv_data_handler(CONN *conn, SDATA *packet, SDATA *cache, SDATA *chunk)
 }
 
 //daemon transaction handler 
-void cb_serv_transaction_handler(CONN *conn, int tid)
+int cb_serv_transaction_handler(CONN *conn, int tid)
 {
 }
 
-void cb_serv_oob_handler(CONN *conn, SDATA *oob)
+int cb_serv_oob_handler(CONN *conn, CB_DATA *oob)
 {
 }
 
@@ -206,7 +206,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
 {
 	char *logfile = NULL, *s = NULL, *p = NULL, *hostname = NULL, *path = NULL, 
          *docfile = NULL, *lnkfile = NULL, *urlfile = NULL, *metafile = NULL;
-	int n = 0, ntask = 0, max_connections = 0;
+	int n = 0, ntask = 0, max_connections = 0, heartbeat_interval = 0;
 	int ret = 0;
 
 	if((dict = iniparser_new(conf)) == NULL)
@@ -214,108 +214,68 @@ int sbase_initialize(SBASE *sbase, char *conf)
 		fprintf(stderr, "Initializing conf:%s failed, %s\n", conf, strerror(errno));
 		_exit(-1);
 	}
-	/* SBASE */
-	//fprintf(stdout, "Parsing SBASE...\n");
-	sbase->working_mode = iniparser_getint(dict, "SBASE:working_mode", WORKING_PROC);
-	sbase->max_procthreads = iniparser_getint(dict, "SBASE:max_procthreads", 1);
-	max_connections = iniparser_getint(dict, "SBASE:max_connections", MAX_CONNECTIONS);
-    if(max_connections <= 0 ) max_connections =  MAX_CONNECTIONS;
-    sbase->setrlimit(sbase, "RLIMIT_NOFILE", RLIMIT_NOFILE, max_connections);
-	if(sbase->max_procthreads > MAX_PROCTHREADS) sbase->max_procthreads = MAX_PROCTHREADS;
-	sbase->sleep_usec = iniparser_getint(dict, "SBASE:sleep_usec", MIN_SLEEP_USEC);
-	if((logfile = iniparser_getstr(dict, "SBASE:logfile")) == NULL) logfile = SBASE_LOG;
-	fprintf(stdout, "Parsing LOG[%s]...\n", logfile);
-	fprintf(stdout, "SBASE[%08x] sbase->evbase:%08x ...\n", sbase, sbase->evbase);
-	sbase->set_log(sbase, logfile);
-	if((logfile = iniparser_getstr(dict, "SBASE:evlogfile")))
-	    sbase->set_evlog(sbase, logfile);
+    /* SBASE */
+    sbase->nchilds = iniparser_getint(dict, "SBASE:nchilds", 0);
+    sbase->connections_limit = iniparser_getint(dict, "SBASE:connections_limit", SB_CONN_MAX);
+    sbase->usec_sleep = iniparser_getint(dict, "SBASE:usec_sleep", SB_USEC_SLEEP);
+    sbase->set_log(sbase, iniparser_getstr(dict, "SBASE:logfile"));
+    sbase->set_evlog(sbase, iniparser_getstr(dict, "SBASE:evlogfile"));
     /* DAEMON */
     if((serv = service_init()) == NULL)
-	{
-		fprintf(stderr, "Initialize serv failed, %s", strerror(errno));
-		_exit(-1);
-	}
+    {
+        fprintf(stderr, "Initialize serv failed, %s", strerror(errno));
+        _exit(-1);
+    }
     /* service type */
-	serv->service_type = iniparser_getint(dict, "DAEMON:service_type", 0);
-	/* INET protocol family */
-	n = iniparser_getint(dict, "DAEMON:inet_family", 0);
-	switch(n)
-	{
-		case 0:
-			serv->family = AF_INET;
-			break;
-		case 1:
-			serv->family = AF_INET6;
-			break;
-		default:
-			fprintf(stderr, "Illegal INET family :%d \n", n);
-			_exit(-1);
-	}
-	/* socket type */
-	n = iniparser_getint(dict, "DAEMON:socket_type", 0);
-	switch(n)
-	{
-		case 0:
-			serv->socket_type = SOCK_STREAM;
-			break;
-		case 1:
-			serv->socket_type = SOCK_DGRAM;
-			break;
-		default:
-			fprintf(stderr, "Illegal socket type :%d \n", n);
-			_exit(-1);
-	}
-	/* serv name and ip and port */
-	serv->name = iniparser_getstr(dict, "DAEMON:service_name");
-	serv->ip = iniparser_getstr(dict, "DAEMON:service_ip");
-	if(serv->ip && serv->ip[0] == 0 ) serv->ip = NULL;
-	serv->port = iniparser_getint(dict, "DAEMON:service_port", 80);
-	serv->max_procthreads = iniparser_getint(dict, "DAEMON:max_procthreads", 1);
-	serv->sleep_usec = iniparser_getint(dict, "DAEMON:sleep_usec", 100);
-	serv->heartbeat_interval = iniparser_getint(dict, "DAEMON:heartbeat_interval", 10000000);
-	logfile = iniparser_getstr(dict, "DAEMON:logfile");
-	serv->logfile = logfile;
-	logfile = iniparser_getstr(dict, "DAEMON:evlogfile");
-	serv->evlogfile = logfile;
-	serv->max_connections = iniparser_getint(dict, "DAEMON:max_connections", MAX_CONNECTIONS);
-	serv->packet_type = PACKET_DELIMITER;
-	serv->packet_delimiter = iniparser_getstr(dict, "DAEMON:packet_delimiter");
-	p = s = serv->packet_delimiter;
-	while(*p != 0 )
-	{
-		if(*p == '\\' && *(p+1) == 'n')
-		{
-			*s++ = '\n';
-			p += 2;
-		}
-		else if (*p == '\\' && *(p+1) == 'r')
-		{
-			*s++ = '\r';
-			p += 2;
-		}
-		else
-			*s++ = *p++;
-	}
-	*s++ = 0;
-	serv->packet_delimiter_length = strlen(serv->packet_delimiter);
-	serv->buffer_size = iniparser_getint(dict, "DAEMON:buffer_size", SB_BUF_SIZE);
-	serv->cb_heartbeat_handler = &cb_serv_heartbeat_handler;
-	serv->ops.cb_packet_reader = &cb_serv_packet_reader;
-	serv->ops.cb_packet_handler = &cb_serv_packet_handler;
-	serv->ops.cb_data_handler = &cb_serv_data_handler;
-	serv->ops.cb_transaction_handler = &cb_serv_transaction_handler;
-	serv->ops.cb_oob_handler = &cb_serv_oob_handler;
-        /* server */
+    serv->family = iniparser_getint(dict, "DAEMON:inet_family", AF_INET);
+    serv->sock_type = iniparser_getint(dict, "DAEMON:socket_type", SOCK_STREAM);
+    serv->ip = iniparser_getstr(dict, "DAEMON:service_ip");
+    serv->port = iniparser_getint(dict, "DAEMON:service_port", 80);
+    serv->working_mode = iniparser_getint(dict, "DAEMON:working_mode", WORKING_PROC);
+    serv->service_type = iniparser_getint(dict, "DAEMON:service_type", C_SERVICE);
+    serv->service_name = iniparser_getstr(dict, "DAEMON:service_name");
+    serv->nprocthreads = iniparser_getint(dict, "DAEMON:nprocthreads", 1);
+    serv->ndaemons = iniparser_getint(dict, "DAEMON:ndaemons", 0);
+    serv->set_log(serv, iniparser_getstr(dict, "DAEMON:logfile"));
+    serv->session.packet_type = iniparser_getint(dict, "DAEMON:packet_type",PACKET_DELIMITER);
+    serv->session.packet_delimiter = iniparser_getstr(dict, "DAEMON:packet_delimiter");
+    heartbeat_interval = iniparser_getint(dict, "DAEMON:heartbeat_interval", 100000);
+    p = s = serv->session.packet_delimiter;
+    while(*p != 0 )
+    {
+        if(*p == '\\' && *(p+1) == 'n')
+        {
+            *s++ = '\n';
+            p += 2;
+        }
+        else if (*p == '\\' && *(p+1) == 'r')
+        {
+            *s++ = '\r';
+            p += 2;
+        }
+        else
+            *s++ = *p++;
+    }
+    *s++ = 0;
+    serv->session.packet_delimiter_length = strlen(serv->session.packet_delimiter);
+    serv->session.buffer_size = iniparser_getint(dict, "DAEMON:buffer_size", SB_BUF_SIZE);
+    serv->session.packet_reader = &cb_serv_packet_reader;
+    serv->session.packet_handler = &cb_serv_packet_handler;
+    serv->session.data_handler = &cb_serv_data_handler;
+    serv->session.oob_handler = &cb_serv_oob_handler;
+    LOGGER_INIT(daemon_logger, iniparser_getstr(dict, "DAEMON:access_log"));
+    serv->set_heartbeat(serv, heartbeat_interval, &cb_serv_heartbeat_handler, serv);
+    /* server */
 	if((ret = sbase->add_service(sbase, serv)) != 0)
 	{
-		fprintf(stderr, "Initiailize service[%s] failed, %s\n", serv->name, strerror(errno));
+		fprintf(stderr, "Initiailize service[%s] failed, %s\n", serv->service_name, strerror(errno));
 		return ret;
 	}
     //logger 
 	LOGGER_INIT(daemon_logger, iniparser_getstr(dict, "DAEMON:access_log"));
     //timeout
     if((p = iniparser_getstr(dict, "DAEMON:timeout")))
-        global_timeout_times = str2ll(p);
+        global_timeout_times = atoll(p);
     //linktable files
 	lnkfile = iniparser_getstr(dict, "DAEMON:lnkfile");
     metafile = iniparser_getstr(dict, "DAEMON:metafile");
@@ -420,4 +380,6 @@ int main(int argc, char **argv)
         fprintf(stdout, "Initialized successed\n");
         //sbase->running(sbase, 3600);
         sbase->running(sbase, 0);
+        sbase->stop(sbase);
+        sbase->clean(&sbase);
 }

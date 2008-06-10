@@ -1,6 +1,9 @@
 #include <stdlib.h>
 #ifndef _TRIE_H
 #define _TRIE_H
+#ifdef __cplusplus
+extern "C" {
+#endif
 #define BYTE_SIZE  256
 #define WORD_MAX_SIZE 1024
 typedef struct _HWORD
@@ -117,11 +120,10 @@ void trietab_CLEAN(void *ptr);
 #define  HBNL(ptr) (((TRIETAB *)(ptr))->newlist)
 #define  TRIETAB_INIT() ((TRIETAB *)calloc(1, sizeof(TRIETAB)))
 #define  TRIETAB_ADD(ptr, key, nkey, pdata)                                                 \
-{                                                                                           \
-    if(ptr && key)                                                                          \
+do{                                                                                         \
+    if(ptr && key && nkey > 0)                                                              \
     {                                                                                       \
         HBND(ptr) = (HNODE *)&(HBTBN(ptr, UNS(key[0])));                                    \
-        IHB(ptr) = 1;                                                                       \
         for(IHB(ptr) = 1; IHB(ptr) < nkey; ++IHB(ptr))                                      \
         {                                                                                   \
             PSH(ptr) = UNS(key[IHB(ptr)]);                                                  \
@@ -141,16 +143,14 @@ void trietab_CLEAN(void *ptr);
         if(HBND(ptr)) HBND(ptr)->dptr = (void *)pdata;                                      \
         else pdata = NULL;                                                                  \
     }                                                                                       \
-}
+}while(0)
 
-#define TRIETAB_GET(ptr, key, nkey, pdata)                                                  \
-{                                                                                           \
-    pdata = NULL;                                                                           \
-    if(ptr && key)                                                                          \
+#define  TRIETAB_RADD(ptr, key, nkey, pdata)                                                \
+do{                                                                                         \
+    if(ptr && key && nkey > 0)                                                              \
     {                                                                                       \
         HBND(ptr) = (HNODE *)&(HBTBN(ptr, UNS(key[0])));                                    \
-        IHB(ptr) = 1;                                                                       \
-        do                                                                                  \
+        for(IHB(ptr) = (nkey-2); IHB(ptr) >= 0; --IHB(ptr))                                 \
         {                                                                                   \
             PSH(ptr) = UNS(key[IHB(ptr)]);                                                  \
             if(HBND(ptr))                                                                   \
@@ -159,86 +159,211 @@ void trietab_CLEAN(void *ptr);
                 if(NHB(ptr) < 0 || NHB(ptr) >= HCNT(HBND(ptr))                              \
                         || HNPC(HBND(ptr), NHB(ptr)) != PSH(ptr))                           \
                 {                                                                           \
-                    HBND(ptr) = NULL;                                                       \
-                    break;                                                                  \
+                    HN_ADD(HBND(ptr), PSH(ptr), MINHB(ptr), MAXHB(ptr), NHB(ptr));          \
+                    ++HBCNT(ptr);                                                           \
+                    HBSIZE(ptr) += sizeof(HNODE);                                           \
                 }                                                                           \
                 HBND(ptr) = HNP(HBND(ptr), NHB(ptr));                                       \
-            }else break;                                                                    \
-        }while(++IHB(ptr) < nkey);                                                          \
-        if(HBND(ptr)) pdata = HBND(ptr)->dptr;                                              \
+            }                                                                               \
+        }                                                                                   \
+        if(HBND(ptr)) HBND(ptr)->dptr = (void *)pdata;                                      \
+        else pdata = NULL;                                                                  \
     }                                                                                       \
-}                                                                                           
-#define TRIETAB_MAX_FIND(ptr, key, nkey, pdata, pos)                                        \
-{                                                                                           \
-}
-#define TRIETAB_MIN_FIND(ptr, key, nkey, pdata, pos)                                        \
-{                                                                                           \
-    pdata = NULL;pos = -1;                                                                  \
-    if(ptr && key)                                                                          \
+}while(0)
+
+#define TRIETAB_GET(ptr, key, nkey, pdata)                                                  \
+do{                                                                                         \
+    pdata = NULL;                                                                           \
+    if(ptr && key && nkey > 0)                                                              \
     {                                                                                       \
         HBND(ptr) = (HNODE *)&(HBTBN(ptr, UNS(key[0])));                                    \
-        IHB(ptr) = 1;                                                                       \
-        do                                                                                  \
+        if((IHB(ptr) = 1) < nkey)                                                           \
         {                                                                                   \
-            PSH(ptr) = UNS(key[IHB(ptr)]);                                                  \
-            if(HBND(ptr))                                                                   \
+            do                                                                              \
             {                                                                               \
-                HN_FIND(HBND(ptr), PSH(ptr), MINHB(ptr), MAXHB(ptr), NHB(ptr));             \
-                if(NHB(ptr) >= 0 && NHB(ptr) < HCNT(HBND(ptr)) && HBND(ptr)->dptr           \
-                        && HNPC(HBND(ptr), NHB(ptr)) == PSH(ptr))                           \
+                PSH(ptr) = UNS(key[IHB(ptr)]);                                              \
+                if(HBND(ptr))                                                               \
                 {                                                                           \
-                    pdata = HBND(ptr)->dptr;                                                \
-                    pos = IHB(ptr);                                                         \
-                    break;                                                                  \
-                }                                                                           \
-                if(NHB(ptr) < 0 || HNPC(HBND(ptr), NHB(ptr)) != PSH(ptr))                   \
-                {                                                                           \
-                    HBND(ptr) = NULL;                                                       \
-                    break;                                                                  \
-                }                                                                           \
-                HBND(ptr) = HNP(HBND(ptr), NHB(ptr));                                       \
-            }else break;                                                                    \
-        }while(++IHB(ptr) < nkey);                                                          \
+                    HN_FIND(HBND(ptr), PSH(ptr), MINHB(ptr), MAXHB(ptr), NHB(ptr));         \
+                    if(NHB(ptr) < 0 || NHB(ptr) >= HCNT(HBND(ptr))                          \
+                            || HNPC(HBND(ptr), NHB(ptr)) != PSH(ptr))                       \
+                    {                                                                       \
+                        HBND(ptr) = NULL;                                                   \
+                        break;                                                              \
+                    }                                                                       \
+                    HBND(ptr) = HNP(HBND(ptr), NHB(ptr));                                   \
+                }else break;                                                                \
+            }while(++IHB(ptr) < nkey);                                                      \
+        }                                                                                   \
+        if(HBND(ptr)) pdata = HBND(ptr)->dptr;                                              \
     }                                                                                       \
-}                                                                                            
+}while(0)                                                                                           
 
-#define TRIETAB_DEL(ptr, key, nkey, pdata)                                                  \
-{                                                                                           \
+#define TRIETAB_RGET(ptr, key, nkey, pdata)                                                 \
+do{                                                                                         \
     pdata = NULL;                                                                           \
     if(ptr && key)                                                                          \
     {                                                                                       \
         HBND(ptr) = (HNODE *)&(HBTBN(ptr, UNS(key[0])));                                    \
-        IHB(ptr) = 1;                                                                       \
-        do                                                                                  \
+        if((IHB(ptr) = (nkey-2)) >= 0)                                                      \
         {                                                                                   \
-            PSH(ptr) = UNS(key[IHB(ptr)]);                                                  \
-            if(HBND(ptr))                                                                   \
+            do                                                                              \
             {                                                                               \
-                HN_FIND(HBND(ptr), PSH(ptr), MINHB(ptr), MAXHB(ptr), NHB(ptr));             \
-                if(NHB(ptr) < 0 || NHB(ptr) >= HCNT(HBND(ptr))                              \
-                        HNPC(HBND(ptr), NHB(ptr)) != PSH(ptr))                              \
+                PSH(ptr) = UNS(key[IHB(ptr)]);                                              \
+                if(HBND(ptr))                                                               \
                 {                                                                           \
-                    HBND(ptr) = NULL;                                                       \
-                    break;                                                                  \
-                }                                                                           \
-                HBND(ptr) = HNP(HBND(ptr), NHB(ptr));                                       \
-            }else break;                                                                    \
-        }while(++IHB(ptr) < nkey);                                                          \
-        if(HBND(ptr))                                                                       \
+                    HN_FIND(HBND(ptr), PSH(ptr), MINHB(ptr), MAXHB(ptr), NHB(ptr));         \
+                    if(NHB(ptr) < 0 || NHB(ptr) >= HCNT(HBND(ptr))                          \
+                            || HNPC(HBND(ptr), NHB(ptr)) != PSH(ptr))                       \
+                    {                                                                       \
+                        HBND(ptr) = NULL;                                                   \
+                        break;                                                              \
+                    }                                                                       \
+                    HBND(ptr) = HNP(HBND(ptr), NHB(ptr));                                   \
+                }else break;                                                                \
+            }while(--IHB(ptr) >= 0);                                                        \
+        }                                                                                   \
+        if(HBND(ptr)) pdata = HBND(ptr)->dptr;                                              \
+    }                                                                                       \
+}while(0)
+
+#define TRIETAB_MIN_FIND(ptr, key, nkey, pdata, pos)                                        \
+do{                                                                                         \
+    pdata = NULL;pos = -1;                                                                  \
+    if(ptr && key && nkey > 0)                                                              \
+    {                                                                                       \
+        HBND(ptr) = (HNODE *)&(HBTBN(ptr, UNS(key[0])));                                    \
+        if((IHB(ptr) = 1) < nkey)                                                           \
         {                                                                                   \
-            pdata = HBND(ptr)->dptr;                                                        \
-            HBND(ptr)->dptr = NULL;                                                         \
+            do                                                                              \
+            {                                                                               \
+                PSH(ptr) = UNS(key[IHB(ptr)]);                                              \
+                if(HBND(ptr))                                                               \
+                {                                                                           \
+                    if(HBND(ptr)->dptr){pos = IHB(ptr);break;}                              \
+                    HN_FIND(HBND(ptr), PSH(ptr), MINHB(ptr), MAXHB(ptr), NHB(ptr));         \
+                    if(NHB(ptr) >= 0 && NHB(ptr) < HCNT(HBND(ptr))                          \
+                            && HNPC(HBND(ptr), NHB(ptr)) == PSH(ptr))                       \
+                    {                                                                       \
+                        HBND(ptr) = HNP(HBND(ptr), NHB(ptr));                               \
+                    }                                                                       \
+                    else                                                                    \
+                    {                                                                       \
+                        HBND(ptr) = NULL;                                                   \
+                        break;                                                              \
+                    }                                                                       \
+                }else break;                                                                \
+            }while(++IHB(ptr) < nkey);                                                      \
+        }                                                                                   \
+        if(HBND(ptr)) pdata = HBND(ptr)->dptr;                                              \
+    }                                                                                       \
+}while(0)                                                                                           
+
+#define TRIETAB_MAX_FIND(ptr, key, nkey, pdata, pos)                                        \
+do{                                                                                           \
+    pdata = NULL;pos = -1;                                                                  \
+    if(ptr && key && nkey > 0)                                                              \
+    {                                                                                       \
+        HBND(ptr) = (HNODE *)&(HBTBN(ptr, UNS(key[0])));                                    \
+        if(HBND(ptr)->dptr){pos = 0;pdata = HBND(ptr)->dptr;}                               \
+        if((IHB(ptr) = 1) < nkey)                                                           \
+        {                                                                                   \
+            do                                                                              \
+            {                                                                               \
+                PSH(ptr) = UNS(key[IHB(ptr)]);                                              \
+                if(HBND(ptr))                                                               \
+                {                                                                           \
+                    if(HBND(ptr)->dptr){pos = IHB(ptr);pdata = HBND(ptr)->dptr;}            \
+                    HN_FIND(HBND(ptr), PSH(ptr), MINHB(ptr), MAXHB(ptr), NHB(ptr));         \
+                    if(NHB(ptr) >= 0 && NHB(ptr) < HCNT(HBND(ptr))                          \
+                            && HNPC(HBND(ptr), NHB(ptr)) == PSH(ptr))                       \
+                    {                                                                       \
+                        HBND(ptr) = HNP(HBND(ptr), NHB(ptr));                               \
+                    }                                                                       \
+                    else                                                                    \
+                    {                                                                       \
+                        HBND(ptr) = NULL;                                                   \
+                        break;                                                              \
+                    }                                                                       \
+                }else break;                                                                \
+            }while(++IHB(ptr) < nkey);                                                      \
         }                                                                                   \
     }                                                                                       \
-}                                                                                           
+}while(0)                                                                                           
 
+#define TRIETAB_DEL(ptr, key, nkey, pdata)                                                  \
+do{                                                                                           \
+    pdata = NULL;                                                                           \
+    if(ptr && key && nkey > 0)                                                              \
+    {                                                                                       \
+        HBND(ptr) = (HNODE *)&(HBTBN(ptr, UNS(key[0])));                                    \
+        if((IHB(ptr) = 1) < nkey)                                                           \
+        {                                                                                   \
+            do                                                                              \
+            {                                                                               \
+                PSH(ptr) = UNS(key[IHB(ptr)]);                                              \
+                if(HBND(ptr))                                                               \
+                {                                                                           \
+                    HN_FIND(HBND(ptr), PSH(ptr), MINHB(ptr), MAXHB(ptr), NHB(ptr));         \
+                    if(NHB(ptr) < 0 || NHB(ptr) >= HCNT(HBND(ptr))                          \
+                            HNPC(HBND(ptr), NHB(ptr)) != PSH(ptr))                          \
+                    {                                                                       \
+                        HBND(ptr) = NULL;                                                   \
+                        break;                                                              \
+                    }                                                                       \
+                    HBND(ptr) = HNP(HBND(ptr), NHB(ptr));                                   \
+                }else break;                                                                \
+            }while(++IHB(ptr) < nkey);                                                      \
+            if(HBND(ptr))                                                                   \
+            {                                                                               \
+                pdata = HBND(ptr)->dptr;                                                    \
+                HBND(ptr)->dptr = NULL;                                                     \
+            }                                                                               \
+        }                                                                                   \
+    }                                                                                       \
+}while(0)                                                                                          
+
+#define TRIETAB_RDEL(ptr, key, nkey, pdata)                                                 \
+do{                                                                                           \
+    pdata = NULL;                                                                           \
+    if(ptr && key && nkey > 0)                                                              \
+    {                                                                                       \
+        HBND(ptr) = (HNODE *)&(HBTBN(ptr, UNS(key[0])));                                    \
+        if((IHB(ptr) = (nkey - 2)) >= 0)                                                    \
+        {                                                                                   \
+            do                                                                              \
+            {                                                                               \
+                PSH(ptr) = UNS(key[IHB(ptr)]);                                              \
+                if(HBND(ptr))                                                               \
+                {                                                                           \
+                    HN_FIND(HBND(ptr), PSH(ptr), MINHB(ptr), MAXHB(ptr), NHB(ptr));         \
+                    if(NHB(ptr) < 0 || NHB(ptr) >= HCNT(HBND(ptr))                          \
+                            HNPC(HBND(ptr), NHB(ptr)) != PSH(ptr))                          \
+                    {                                                                       \
+                        HBND(ptr) = NULL;                                                   \
+                        break;                                                              \
+                    }                                                                       \
+                    HBND(ptr) = HNP(HBND(ptr), NHB(ptr));                                   \
+                }else break;                                                                \
+            }while(--IHB(ptr) >= 0);                                                        \
+            if(HBND(ptr))                                                                   \
+            {                                                                               \
+                pdata = HBND(ptr)->dptr;                                                    \
+                HBND(ptr)->dptr = NULL;                                                     \
+            }                                                                               \
+        }                                                                                   \
+    }                                                                                       \
+}while(0) 
 #define TRIETAB_CLEAN(ptr)                                                                  \
-{                                                                                           \
+do{                                                                                           \
     if(ptr)                                                                                 \
     {                                                                                       \
         trietab_clean(ptr);                                                                 \
         free(ptr);                                                                          \
         ptr = NULL;                                                                         \
     }                                                                                       \
-}
+}while(0)
+#ifdef __cplusplus
+ }
+#endif
 #endif

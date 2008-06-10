@@ -12,7 +12,7 @@
 #include "logger.h"
 #include "common.h"
 #include "timer.h"
-#define HTTP_SDATA_MAX 1048576
+#define HTTP_CB_DATA_MAX 1048576
 #define SBASE_LOG "/tmp/sbase.log"
 
 static SBASE *sbase = NULL;
@@ -36,7 +36,7 @@ typedef struct _TASK
 }TASK;
 static TASK task = {0};
 #define NCONN(tp, n) ((tp.conns[n])?(tp.conns[n])\
-        :(tp.conns[n] = transport->newconn(transport, -1, tp.daemon_ip, tp.daemon_port, -1, NULL)))
+        :(tp.conns[n] = transport->newconn(transport, -1, -1, tp.daemon_ip, tp.daemon_port, NULL)))
 #define OCONN(tp, n)                                        \
 {                                                           \
     if(tp.conns[n])                                         \
@@ -80,7 +80,7 @@ static TASK task = {0};
     DEBUG_LOGGER(daemon_logger, "RESET TASK[%d]", n);       \
 }
 //error handler 
-void cb_trans_error_handler(CONN *conn)
+int cb_trans_error_handler(CONN *conn)
 {
     int c_id = 0;
     if(conn)
@@ -100,14 +100,15 @@ void cb_trans_error_handler(CONN *conn)
         }
         else
         {
-            if(((SDATA *)(conn->packet))->data && ((SDATA *)(conn->cache))->data)
+            if(((CB_DATA *)(conn->packet))->data && ((CB_DATA *)(conn->cache))->data)
             {
-                return conn->ops.cb_data_handler(conn, (SDATA *)conn->packet, (SDATA *)conn->cache, (SDATA *)conn->chunk);
+                conn->session.data_handler(conn, (CB_DATA *)conn->packet, 
+                        (CB_DATA *)conn->cache, (CB_DATA *)conn->chunk);
             }
             ENDTASK(task, c_id, LINK_STATUS_ERROR);
         }
     }
-    return ;
+    return -1;
 }
 
 //daemon task handler 
@@ -132,8 +133,8 @@ void cb_trans_heartbeat_handler(void *arg)
             }
             if(task.requests[i].status == LINK_STATUS_WAIT)
             {
-                if((conn = transport->newconn(transport, -1, task.requests[i].ip, 
-                                task.requests[i].port, -1, NULL)))
+                if((conn = transport->newconn(transport, -1, -1, task.requests[i].ip, 
+                                task.requests[i].port, NULL)))
                 {
                     conn->start_cstate(conn);
                     conn->c_id = i;
@@ -171,27 +172,13 @@ void cb_trans_task_handler(void *arg)
 {
     long taskid = (long )arg;
     struct hostent *hp = NULL;
-
-    if(taskid >= 0 && taskid < task.ntask_limit)
-    {
-        if((hp = gethostbyname((const char *)task.requests[taskid].host)) == NULL)
-        {
-           ENDTASK(task, taskid, LINK_STATUS_ERROR); 
-        }
-        else
-        {
-            sprintf(task.requests[taskid].ip, "%s", inet_ntoa(*((struct in_addr *)(hp->h_addr))));
-            task.requests[taskid].status = LINK_STATUS_WAIT;
-        }
-        return ;
-    }
 }
 
-int cb_trans_packet_reader(CONN *conn, SDATA *buffer)
+int cb_trans_packet_reader(CONN *conn, CB_DATA *buffer)
 {
 }
 
-void cb_trans_packet_handler(CONN *conn, SDATA *packet)
+int cb_trans_packet_handler(CONN *conn, CB_DATA *packet)
 {
     HTTP_RESPONSE response;
     char *p = NULL, *end = NULL;
@@ -213,7 +200,7 @@ void cb_trans_packet_handler(CONN *conn, SDATA *packet)
                 {
                     len = atoi(response.headers[HEAD_ENT_CONTENT_LENGTH]);
                     conn->recv_chunk(conn, len);
-                    return ;
+                    return 0;
                 }
                 //set re request
                 task.requests[c_id].status = LINK_STATUS_INIT;
@@ -224,15 +211,15 @@ void cb_trans_packet_handler(CONN *conn, SDATA *packet)
                 {
                     //resend complete data
                     task.requests[c_id].status = LINK_STATUS_OVER;
-                    return ;
+                    return -1;
                 }
                 //over cstate
                 conn->over_cstate(conn);
                 //RESET TASK
                 RESETTASK(task, c_id);
-                return ;
+                return 0;
             }
-            return ;
+            return -1;
         }
         else
         {
@@ -252,9 +239,9 @@ void cb_trans_packet_handler(CONN *conn, SDATA *packet)
                         else
                         {
                             conn->save_cache(conn->cache, &response, sizeof(HTTP_RESPONSE));
-                            conn->recv_chunk(conn, HTTP_SDATA_MAX);
+                            conn->recv_chunk(conn, HTTP_CB_DATA_MAX);
                         }
-                        return ;
+                        return -1;
                     }
                 }
             }
@@ -263,10 +250,10 @@ void cb_trans_packet_handler(CONN *conn, SDATA *packet)
             ENDTASK(task, c_id, LINK_STATUS_ERROR);
         }
     }
-    return ;
+    return -1;
 }
 
-void cb_trans_data_handler(CONN *conn, SDATA *packet, SDATA *cache, SDATA *chunk)
+int cb_trans_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
     DOCMETA *pdocmeta = NULL;
     HTTP_RESPONSE *resp = NULL;
@@ -285,7 +272,7 @@ void cb_trans_data_handler(CONN *conn, SDATA *packet, SDATA *cache, SDATA *chunk
             {
                 NEWTASK(task, c_id, chunk->data);
             }
-            return ;
+            return -1;
         }
         else
         {
@@ -348,11 +335,11 @@ void cb_trans_data_handler(CONN *conn, SDATA *packet, SDATA *cache, SDATA *chunk
             ENDTASK(task, c_id, req->status);
         }
     }
-    return ;
+    return -1;
 }
 
 //daemon transaction handler 
-void cb_trans_transaction_handler(CONN *conn, int tid)
+int cb_trans_transaction_handler(CONN *conn, int tid)
 {
     char buf[HTTP_BUF_SIZE];
     char *p = NULL;
@@ -367,7 +354,7 @@ void cb_trans_transaction_handler(CONN *conn, int tid)
                 p = buf;
                 n = sprintf(p, "TASK / HTTP/1.0\r\n\r\n");
                 conn->push_chunk(conn, buf, n);
-                return ;
+                return 0;
             }
             if(task.requests[tid].status == LINK_STATUS_COMPLETE)
             {
@@ -380,7 +367,7 @@ void cb_trans_transaction_handler(CONN *conn, int tid)
                 {
                     conn->push_chunk(conn, task.results[tid], task.tasks[tid].zsize);
                 }
-                return ;
+                return 0;
             }
         }
         else
@@ -396,16 +383,16 @@ void cb_trans_transaction_handler(CONN *conn, int tid)
                         "on %s:%d via %d", 
                         task.requests[tid].host, task.requests[tid].path,
                         conn->ip, conn->port, conn->fd);
-                return ;
+                return 0;
             }
         }
         conn->over_cstate(conn);
         conn->over(conn);
     }
-    return ;
+    return -1;
 }
 
-void cb_trans_oob_handler(CONN *conn, SDATA *oob)
+int cb_trans_oob_handler(CONN *conn, CB_DATA *oob)
 {
 }
 
@@ -413,7 +400,7 @@ void cb_trans_oob_handler(CONN *conn, SDATA *oob)
 int sbase_initialize(SBASE *sbase, char *conf)
 {
 	char *logfile = NULL, *s = NULL, *p = NULL;
-	int i = 0, n = 0;
+	int i = 0, n = 0, interval = 0;
 	int ret = 0;
 
 	if((dict = iniparser_new(conf)) == NULL)
@@ -421,102 +408,68 @@ int sbase_initialize(SBASE *sbase, char *conf)
 		fprintf(stderr, "Initializing conf:%s failed, %s\n", conf, strerror(errno));
 		_exit(-1);
 	}
-	/* SBASE */
-	//fprintf(stdout, "Parsing SBASE...\n");
-	sbase->working_mode = iniparser_getint(dict, "SBASE:working_mode", WORKING_PROC);
-	sbase->max_procthreads = iniparser_getint(dict, "SBASE:max_procthreads", 1);
-	if(sbase->max_procthreads > MAX_PROCTHREADS) sbase->max_procthreads = MAX_PROCTHREADS;
-	sbase->sleep_usec = iniparser_getint(dict, "SBASE:sleep_usec", MIN_SLEEP_USEC);
-	if((logfile = iniparser_getstr(dict, "SBASE:logfile")) == NULL) logfile = SBASE_LOG;
-	fprintf(stdout, "Parsing LOG[%s]...\n", logfile);
-	fprintf(stdout, "SBASE[%08x] sbase->evbase:%08x ...\n", sbase, sbase->evbase);
-	sbase->set_log(sbase, logfile);
-	if((logfile = iniparser_getstr(dict, "SBASE:evlogfile")))
-	    sbase->set_evlog(sbase, logfile);
+    /* SBASE */
+    sbase->nchilds = iniparser_getint(dict, "SBASE:nchilds", 0);
+    sbase->connections_limit = iniparser_getint(dict, "SBASE:connections_limit", SB_CONN_MAX);
+    sbase->usec_sleep = iniparser_getint(dict, "SBASE:usec_sleep", SB_USEC_SLEEP);
+    sbase->set_log(sbase, iniparser_getstr(dict, "SBASE:logfile"));
+    sbase->set_evlog(sbase, iniparser_getstr(dict, "SBASE:evlogfile"));
+
     /* TRANSPORT */
     if((transport = service_init()) == NULL)
 	{
 		fprintf(stderr, "Initialize serv failed, %s", strerror(errno));
 		_exit(-1);
-	}
-    /* service type */
-	transport->service_type = iniparser_getint(dict, "TRANSPORT:service_type", 0);
-	/* INET protocol family */
-	n = iniparser_getint(dict, "TRANSPORT:inet_family", 0);
-	/* INET protocol family */
-	n = iniparser_getint(dict, "TRANSPORT:inet_family", 0);
-	switch(n)
-	{
-		case 0:
-			transport->family = AF_INET;
-			break;
-		case 1:
-			transport->family = AF_INET6;
-			break;
-		default:
-			fprintf(stderr, "Illegal INET family :%d \n", n);
-			_exit(-1);
-	}
-	/* socket type */
-	n = iniparser_getint(dict, "TRANSPORT:socket_type", 0);
-	switch(n)
-	{
-		case 0:
-			transport->socket_type = SOCK_STREAM;
-			break;
-		case 1:
-			transport->socket_type = SOCK_DGRAM;
-			break;
-		default:
-			fprintf(stderr, "Illegal socket type :%d \n", n);
-			_exit(-1);
-	}
-	/* serv name and ip and port */
-	transport->name = iniparser_getstr(dict, "TRANSPORT:service_name");
-	transport->ip = iniparser_getstr(dict, "TRANSPORT:service_ip");
-	if(transport->ip && transport->ip[0] == 0 ) transport->ip = NULL;
-	transport->port = iniparser_getint(dict, "TRANSPORT:service_port", 80);
-	transport->max_procthreads = iniparser_getint(dict, "TRANSPORT:max_procthreads", 1);
-	transport->sleep_usec = iniparser_getint(dict, "TRANSPORT:sleep_usec", 100);
-	transport->heartbeat_interval = iniparser_getint(dict, "TRANSPORT:heartbeat_interval", 1000000);
-	logfile = iniparser_getstr(dict, "TRANSPORT:logfile");
-	transport->logfile = logfile;
-	logfile = iniparser_getstr(dict, "TRANSPORT:evlogfile");
-	transport->evlogfile = logfile;
-	transport->max_connections = iniparser_getint(dict, 
-            "TRANSPORT:max_connections", MAX_CONNECTIONS);
-	transport->packet_type = PACKET_DELIMITER;
-	transport->packet_delimiter = iniparser_getstr(dict, "TRANSPORT:packet_delimiter");
-	p = s = transport->packet_delimiter;
-	while(*p != 0 )
-	{
-		if(*p == '\\' && *(p+1) == 'n')
-		{
-			*s++ = '\n';
-			p += 2;
-		}
-		else if (*p == '\\' && *(p+1) == 'r')
-		{
-			*s++ = '\r';
-			p += 2;
-		}
-		else
-			*s++ = *p++;
-	}
-	*s++ = 0;
-	transport->packet_delimiter_length = strlen(transport->packet_delimiter);
-	transport->buffer_size = iniparser_getint(dict, "TRANSPORT:buffer_size", SB_BUF_SIZE);
-	transport->cb_heartbeat_handler = &cb_trans_heartbeat_handler;
-	transport->ops.cb_packet_reader = &cb_trans_packet_reader;
-	transport->ops.cb_packet_handler = &cb_trans_packet_handler;
-	transport->ops.cb_data_handler = &cb_trans_data_handler;
-	transport->ops.cb_transaction_handler = &cb_trans_transaction_handler;
-	transport->ops.cb_oob_handler = &cb_trans_oob_handler;
-	transport->ops.cb_error_handler = &cb_trans_error_handler;
-        /* server */
+    }
+    if((transport = service_init()) == NULL)
+    {
+        fprintf(stderr, "Initialize transport failed, %s", strerror(errno));
+        _exit(-1);
+    }
+    transport->family = iniparser_getint(dict, "TRANSPORT:inet_family", AF_INET);
+    transport->sock_type = iniparser_getint(dict, "TRANSPORT:socket_type", SOCK_STREAM);
+    transport->ip = iniparser_getstr(dict, "TRANSPORT:service_ip");
+    transport->port = iniparser_getint(dict, "TRANSPORT:service_port", 80);
+    transport->working_mode = iniparser_getint(dict, "TRANSPORT:working_mode", WORKING_PROC);
+    transport->service_type = iniparser_getint(dict, "TRANSPORT:service_type", C_SERVICE);
+    transport->service_name = iniparser_getstr(dict, "TRANSPORT:service_name");
+    transport->nprocthreads = iniparser_getint(dict, "TRANSPORT:nprocthreads", 1);
+    transport->ndaemons = iniparser_getint(dict, "TRANSPORT:ndaemons", 0);
+    transport->set_log(transport, iniparser_getstr(dict, "TRANSPORT:logfile"));
+    transport->session.packet_type = iniparser_getint(dict, "TRANSPORT:packet_type",
+            PACKET_DELIMITER);
+    transport->session.packet_delimiter = iniparser_getstr(dict, "TRANSPORT:packet_delimiter");
+    p = s = transport->session.packet_delimiter;
+    while(*p != 0 )
+    {
+        if(*p == '\\' && *(p+1) == 'n')
+        {
+            *s++ = '\n';
+            p += 2;
+        }
+        else if (*p == '\\' && *(p+1) == 'r')
+        {
+            *s++ = '\r';
+            p += 2;
+        }
+        else
+            *s++ = *p++;
+    }
+    *s++ = 0;
+    transport->session.packet_delimiter_length = strlen(transport->session.packet_delimiter);
+    transport->session.buffer_size = iniparser_getint(dict, "TRANSPORT:buffer_size", SB_BUF_SIZE);
+    transport->session.packet_reader = &cb_trans_packet_reader;
+    transport->session.packet_handler = &cb_trans_packet_handler;
+    transport->session.data_handler = &cb_trans_data_handler;
+    transport->session.oob_handler = &cb_trans_oob_handler;
+    transport->client_connections_limit = iniparser_getint(dict,
+            "TRANSPORT:client_connections_limit", 8);
+    interval = iniparser_getint(dict, "TRANSPORT:heartbeat_interval", SB_HEARTBEAT_INTERVAL);
+    transport->set_heartbeat(transport, interval, &cb_trans_heartbeat_handler, transport);
 	if((ret = sbase->add_service(sbase, transport)) != 0)
 	{
-		fprintf(stderr, "Initiailize service[%s] failed, %s\n", transport->name, strerror(errno));
+		fprintf(stderr, "Initiailize service[%s] failed, %s\n", 
+                transport->service_name, strerror(errno));
 		return ret;
 	}
     //logger 
