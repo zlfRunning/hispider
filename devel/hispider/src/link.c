@@ -216,7 +216,7 @@ int linktable_add(LINKTABLE *linktable, unsigned char *host, unsigned char *path
     unsigned char lhost[HTTP_HOST_MAX];
     unsigned char lpath[HTTP_PATH_MAX];
     int n = 0, isneedencode = 0, isquery = 0;
-    unsigned char *p = NULL, *ps = NULL, *last = NULL;
+    unsigned char *p = NULL, *ps = NULL, *last = NULL, *end = lpath + HTTP_PATH_MAX;
     void *timer = NULL;
 
     if(linktable && host && path && href && (ehref - href) > 0 && (ehref - href) < HTTP_PATH_MAX)
@@ -224,6 +224,7 @@ int linktable_add(LINKTABLE *linktable, unsigned char *host, unsigned char *path
         memset(lhost, 0, HTTP_HOST_MAX);
         memset(lpath, 0, HTTP_PATH_MAX);
         p = href;
+        //DEBUG_LOGGER(linktable->logger, "addurl:http://%s%s ", lhost, lpath);
         if(*p == '/')
         {
             strcpy((char *)lhost, (char *)host);
@@ -263,9 +264,10 @@ int linktable_add(LINKTABLE *linktable, unsigned char *host, unsigned char *path
             p = href;
             *ps = '\0';
         }
+        //DEBUG_LOGGER(linktable->logger, "addurl:http://%s%s ", lhost, lpath);
         if(p && ps)
         {
-            while(p < ehref)
+            while(p < ehref && ps < end)
             {
                 //while(p < ehref && (*p == '/' && *(p+1) == '/')) ++p;
                 if(*((unsigned char *)p) > 127 || *p == 0x20)
@@ -278,9 +280,9 @@ int linktable_add(LINKTABLE *linktable, unsigned char *host, unsigned char *path
             if(*ps == '\0') *ps = '/';
         }
         if(lhost[0] == '\0' || lpath[0] == '\0') return -1;
-        DEBUG_LOGGER(linktable->logger, "addurl:http://%s%s ", lhost, lpath);
+        //DEBUG_LOGGER(linktable->logger, "addurl:http://%s%s ", lhost, lpath);
         linktable->addurl(linktable, (char *)lhost, (char *)lpath);
-        DEBUG_LOGGER(linktable->logger, "addurl:http://%s%s ", lhost, lpath);
+        //DEBUG_LOGGER(linktable->logger, "addurl:http://%s%s ", lhost, lpath);
         //TIMER_INIT(timer);
         //TIMER_SAMPLE(timer);
         //DEBUG_LOGGER(linktable->logger, "addurl:http://%s%s time used:%lld ", 
@@ -347,14 +349,14 @@ int linktable_addurl(LINKTABLE *linktable, char *host, char *path)
             req.port = 80;
             if(*p == ':') req.port = atoi(++p);
             //ip
-            /*
+            /* */
             DEBUG_LOGGER(linktable->logger, "ready for addurl:http://%s%s",  host, path);
             if((ip = linktable->iptab(linktable, req.host, NULL)) == NULL) 
                 goto err_end; 
             p = ip;
             ps = req.ip;
             while(*p != '\0') *ps++ = *p++;
-            */
+            /**/
             //path
             ps = req.path;
             p = path;
@@ -1214,11 +1216,11 @@ int main(int argc, char **argv)
 
     if(linktable = linktable_init())
     {
-        linktable->set_logger(linktable, "/tmp/link.log", NULL);
-        linktable->set_lnkfile(linktable, "/tmp/link.lnk");
-        linktable->set_urlfile(linktable, "/tmp/link.url");
-        linktable->set_metafile(linktable, "/tmp/link.meta");
-        linktable->set_docfile(linktable, "/tmp/link.doc");
+        linktable->set_logger(linktable, "/Users/sounos/html/link.log", NULL);
+        linktable->set_lnkfile(linktable, "/Users/sounos/html/link.lnk");
+        linktable->set_urlfile(linktable, "/Users/sounos/html/link.url");
+        linktable->set_metafile(linktable, "/Users/sounos/html/link.meta");
+        linktable->set_docfile(linktable, "/Users/sounos/html/link.doc");
         linktable->set_ntask(linktable, 32);
         linktable->iszlib = 1;
         linktable->resume(linktable);
