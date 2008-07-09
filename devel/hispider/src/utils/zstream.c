@@ -3,8 +3,8 @@
 #include <string.h>
 #include <zlib.h>
 /* Compress data */
-int zcompress(char *data, uLong ndata, 
-	char *zdata, uLong *nzdata)
+int zcompress(Bytef *data, uLong ndata, 
+	Bytef *zdata, uLong *nzdata)
 {
 	z_stream c_stream;
 	int err = 0;
@@ -15,8 +15,8 @@ int zcompress(char *data, uLong ndata,
 		c_stream.zfree = (free_func)0;
 		c_stream.opaque = (voidpf)0;
 		deflateInit(&c_stream, Z_DEFAULT_COMPRESSION);
-		c_stream.next_in  = (Bytef *)data;
-		c_stream.next_out = (Bytef *)zdata;
+		c_stream.next_in  = data;
+		c_stream.next_out = zdata;
 		while (c_stream.total_in != ndata && c_stream.total_out < *nzdata) 
 		{
 			c_stream.avail_in = c_stream.avail_out = 1; /* force small buffers */
@@ -36,8 +36,8 @@ int zcompress(char *data, uLong ndata,
 }
 
 /* Uncompress data */
-int zdecompress(char *zdata, uLong nzdata,                 
-        char *data, uLong *ndata)
+int zdecompress(Byte *zdata, uLong nzdata,                 
+        Byte *data, uLong *ndata)
 {
 	int err = 0;
 	z_stream d_stream; /* decompression stream */
@@ -46,9 +46,9 @@ int zdecompress(char *zdata, uLong nzdata,
 	d_stream.zfree = (free_func)0;
 	d_stream.opaque = (voidpf)0;
 
-	d_stream.next_in  = (Byte *)zdata;
+	d_stream.next_in  = zdata;
 	d_stream.avail_in = 0;
-	d_stream.next_out = (Byte *)data;
+	d_stream.next_out = data;
 
 	if(inflateInit(&d_stream) != Z_OK) return -1;
 	while (d_stream.total_out < *ndata && d_stream.total_in < nzdata) {
@@ -66,9 +66,9 @@ int main()
 {
 	char *data = "kjdalkfjdflkjdlkfjdklfjdlkfjlkdjflkdjflddajfkdjfkdfaskf;ldsfk;ldakf;ldskfl;dskf;ld";	
 	uLong ndata = strlen(data);	
-	char zdata[BUF_SIZE];
+	Byte zdata[BUF_SIZE];
 	uLong nzdata = BUF_SIZE;
-	char  odata[BUF_SIZE];
+	Byte  odata[BUF_SIZE];
 	uLong nodata = BUF_SIZE;
 	
 	memset(zdata, 0, BUF_SIZE);
@@ -76,9 +76,9 @@ int main()
 	{
 		fprintf(stdout, "nzdata:%d %s\n", nzdata, zdata);
 		memset(odata, 0, BUF_SIZE);
-		if(zdecompress(zdata, nzdata, odata, &nodata) == 0)
+		if(zdecompress(zdata, ndata, odata, &nodata) == 0)
 		{
-			fprintf(stdout, "%d %d %s\n", ndata, nodata, odata);
+			fprintf(stdout, "%d %s\n", nodata, odata);
 		}
 	}
 }

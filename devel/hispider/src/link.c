@@ -702,9 +702,10 @@ int linktable_add_content(LINKTABLE *linktable, void *response,
         docmeta.pathoff = docmeta.hostoff + nhost;
         npath = strlen(path) + 1;    
         docmeta.htmloff = docmeta.pathoff + npath;
-        nzdata = ndata = docmeta.size = (docmeta.htmloff + ncontent);
+        ndata = docmeta.size = (docmeta.htmloff + ncontent); 
+        nzdata = ndata + Z_HEADER_SIZE;
         if((data = (char *)calloc(1, ndata)) == NULL 
-                || (zdata = (char *)calloc(1, ndata)) == NULL) goto end;
+                || (zdata = (char *)calloc(1, nzdata)) == NULL) goto end;
         DEBUG_LOGGER(linktable->logger, "Ready data combine");
         ps = data;
         memcpy(ps, buf, docmeta.hostoff);
@@ -714,8 +715,8 @@ int linktable_add_content(LINKTABLE *linktable, void *response,
         memcpy(ps, path, npath);
         ps += npath;
         memcpy(ps, content, ncontent);
-        DEBUG_LOGGER(linktable->logger, "Ready for compressing data");
-        if(zcompress(data, nzdata, zdata, &nzdata) != 0) goto end;
+        DEBUG_LOGGER(linktable->logger, "Ready for compressing data[%d] to zdata[%d]", ndata, nzdata);
+        if(zcompress(data, ndata, zdata, &nzdata) != 0) goto end;
         docmeta.zsize = nzdata;
         DEBUG_LOGGER(linktable->logger, "Ready for append doc to docfile");
         if(HIO_APPEND(linktable->docio, zdata, nzdata, docmeta.offset) <= 0) goto end;
@@ -1216,11 +1217,11 @@ int main(int argc, char **argv)
 
     if(linktable = linktable_init())
     {
-        linktable->set_logger(linktable, "/Users/sounos/html/link.log", NULL);
-        linktable->set_lnkfile(linktable, "/Users/sounos/html/link.lnk");
-        linktable->set_urlfile(linktable, "/Users/sounos/html/link.url");
-        linktable->set_metafile(linktable, "/Users/sounos/html/link.meta");
-        linktable->set_docfile(linktable, "/Users/sounos/html/link.doc");
+        linktable->set_logger(linktable, "/media/disk/html/link.log", NULL);
+        linktable->set_lnkfile(linktable, "/media/disk/html/link.lnk");
+        linktable->set_urlfile(linktable, "/media/disk/html/link.url");
+        linktable->set_metafile(linktable, "/media/disk/html/link.meta");
+        linktable->set_docfile(linktable, "/media/disk/html/link.doc");
         linktable->set_ntask(linktable, 32);
         linktable->iszlib = 1;
         linktable->resume(linktable);

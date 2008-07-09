@@ -4,10 +4,11 @@
 #include <zlib.h>
 #ifndef _ZSTREAM_H
 #define _ZSTREAM_H
+#define  Z_HEADER_SIZE 12
 /* Compress data */
-int zcompress(char *data, uLong ndata, 
-	char *zdata, uLong *nzdata);
+int zcompress(Bytef *data, uLong ndata, 
+	Bytef *zdata, uLong *nzdata);
 /* Uncompress data */
-int zdecompress(char *zdata, uLong nzdata,
-        char *data, uLong *ndata);
+int zdecompress(Bytef *zdata, uLong nzdata,
+        Bytef *data, uLong *ndata);
 #endif

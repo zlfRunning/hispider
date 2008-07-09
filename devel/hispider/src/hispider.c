@@ -12,6 +12,8 @@
 #include "logger.h"
 #include "common.h"
 #include "timer.h"
+#include "zstream.h"
+
 #define HTTP_CB_DATA_MAX 1048576
 #define SBASE_LOG "/tmp/sbase.log"
 
@@ -313,9 +315,9 @@ int cb_trans_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
                             "nhost:%d npath:%d hostoff:%d htmloff:%d off:%d dsize:%d ndata:%d", 
                             nhost, npath, pdocmeta->hostoff, pdocmeta->htmloff, 
                             (p - data), chunk->ndata, ndata);
-                    if((zdata = (char *)calloc(1, ndata)))
+                    nzdata = pdocmeta->size + Z_HEADER_SIZE;
+                    if((zdata = (char *)calloc(1, nzdata)))
                     {
-                        nzdata = pdocmeta->size;
                         if(zcompress(data, ndata, zdata, &(nzdata)) == 0)
                         {
                             DEBUG_LOGGER(daemon_logger, "compress %d  to %d body:%d ",
