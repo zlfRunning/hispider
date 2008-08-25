@@ -9,6 +9,7 @@
 #include "ltable.h"
 #include "iniparser.h"
 #include "evdns.h"
+#include "queue.h"
 
 typedef struct _DNSTASK
 {
@@ -19,7 +20,7 @@ typedef struct _DNSTASK
 }DNSTASK;
 static SBASE *sbase = NULL;
 static SERVICE *service = NULL;
-static SERVICE *dnservice = NULL;
+static SERVICE *adnservice = NULL;
 static dictionary *dict = NULL;
 static LTABLE *ltable = NULL;
 static void *dnsqueue = NULL;
@@ -48,13 +49,14 @@ int adns_packet_handler(CONN *conn, CB_DATA *packet)
     if(conn && (tid = conn->c_id) >= 0 && tid < DNS_TASK_MAX 
             && tasklist[tid].conn == conn && packet->ndata > 0 && packet->data)
     {
-        if(evdns_parse_reply(packet->data, packet->ndata, &hostent)  == 0 && hostent.naddrs > 0)
+        if(evdns_parse_reply((unsigned char *)packet->data, packet->ndata, &hostent)  == 0 
+                && hostent.naddrs > 0)
         {
             ip = hostent.addrs[0];
             ltable->dnsdb->update(ltable->dnsdb, tasklist[tid].id, tasklist[tid].host, ip);
         }
         tasklist[tid].conn->c_id = tid;
-        adnservice->newtransaction(adnservice, tasklist[id].conn, tid);
+        adnservice->newtransaction(adnservice, tasklist[tid].conn, tid);
         return 0;
     }
     else 
@@ -71,7 +73,7 @@ int adns_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chu
 {
     int tid = 0;
 
-    if(conn && (tid = conn->c_id) >= 0 && tid < DNS_TASK_MAX && tasklist[id].conn == conn)
+    if(conn && (tid = conn->c_id) >= 0 && tid < DNS_TASK_MAX && tasklist[tid].conn == conn)
     {
         conn->over(conn);
         tasklist[tid].conn = NULL;
@@ -85,7 +87,7 @@ int adns_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
 {
     int tid = 0;
 
-    if(conn && (tid = conn->c_id) >= 0 && tid < DNS_TASK_MAX && tasklist[id].conn == conn)
+    if(conn && (tid = conn->c_id) >= 0 && tid < DNS_TASK_MAX && tasklist[tid].conn == conn)
     {
         conn->over(conn);
         tasklist[tid].conn = NULL;
@@ -102,9 +104,10 @@ int adns_trans_handler(CONN *conn, int tid)
 
     if(conn && tid >= 0 && tid < DNS_TASK_MAX && tasklist[tid].conn == conn)
     {
-        if((tasklist[tid].taskid = ltable->dnsdb->get_task(ltable->dnsdb, tasklist[tid].host)) >= 0)
+        if((tasklist[tid].id = ltable->dnsdb->get_task(ltable->dnsdb, tasklist[tid].host)) >= 0)
         {
-            n = evdns_make_query(tasklist[tid].host, 1, 1, (tid % 65536), 1, buf); 
+            n = evdns_make_query(tasklist[tid].host, 1, 1, 
+                    (tasklist[tid].id % 65536), 1, (unsigned char *)buf); 
             conn->c_id = tid;
             conn->start_cstate(conn);
             conn->set_timeout(conn, EVDNS_TIMEOUT);
@@ -113,7 +116,7 @@ int adns_trans_handler(CONN *conn, int tid)
         else
         {
             tasklist[tid].conn->c_id = tid;
-            adnservice->newtransaction(adnservice, tasklist[id].conn, tid);
+            adnservice->newtransaction(adnservice, tasklist[tid].conn, tid);
         }
     }
     return -1;
@@ -222,7 +225,8 @@ int hispiderd_oob_handler(CONN *conn, CB_DATA *oob)
 int sbase_initialize(SBASE *sbase, char *conf)
 {
     char *logfile = NULL, *s = NULL, *p = NULL, *basedir = NULL;
-    int n = 0;
+    int i = 0, n = 0, interval = 0;
+
     if((dict = iniparser_new(conf)) == NULL)
     {
         fprintf(stderr, "Initializing conf:%s failed, %s\n", conf, strerror(errno));
@@ -302,8 +306,6 @@ int sbase_initialize(SBASE *sbase, char *conf)
     adnservice->session.buffer_size = iniparser_getint(dict, "ADNS:buffer_size", SB_BUF_SIZE);
     adnservice->session.packet_reader = &adns_packet_reader;
     adnservice->session.packet_handler = &adns_packet_handler;
-    adnservice->session.data_handler = &adns_data_handler;
-    adnservice->session.oob_handler = &adns_oob_handler;
     adnservice->session.timeout_handler = &adns_timeout_handler;
     adnservice->session.error_handler = &adns_error_handler;
     adnservice->session.transaction_handler = &adns_trans_handler;
@@ -314,11 +316,11 @@ int sbase_initialize(SBASE *sbase, char *conf)
     i = 0;
     while(*p != '\0' && i < DNS_TASK_MAX)
     {
-        memset(&(tasklist[i]), 0, sizeof(DNS_TASK));
+        memset(&(tasklist[i]), 0, sizeof(DNS_TASK_MAX));
         while(*p != '\0' && (*p < '0' || *p > '5'))++p;     
-        ps = tasklist[i].nameserver;
-        while(*p != '\0' && ((*p >= '0' && *p <= '5') || *p == '.')) *ps++ = *p++;
-        if(ps > tasklist[i].nameserver)
+        s = tasklist[i].nameserver;
+        while(*p != '\0' && ((*p >= '0' && *p <= '5') || *p == '.')) *s++ = *p++;
+        if(s > tasklist[i].nameserver)
         {
             QUEUE_PUSH(dnsqueue, int, &i);
             i++;

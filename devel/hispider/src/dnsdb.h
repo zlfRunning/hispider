@@ -4,6 +4,7 @@
 #define _DNSDB_H
 #define DNS_PATH_MAX 256
 #define DNS_BUF_SIZE 65536
+#define DNS_TASK_MAX 32
 #define DNS_DOMAIN_NAME "dnsdb.domain"
 #define DNS_IP_NAME "dnsdb.dns"
 typedef struct _DNS
@@ -22,7 +23,7 @@ typedef struct _DNSDB
     void *mutex;
 
     int (*get)(struct _DNSDB *, char *domain);
-    int (*update)(struct _DNSDB *, int no, int ip);
+    int (*update)(struct _DNSDB *, int no, char *domain, int ip);
     int (*del)(struct _DNSDB *, char *domain);
     int (*resolve)(struct _DNSDB *, char *domain);
     int (*get_task)(struct _DNSDB *, char *domain);

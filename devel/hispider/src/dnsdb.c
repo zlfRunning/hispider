@@ -121,6 +121,7 @@ int dnsdb_resolve(DNSDB *dnsdb, char *domain)
 int dnsdb_get_task(DNSDB *dnsdb, char *domain)
 {
     int taskid = -1;
+    off_t offset = 0;
     DNS dns = {0};
 
     if(dnsdb)
@@ -141,7 +142,7 @@ int dnsdb_get_task(DNSDB *dnsdb, char *domain)
                         break;
                     }
                 }
-            }while(dns.ip != 0)
+            }while(dns.ip != 0);
         }
         MUTEX_UNLOCK(dnsdb->mutex);
     }
