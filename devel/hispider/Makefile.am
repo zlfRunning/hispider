@@ -1,0 +1,2 @@
+#automake 
+SUBDIRS = doc src
