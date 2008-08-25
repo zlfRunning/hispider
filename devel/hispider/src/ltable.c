@@ -413,17 +413,70 @@ int ltable_get_stateinfo(LTABLE *ltable, char *block)
     return ret;
 }
 
-/* add document as taskid/status/date/content */
-int ltable_add_document(LTABLE *ltable, int taskid, int status, int date,
-                            char *content, int ncontent)
+/* set task state */
+int ltable_set_task_state(LTABLE *ltable, int taskid, int state)
 {
-    int ret = -1;
-
-
-    if(ltable)
+    if(ltable && ltable->meta_fd > 0 && taskid >= 0 && taskid < ltable->url_total )
     {
+        return iwrite(ltable->meta_fd, &state, sizeof(int), taskid * sizeof(LMETA));
     }
+    return -1;
+}
 
+/* add document as taskid/status/date/content */
+int ltable_add_document(LTABLE *ltable, int taskid, int date, char *content, int ncontent)
+{
+    int ret = -1, ndata = 0, n = 0;
+    off_t offset = 0;
+    char *data = NULL, *p = NULL, *ps = NULL, *path = NULL, 
+         host[HTTP_HOST_MAX], url[HTTP_URL_MAX];
+    LMETA lmeta = {0};
+    LHEADER *lheader = NULL;
+
+    if(ltable && content && ncontent > 0)
+    {
+       if(ltable->meta_fd > 0 && iread(ltable->meta_fd, &lmeta, 
+                   sizeof(LMETA), taskid * sizeof(LMETA)) > 0)
+        {
+            memset(url, 0, HTTP_URL_MAX);
+            if(ltable->url_fd > 0 && iread(ltable->url_fd, url, lmeta.nurl, lmeta.offurl) > 0)
+            {
+                url[lmeta.nurl] = '\0';
+                p = url + strlen("http://");
+                ps = host;
+                while(*p != '\0' && *p != '/') *ps++ = *p++;
+                *ps = '\0'; 
+                path = p;
+                ndata = ncontent * 20;
+                if((data = calloc(1, ndata)) && zdecompress((Bytef *)content, 
+                            (uLong )ncontent, (Bytef *)data, (uLong *)&ndata) == 0)
+                {
+                    ltable->parselink(ltable, host, path, data, (data + ndata));
+                    lheader = (LHEADER *)data;
+                    p = data + sizeof(LHEADER);
+                    lheader->ndate = time(NULL);
+                    lheader->nurl = lmeta.nurl;
+                    lheader->nzdata = ncontent;
+                    lheader->ndata = ndata;
+                    strcpy(p, url);
+                    p += lmeta.nurl + 1;
+                    memcpy(p, content, ncontent);
+                    n = p - data;
+                    if(iappend(ltable->doc_fd, data, n, &offset) > 0)
+                    {
+                        lmeta.offset    = offset;
+                        lmeta.length    = n;
+                        lmeta.date      = date;
+                        lmeta.state     = TASK_STATE_OK;
+                        iwrite(ltable->meta_fd, &lmeta, sizeof(LMETA), taskid * sizeof(LMETA));
+                        ret = 0;
+                    }
+                    free(data);
+                    data = NULL;
+                }
+            }
+        }
+    }
     return ret;
 }
 
@@ -466,6 +519,7 @@ LTABLE *ltable_init()
         ltable->addlink         = ltable_addlink;
         ltable->addurl          = ltable_addurl;
         ltable->get_task        = ltable_get_task;
+        ltable->set_task_state  = ltable_set_task_state;
         ltable->get_stateinfo   = ltable_get_stateinfo;
         ltable->add_document    = ltable_add_document;
         ltable->clean           = ltable_clean;

@@ -12,10 +12,6 @@ typedef struct _DNS
     int offset;
     int length;
 }DNS;
-typedef struct _DNS_QUERY
-{
-    
-}DNS_QUERY;
 typedef struct _DNSDB
 {
     void *table;
@@ -29,6 +25,7 @@ typedef struct _DNSDB
     int (*update)(struct _DNSDB *, int no, int ip);
     int (*del)(struct _DNSDB *, char *domain);
     int (*resolve)(struct _DNSDB *, char *domain);
+    int (*get_task)(struct _DNSDB *, char *domain);
     int (*set_basedir)(struct _DNSDB *, char *path);
     int (*resume)(struct _DNSDB *);
     void (*clean)(struct _DNSDB **);

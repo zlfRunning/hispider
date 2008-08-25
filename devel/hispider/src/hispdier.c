@@ -236,8 +236,9 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
             }
             if(nzdata > 0)
             {
-                n = sprintf(buf, "TASK %ld HTTP/1.0\r\nContent-Length: %ld\r\n\r\n", 
-                        tasklist[c_id].taskid, nzdata);
+                n = sprintf(buf, "TASK %ld HTTP/1.0\r\nLast-Modified: %s\r\n"
+                        "Content-Length: %ld\r\n\r\n",tasklist[c_id].taskid,
+                        http_resp->headers[HEAD_ENT_LAST_MODIFIED], nzdata);
                 conn->push_chunk(conn, buf, n);
                 conn->push_chunk(conn, zdata, nzdata);
                 if(is_gzip == 0 && zdata) free(zdata); 

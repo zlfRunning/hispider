@@ -28,7 +28,8 @@
 #define ACCEPT_LANGUAGE     "zh-cn,zh;q=0.5"
 #define ACCEPT_ENCODING     "gzip,deflate"
 #define ACCEPT_CHARSET      "gb2312,utf-8;q=0.7,*;q=0.7"
-#define HTTP_RESP_OK        "HTTP/1.0 OK"
+#define HTTP_RESP_OK        "HTTP/1.0 200 OK"
+#define HTTP_BAD_REQUEST    "HTTP/1.0 404 Not Found\r\n\r\n"
 typedef long long LLong;
 typedef struct _LMETA
 {
@@ -42,9 +43,10 @@ typedef struct _LMETA
 }LMETA;
 typedef struct _LHEADER
 {
-    int date;
+    int ndate;
     int nurl;
-    int length;
+    int nzdata;
+    int ndata;
 }LHEADER;
 typedef struct _LSTATE
 {
@@ -77,9 +79,11 @@ typedef struct _LTABLE
             unsigned char *path, unsigned char *href, unsigned char *ehref);
     int     (*addurl)(struct _LTABLE *, char *host, char *path);
     int     (*get_task)(struct _LTABLE *, char *block, long *nblock);
+    int     (*set_task_state)(struct _LTABLE *, int taskid, int state);
     int     (*get_stateinfo)(struct _LTABLE *, char *block);
-    int     (*add_document)(struct _LTABLE *, int taskid, int status, int date, 
-            char *content, int ncontent);
+    int     (*add_document)(struct _LTABLE *, int taskid, int date, char *content, int ncontent);
+    int     (*get_dns_task)(struct _LTABLE *, char *host);
+    int     (*over_dns_task)(struct _LTABLE *, int dns_taskid, char *host, int ip);
     void    (*clean)(struct _LTABLE **);
 }LTABLE;
 /* initialize LTABLE */

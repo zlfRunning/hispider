@@ -30,7 +30,7 @@ int dnsdb_get(DNSDB *dnsdb, char *domain)
 }
 
 /* update dns */
-int dnsdb_update(DNSDB *dnsdb, int no, int ip)
+int dnsdb_update(DNSDB *dnsdb, int no, char *domain, int ip)
 {
     int ret = -1;
     void *dp = NULL;
@@ -44,13 +44,9 @@ int dnsdb_update(DNSDB *dnsdb, int no, int ip)
         offset = (no-1) * sizeof(DNS);
         if(iwrite(dnsdb->dns_fd, &ip, sizeof(int), offset) > 0)
         {
-            if(iread(dnsdb->dns_fd, &dns, sizeof(DNS), offset) > 0 
-                && iread(dnsdb->domain_fd, buf, dns.length, dns.offset) > 0) 
-            {
-                dp = (void *)((long)ip);
-                TRIETAB_RADD(dnsdb->table, buf, dns.length, dp);
-                ret = 0;
-            }
+            dp = (void *)((long)ip);
+            TRIETAB_RADD(dnsdb->table, domain, strlen(domain), dp);
+            ret = 0;
         }
         MUTEX_UNLOCK(dnsdb->mutex);
     }
@@ -82,6 +78,7 @@ int dnsdb_del(DNSDB *dnsdb, char *domain)
 /* resolve */
 int dnsdb_resolve(DNSDB *dnsdb, char *domain)
 {
+ 
     int ret = -1, n = 0;
     void *dp = NULL;
     long id = 0;
@@ -118,6 +115,37 @@ int dnsdb_resolve(DNSDB *dnsdb, char *domain)
         MUTEX_UNLOCK(dnsdb->mutex);
     }
     return ret;
+}
+
+/* get task */
+int dnsdb_get_task(DNSDB *dnsdb, char *domain)
+{
+    int taskid = -1;
+    DNS dns = {0};
+
+    if(dnsdb)
+    {
+        MUTEX_LOCK(dnsdb->mutex);
+        if(dnsdb->current < dnsdb->total)
+        {
+            dns.ip = -1;
+            do
+            {
+                offset = sizeof(DNS) * dnsdb->current++;
+                if(iread(dnsdb->dns_fd, &dns, sizeof(DNS), offset) > 0 && dns.ip == 0)
+                {
+                    if(iread(dnsdb->domain_fd, domain, dns.length, dns.offset) > 0)
+                    {
+                        taskid = dnsdb->current - 1;
+                        domain[dns.length] = '\0';
+                        break;
+                    }
+                }
+            }while(dns.ip != 0)
+        }
+        MUTEX_UNLOCK(dnsdb->mutex);
+    }
+    return taskid;
 }
 
 /* set basedir */
@@ -213,6 +241,7 @@ DNSDB *dnsdb_init()
         dnsdb->update = dnsdb_update;
         dnsdb->del = dnsdb_del;
         dnsdb->resolve = dnsdb_resolve;
+        dnsdb->get_task = dnsdb_get_task;
         dnsdb->set_basedir = dnsdb_set_basedir;
         dnsdb->resume = dnsdb_resume;
         dnsdb->clean = dnsdb_clean;
