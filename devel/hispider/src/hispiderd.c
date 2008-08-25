@@ -193,10 +193,13 @@ int hispiderd_packet_handler(CONN *conn, CB_DATA *packet)
             if((ltable->get_task(ltable, buf, &n) == -1)) goto err_end;
             conn->push_chunk(conn, buf, n);
         }
+        else goto err_end;
         return 0;
-err_end:
-        conn->push_chunk(conn, HTTP_BAD_REQUEST, strlen(HTTP_BAD_REQUEST));
     }
+err_end:
+    conn->push_chunk(conn, HTTP_BAD_REQUEST, strlen(HTTP_BAD_REQUEST));
+    conn->over(conn);
+
     return -1;
 }
 
@@ -224,7 +227,7 @@ int hispiderd_oob_handler(CONN *conn, CB_DATA *oob)
 /* Initialize from ini file */
 int sbase_initialize(SBASE *sbase, char *conf)
 {
-    char *logfile = NULL, *s = NULL, *p = NULL, *basedir = NULL;
+    char *logfile = NULL, *s = NULL, *p = NULL, *basedir = NULL, *host = NULL, *path = NULL;
     int i = 0, n = 0, interval = 0;
 
     if((dict = iniparser_new(conf)) == NULL)
@@ -247,7 +250,6 @@ int sbase_initialize(SBASE *sbase, char *conf)
     service->family = iniparser_getint(dict, "HISPIDERD:inet_family", AF_INET);
     service->sock_type = iniparser_getint(dict, "HISPIDERD:socket_type", SOCK_STREAM);
     service->ip = iniparser_getstr(dict, "HISPIDERD:service_ip");
-
     service->port = iniparser_getint(dict, "HISPIDERD:service_port", 3721);
     service->working_mode = iniparser_getint(dict, "HISPIDERD:working_mode", WORKING_PROC);
     service->service_type = iniparser_getint(dict, "HISPIDERD:service_type", S_SERVICE);
@@ -284,6 +286,9 @@ int sbase_initialize(SBASE *sbase, char *conf)
     {
         basedir = iniparser_getstr(dict, "HISPIDERD:basedir");
         ltable->set_basedir(ltable, basedir);
+        host = iniparser_getstr(dict, "HISPIDERD:host");
+        path = iniparser_getstr(dict, "HISPIDERD:path");
+        ltable->addurl(ltable, host, path);
         ltable->resume(ltable);
     }
     /* dns service */
@@ -294,8 +299,6 @@ int sbase_initialize(SBASE *sbase, char *conf)
     }
     adnservice->family = iniparser_getint(dict, "ADNS:inet_family", AF_INET);
     adnservice->sock_type = iniparser_getint(dict, "ADNS:socket_type", SOCK_STREAM);
-    adnservice->ip = iniparser_getstr(dict, "ADNS:service_ip");
-    adnservice->port = iniparser_getint(dict, "ADNS:service_port", 3721);
     adnservice->working_mode = iniparser_getint(dict, "ADNS:working_mode", WORKING_PROC);
     adnservice->service_type = iniparser_getint(dict, "ADNS:service_type", C_SERVICE);
     adnservice->service_name = iniparser_getstr(dict, "ADNS:service_name");

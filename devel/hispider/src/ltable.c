@@ -158,8 +158,8 @@ int ltable_parselink(LTABLE *ltable, char *host, char *path, char *content, char
                     {
                         DEBUG_LOGGER(ltable->logger, 
                                 "Ready for adding URL from page[%s%s] %d", host, path, n);
-                        ltable->addlink(ltable, (unsigned char *)host, 
-                                (unsigned char *)path,  (unsigned char *)link,(unsigned char *)p);
+                        ltable->addlink(ltable, (unsigned char *)host, (unsigned char *)path, 
+                                (unsigned char *)link, (unsigned char *)p);
                         count++;
                         //fprintf(stdout, "%s\n", link);
                     }
@@ -284,14 +284,14 @@ int ltable_addurl(LTABLE *ltable, char *host, char *path)
                 goto end;
             }
             //add url to url file 
-            url[n-1] = '\n';
+            url[n] = '\n';
             if(iappend(ltable->url_fd, url, (n + 1), &offset) <= 0)
             {
                 ERROR_LOGGER(ltable->logger, "Adding url via %d failed, %s", 
                         ltable->url_fd, strerror(errno));
                 goto err_end;
             }
-            url[n-1] = '\0';
+            url[1] = '\0';
             lmeta.offurl = offset;
             lmeta.nurl = n;
             if(iappend(ltable->meta_fd, &lmeta, sizeof(LMETA), &offset) <= 0)
@@ -441,7 +441,7 @@ int ltable_get_stateinfo(LTABLE *ltable, char *block)
                 ltable->url_ok, ltable->url_error, ltable->doc_size, ltable->doc_size,
                 ltable->doc_zsize, ltable->dnsdb->total);   
         ret = sprintf(block, "HTTP/1.0 200 OK \r\nContent-Type: text/html\r\n"
-                                    "Content-Length: %d\r\n\r\n", n);
+                                    "Content-Length: %d\r\n\r\n%s", n, buf);
     }
     return ret;
 }
