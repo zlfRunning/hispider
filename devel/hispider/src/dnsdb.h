@@ -7,6 +7,7 @@
 #define DNS_TASK_MAX 32
 #define DNS_DOMAIN_NAME "dnsdb.domain"
 #define DNS_IP_NAME "dnsdb.dns"
+#define DNS_SELF_IP 0x0100007f
 typedef struct _DNS
 {
     int ip;

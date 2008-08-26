@@ -16,13 +16,13 @@ int http_request_parse(char *p, char *end, HTTP_REQ *http_req)
             if(strncasecmp(http_methods[i].e, s, http_methods[i].elen) == 0)
             {
                 http_req->reqid = i;
+                s += http_methods[i].elen;
                 break;
             }
         }
         //path
-        while(s < end && *s != 0x20)s++;
         while(s < end && *s == 0x20)s++;
-        s++;
+        //fprintf(stdout, "%s:%d path:%s\n", __FILE__, __LINE__, s);
         ps = http_req->path;
         while(s < end && *s != 0x20 && *s != '\r') *ps++ = *s++;
         while(s < end && *s != '\n')s++;
@@ -69,6 +69,7 @@ int http_response_parse(char *p, char *end, HTTP_RESPONSE *http_response)
             if(memcmp(response_status[i].e, s, response_status[i].elen) == 0)
             {
                 http_response->respid = i;
+                s += response_status[i].elen;
                 break;
             }
         }

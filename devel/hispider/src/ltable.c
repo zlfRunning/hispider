@@ -259,7 +259,7 @@ int ltable_addurl(LTABLE *ltable, char *host, char *path)
 {
     char url[HTTP_URL_MAX];
     LMETA lmeta = {0};
-    char *p = NULL, *ps = NULL;
+    char *p = NULL, *ps = NULL, *dot_off = NULL;
     void *dp = NULL;
     off_t offset = 0;
     int ret = -1, n = 0;
@@ -268,6 +268,14 @@ int ltable_addurl(LTABLE *ltable, char *host, char *path)
     if(ltable)
     {
         //check dns
+        p = host;
+        while((*p >= '0' && *p <= '9') || (*p >= 'a' && *p <= 'z') 
+            || (*p >= 'A' && *p <= 'Z') || *p == '.' || *p == '-')
+        {
+            if(*p == '.') dot_off = p;
+            ++p;
+        }
+        if(dot_off == NULL || (p - host) > 64 || (p - dot_off) > 4) return -1;
         MUTEX_LOCK(ltable->mutex);
         if((n = sprintf(url, "http://%s%s", host, path)) > 0)
         {
@@ -373,15 +381,20 @@ int  ltable_get_task(LTABLE *ltable, char *block, long *nblock)
                     ltable->url_current++;
                     if(lmeta.state == TASK_STATE_INIT)
                     {
+                        //fprintf(stdout, "%s:%d OK\n", __FILE__, __LINE__);
                         if(iread(ltable->url_fd, url, lmeta.nurl, lmeta.offurl) > 0)
                         {
+                            //fprintf(stdout, "%s:%d OK\n", __FILE__, __LINE__);
                             url[lmeta.nurl] = '\0';
                             p = ps = url + strlen("http://");
                             while(*p != '\0' && *p != ':' && *p != '/')++p;
                             ch = *p;
                             *p = '\0';
-                            if((ip = ltable->dnsdb->get(ltable->dnsdb, ps)) <= 0) 
+                            ip = ltable->dnsdb->get(ltable->dnsdb, ps);
+                            if(ip == DNS_SELF_IP) continue;
+                            else if(ip == -1) 
                             {
+                                fprintf(stderr, "Invalid Host:%s ip:%d\n", ps, ip);
                                 ltable->url_current--;
                                 goto err_end;
                             }
@@ -393,6 +406,7 @@ int  ltable_get_task(LTABLE *ltable, char *block, long *nblock)
                                 while(*p != '\0' && *p != '/')++p;
                                 path = (p+1);
                             }
+                            //fprintf(stdout, "%s:%d OK\n", __FILE__, __LINE__);
                             sip = (unsigned char *)&ip;
                             taskid = ltable->url_current - 1;
                             *nblock = sprintf(block, "%s\r\nFrom: %d\r\nLocation: /%s\r\n"
@@ -400,6 +414,9 @@ int  ltable_get_task(LTABLE *ltable, char *block, long *nblock)
                                     HTTP_RESP_OK, taskid, path, ps, 
                                     sip[0], sip[1], sip[2], sip[3], port);
                             /*
+                            fprintf(stdout, "%s::%d host:%s [%u][%u]ip:%d.%d.%d.%d\n", 
+                                    __FILE__, __LINE__, ps, DNS_SELF_IP,
+                                    ip, sip[0], sip[1], sip[2], sip[3]);
                             fprintf(stdout, "%d::OK taskid:%d current:%d total:%d\n", 
                                     __LINE__, taskid, ltable->url_current, ltable->url_total);
                             */
@@ -447,6 +464,7 @@ int ltable_set_task_state(LTABLE *ltable, int taskid, int state)
 {
     if(ltable && ltable->meta_fd > 0 && taskid >= 0 && taskid < ltable->url_total )
     {
+        if(state == TASK_STATE_ERROR) ltable->url_error++;
         return iwrite(ltable->meta_fd, &state, sizeof(int), taskid * sizeof(LMETA));
     }
     return -1;
@@ -468,6 +486,7 @@ int ltable_add_document(LTABLE *ltable, int taskid, int date, char *content, int
                    sizeof(LMETA), taskid * sizeof(LMETA)) > 0)
         {
             memset(url, 0, HTTP_URL_MAX);
+            //fprintf(stdout, "%s::%d OK \n", __FILE__,  __LINE__);
             if(ltable->url_fd > 0 && iread(ltable->url_fd, url, lmeta.nurl, lmeta.offurl) > 0)
             {
                 url[lmeta.nurl] = '\0';
@@ -477,10 +496,19 @@ int ltable_add_document(LTABLE *ltable, int taskid, int date, char *content, int
                 *ps = '\0'; 
                 path = p;
                 ndata = ncontent * 20;
-                if((data = calloc(1, ndata)) && zdecompress((Bytef *)content, 
-                            (uLong )ncontent, (Bytef *)data, (uLong *)&ndata) == 0)
+                //fprintf(stdout, "%s::%d OK %d:%d\n", __FILE__,  __LINE__, ncontent, ndata);
+                if((data = calloc(1, ndata)))
                 {
+                    if(zdecompress((Bytef *)content, (uLong)ncontent, 
+                            (Bytef *)data, (uLong *)&ndata) != 0) 
+                    {
+                        fprintf(stderr, "%s::%d decompress failed, %s\n", 
+                                __FILE__,  __LINE__, strerror(errno));
+                        goto over;
+                    }
+                    //fprintf(stdout, "%s::%d OK \n", __FILE__,  __LINE__);
                     ltable->parselink(ltable, host, path, data, (data + ndata));
+                    //fprintf(stdout, "%s::%d OK \n", __FILE__,  __LINE__);
                     lheader = (LHEADER *)data;
                     p = data + sizeof(LHEADER);
                     lheader->ndate = time(NULL);
@@ -490,19 +518,26 @@ int ltable_add_document(LTABLE *ltable, int taskid, int date, char *content, int
                     strcpy(p, url);
                     p += lmeta.nurl + 1;
                     memcpy(p, content, ncontent);
+                    p += ncontent;
                     n = p - data;
+                    //fprintf(stdout, "%s::%d OK \n", __FILE__,  __LINE__);
                     if(iappend(ltable->doc_fd, data, n, &offset) > 0)
                     {
+                        //fprintf(stdout, "%s::%d OK offset:%lld\n", __FILE__,  __LINE__, offset);
                         lmeta.offset    = offset;
                         lmeta.length    = n;
                         lmeta.date      = date;
                         lmeta.state     = TASK_STATE_OK;
                         iwrite(ltable->meta_fd, &lmeta, sizeof(LMETA), taskid * sizeof(LMETA));
                         ret = 0;
+                        ltable->url_ok++;
                     }
-                    free(data);
-                    data = NULL;
+                    //fprintf(stdout, "%s::%d OK \n", __FILE__,  __LINE__);
+                    over:
+                        free(data);
+                        data = NULL;
                 }
+                //fprintf(stdout, "%s::%d OK \n", __FILE__,  __LINE__);
             }
         }
     }

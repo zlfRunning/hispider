@@ -22,7 +22,7 @@ int dnsdb_get(DNSDB *dnsdb, char *domain)
         TRIETAB_RGET(dnsdb->table, domain, n, dp);
         if(dp)
         {
-            ret = (int)dp;
+            ret = (long )dp;
         }
         MUTEX_UNLOCK(dnsdb->mutex);
     }
@@ -34,8 +34,6 @@ int dnsdb_update(DNSDB *dnsdb, int no, char *domain, int ip)
 {
     int ret = -1;
     void *dp = NULL;
-    char buf[DNS_BUF_SIZE];
-    DNS dns = {0};
     off_t offset = 0;
 
     if(dnsdb && no >= 0 && no <= dnsdb->total)
@@ -81,7 +79,6 @@ int dnsdb_resolve(DNSDB *dnsdb, char *domain)
  
     int ret = -1, n = 0;
     void *dp = NULL;
-    long id = 0;
     DNS dns = {0};
     char buf[DNS_BUF_SIZE];
     off_t offset = 0;
@@ -104,8 +101,7 @@ int dnsdb_resolve(DNSDB *dnsdb, char *domain)
                     dns.offset = offset;
                     dns.length = n - 1;
                     iappend(dnsdb->dns_fd, &dns, sizeof(DNS), &offset);
-                    id = -1;
-                    dp = (void *)&id;
+                    dp = (void *)((long)-1);
                     TRIETAB_RADD(dnsdb->table, domain, (n-1), dp);
                     dnsdb->total++;
                     ret = 0;

@@ -10,13 +10,18 @@
 #include "iniparser.h"
 #include "evdns.h"
 #include "queue.h"
+#include "logger.h"
 
 typedef struct _DNSTASK
 {
     int id;
+    int qid;
+    int ntimeout;
     CONN *conn;
     char nameserver[DNS_IP_MAX];
     char host[DNS_NAME_MAX];
+    unsigned char buf[HTTP_BUF_SIZE];
+    int nbuf;
 }DNSTASK;
 static SBASE *sbase = NULL;
 static SERVICE *service = NULL;
@@ -24,9 +29,21 @@ static SERVICE *adnservice = NULL;
 static dictionary *dict = NULL;
 static LTABLE *ltable = NULL;
 static void *dnsqueue = NULL;
+static void *adns_logger = NULL;
 //static void *undnsqueue = NULL;
 static DNSTASK tasklist[DNS_TASK_MAX];
+static void *waitqueue = NULL;
 
+/* dns query error */
+int adns_query_error(int tid)
+{
+    if(tid >= 0 && tid < DNS_TASK_MAX)
+    {
+        return ltable->dnsdb->update(ltable->dnsdb, tasklist[tid].id, 
+                tasklist[tid].host, DNS_SELF_IP);       
+    }
+    return -1;
+}
 /* dns packet reader */
 int adns_packet_reader(CONN *conn, CB_DATA *buffer)
 {
@@ -48,13 +65,22 @@ int adns_packet_handler(CONN *conn, CB_DATA *packet)
             && tasklist[tid].conn == conn && packet->ndata > 0 && packet->data)
     {
         if(evdns_parse_reply((unsigned char *)packet->data, packet->ndata, &hostent)  == 0 
-                && hostent.naddrs > 0)
+                && hostent.naddrs > 0 && hostent.qid == tasklist[tid].qid)
         {
             ip = hostent.addrs[0];
             p = (unsigned char *)&ip;
-            fprintf(stdout, "%d:Got hostname[%s]'s ip[%d:%d:%d:%d]\n", 
-                    __LINE__, tasklist[tid].host, p[0], p[1], p[2], p[3]);
+            /*
+            fprintf(stdout, "%d:Got hostname[%s]'s ip[%lu][%d.%d.%d.%d]\n", 
+                    __LINE__, tasklist[tid].host, (unsigned int)ip, p[0], p[1], p[2], p[3]);
+            */
+            DEBUG_LOGGER(adns_logger, "Got host[%s][%s]'s ip[%d.%d.%d.%d]", hostent.name,
+                    tasklist[tid].host, p[0], p[1], p[2], p[3]);
             ltable->dnsdb->update(ltable->dnsdb, tasklist[tid].id, tasklist[tid].host, ip);
+            tasklist[tid].qid = -1;
+        }
+        else
+        {
+            adns_query_error(tid);
         }
         tasklist[tid].conn->c_id = tid;
         adnservice->newtransaction(adnservice, tasklist[tid].conn, tid);
@@ -76,6 +102,9 @@ int adns_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chu
 
     if(conn && (tid = conn->c_id) >= 0 && tid < DNS_TASK_MAX && tasklist[tid].conn == conn)
     {
+        ERROR_LOGGER(adns_logger, "Resolving %s from nameserver[%s] ERROR", 
+                    tasklist[tid].host, tasklist[tid].nameserver);
+        adns_query_error(tid);
         conn->over(conn);
         tasklist[tid].conn = NULL;
         QUEUE_PUSH(dnsqueue, int, &tid);
@@ -90,6 +119,13 @@ int adns_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
 
     if(conn && (tid = conn->c_id) >= 0 && tid < DNS_TASK_MAX && tasklist[tid].conn == conn)
     {
+        if(tasklist[tid].ntimeout++ < EVDNS_TIMEOUT_MAX)
+        {
+            return conn->push_chunk(conn, tasklist[tid].buf, tasklist[tid].nbuf);
+        }
+        ERROR_LOGGER(adns_logger, "Resolving %s from nameserver[%s] TIMEOUT", 
+                tasklist[tid].host, tasklist[tid].nameserver);
+        adns_query_error(tid);
         conn->over(conn);
         tasklist[tid].conn = NULL;
         QUEUE_PUSH(dnsqueue, int, &tid);
@@ -100,7 +136,6 @@ int adns_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
 /* adns transaction handler */
 int adns_trans_handler(CONN *conn, int tid)
 {
-    char buf[HTTP_BUF_SIZE];
     int taskid = 0, n = 0;
 
     if(conn && tid >= 0 && tid < DNS_TASK_MAX && tasklist[tid].conn == conn)
@@ -108,13 +143,16 @@ int adns_trans_handler(CONN *conn, int tid)
         memset(tasklist[tid].host, 0, DNS_NAME_MAX);
         if((tasklist[tid].id = ltable->dnsdb->get_task(ltable->dnsdb, tasklist[tid].host)) >= 0)
         {
-            taskid = (tasklist[tid].id % 65536);
-            n = evdns_make_query(tasklist[tid].host, 1, 1, taskid, 1, (unsigned char *)buf); 
+            tasklist[tid].qid = (tasklist[tid].id % 65536);
+            tasklist[tid].nbuf = evdns_make_query(tasklist[tid].host, 
+                    1, 1, tasklist[tid].qid, 1, tasklist[tid].buf); 
             conn->c_id = tid;
             conn->start_cstate(conn);
             conn->set_timeout(conn, EVDNS_TIMEOUT);
+            DEBUG_LOGGER(adns_logger, "Resolving %s from nameserver[%s]", 
+                    tasklist[tid].host, tasklist[tid].nameserver);
             //fprintf(stdout, "%d::trans:%d taskid:[%d][%d]\n", __LINE__, tid, taskid, n);
-            return conn->push_chunk(conn, buf, n);
+            return conn->push_chunk(conn, tasklist[tid].buf, tasklist[tid].nbuf);
         }
         else
         {
@@ -186,12 +224,13 @@ int hispiderd_packet_handler(CONN *conn, CB_DATA *packet)
         else if(http_req.reqid == HTTP_TASK)
         {
             taskid = atol(http_req.path);
+            //fprintf(stdout, "%s::%d TASK: %ld path:%s\n", 
+            //__FILE__, __LINE__, taskid, http_req.path);
             if(taskid != -1)
             {
-                if(http_req.headers[HEAD_ENT_CONTENT_LENGTH] 
-                        && (n = atol(http_req.headers[HEAD_ENT_CONTENT_LENGTH])) > 0)
+                if((p = http_req.headers[HEAD_ENT_CONTENT_LENGTH]) && (n = atol(p)) > 0)
                 {
-                    conn->save_cache(conn->cache, &http_req, sizeof(HTTP_RESPONSE));
+                    conn->save_cache(conn, &http_req, sizeof(HTTP_REQ));
                     conn->recv_chunk(conn, n);
                 }
                 else
@@ -199,7 +238,12 @@ int hispiderd_packet_handler(CONN *conn, CB_DATA *packet)
                     ltable->set_task_state(ltable, taskid, TASK_STATE_ERROR);
                 }
             }
-            if((ltable->get_task(ltable, buf, &n) == -1)) goto err_end;
+            if((ltable->get_task(ltable, buf, &n) == -1)) 
+            {
+                //fprintf(stderr, "%s:%d get task failed, %s\n", 
+                //__FILE__, __LINE__, strerror(errno));
+                goto err_end;
+            }
             conn->push_chunk(conn, buf, n);
         }
         else goto err_end;
@@ -207,8 +251,6 @@ int hispiderd_packet_handler(CONN *conn, CB_DATA *packet)
     }
 err_end:
     conn->push_chunk(conn, HTTP_BAD_REQUEST, strlen(HTTP_BAD_REQUEST));
-    conn->over(conn);
-
     return -1;
 }
 
@@ -220,9 +262,11 @@ int hispiderd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA 
 
     if(conn && packet && cache && chunk)
     {
-        if((http_req = (HTTP_REQ *)packet->data))
+        if((http_req = (HTTP_REQ *)cache->data))
         {
             taskid = atoi(http_req->path);
+            fprintf(stdout, "%s::%d path:%s taskid:%d length:%d\n", __FILE__,  __LINE__, 
+                    http_req->path, taskid, chunk->ndata);
             return ltable->add_document(ltable, taskid, 0, chunk->data, chunk->ndata); 
         }
     }
@@ -344,8 +388,10 @@ int sbase_initialize(SBASE *sbase, char *conf)
             i++;
         }
     }
-    /* unused dns queue */
-    //QUEUE_INIT(undnsqueue);
+    p = iniparser_getstr(dict, "ADNS:access_log");
+    LOGGER_INIT(adns_logger, p);
+    /* wait queue */
+    QUEUE_INIT(waitqueue);
     //while(i < DNS_TASK_MAX){QUEUE_PUSH(undnsqueue, int, &i++);}
     return (sbase->add_service(sbase, service) | sbase->add_service(sbase, adnservice));
 }

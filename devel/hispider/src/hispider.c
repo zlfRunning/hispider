@@ -74,9 +74,8 @@ int hispider_packet_handler(CONN *conn, CB_DATA *packet)
             if(http_resp.respid == RESP_OK && http_resp.headers[HEAD_ENT_CONTENT_TYPE] 
                     && strncasecmp(http_resp.headers[HEAD_ENT_CONTENT_TYPE], "text", 4) == 0)
             {
-                conn->save_cache(conn->cache, &http_resp, sizeof(HTTP_RESPONSE));
-                if(http_resp.headers[HEAD_ENT_CONTENT_LENGTH] 
-                    && (n = atol(http_resp.headers[HEAD_ENT_CONTENT_LENGTH])) > 0)
+                conn->save_cache(conn, &http_resp, sizeof(HTTP_RESPONSE));
+                if((p = http_resp.headers[HEAD_ENT_CONTENT_LENGTH]) && (n = atol(p)) > 0)
                 {
                     conn->recv_chunk(conn, n);
                 }
@@ -95,32 +94,41 @@ int hispider_packet_handler(CONN *conn, CB_DATA *packet)
         /* task handler */
         else if(conn == tasklist[c_id].s_conn)
         {
-           host = http_resp.headers[HEAD_REQ_HOST];
-           ip = http_resp.headers[HEAD_RESP_SERVER];
-           port = atoi(http_resp.headers[HEAD_REQ_REFERER]);
-           path = http_resp.headers[HEAD_RESP_LOCATION];
-           taskid = atol(http_resp.headers[HEAD_REQ_FROM]);
-           if(host == NULL || ip == NULL || path == NULL || port == 0 || taskid <= 0) goto err_end;
-           if((tasklist[c_id].c_conn = service->newconn(service, -1, -1, ip, port, NULL)))
-           {
-               tasklist[c_id].taskid = taskid;
-               tasklist[c_id].nrequest = sprintf(tasklist[c_id].request, 
-                       "GET %s HTTP/1.0\r\nHost: %s\r\n"
-                       "User-Agent: %s\r\nAccept: %s\r\nAccept-Language: %s\r\n"
-                       "Accept-Encoding: %s\r\nAccept-Charset: %s\r\nConnection: close\r\n\r\n", 
-                       path, host, USER_AGENT, ACCEPT_TYPE, ACCEPT_LANGUAGE, 
-                       ACCEPT_ENCODING, ACCEPT_CHARSET);
-               tasklist[c_id].c_conn->c_id = c_id;
-               tasklist[c_id].c_conn->start_cstate(tasklist[c_id].c_conn);
-               service->newtransaction(service, tasklist[c_id].c_conn, c_id);
-           }
-           conn->over_cstate(conn);
+            if(http_resp.respid == RESP_OK)
+            {
+                host = http_resp.headers[HEAD_REQ_HOST];
+                ip = http_resp.headers[HEAD_RESP_SERVER];
+                port = (http_resp.headers[HEAD_REQ_REFERER])
+                    ? atoi(http_resp.headers[HEAD_REQ_REFERER]) : 0;
+                path = http_resp.headers[HEAD_RESP_LOCATION];
+                taskid = http_resp.headers[HEAD_REQ_FROM]
+                    ? atol(http_resp.headers[HEAD_REQ_FROM]) : NULL;
+                //fprintf(stdout, "%s::%d OK host:%s ip:%s port:%d path:%s taskid:%d \n", 
+                //        __FILE__, __LINE__, host, ip, port, path, taskid);
+                if(host == NULL || ip == NULL || path == NULL || port == 0 || taskid < 0) 
+                    goto restart_task;
+                if((tasklist[c_id].c_conn = service->newconn(service, -1, -1, ip, port, NULL)))
+                {
+                    tasklist[c_id].taskid = taskid;
+                    tasklist[c_id].nrequest = sprintf(tasklist[c_id].request, 
+                        "GET %s HTTP/1.0\r\nHost: %s\r\n"
+                        "User-Agent: %s\r\nAccept: %s\r\nAccept-Language: %s\r\n"
+                        //"Accept-Encoding: %\r\nAccept-Charset: %s\r\nConnection: close\r\n\r\n", 
+                        "Accept-Charset: %s\r\nConnection: close\r\n\r\n", 
+                        path, host, USER_AGENT, ACCEPT_TYPE, ACCEPT_LANGUAGE, ACCEPT_CHARSET);
+                        //ACCEPT_ENCODING, ACCEPT_CHARSET);
+                    tasklist[c_id].c_conn->c_id = c_id;
+                    tasklist[c_id].c_conn->start_cstate(tasklist[c_id].c_conn);
+                    return service->newtransaction(service, tasklist[c_id].c_conn, c_id);
+                }
+            }
+            restart_task:
+                service->newtransaction(service, tasklist[c_id].s_conn, c_id);
         }
         return 0;
 err_end:
         if(conn == tasklist[c_id].c_conn)
         {
-            conn->over_cstate(conn);
             conn->over(conn);
             http_download_error(c_id);
         }
@@ -142,7 +150,7 @@ int hispider_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA 
     {
         if(conn == tasklist[c_id].c_conn && packet && cache && chunk) 
         {
-            
+            //fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
             if(packet->ndata > 0 && cache->ndata > 0 && chunk->ndata > 0)
             {
                 return hispider_data_handler(conn, packet, cache, chunk);
@@ -168,6 +176,7 @@ int hispider_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DAT
 
     if(conn && (c_id = conn->c_id) >= 0 && c_id < ntask)
     {
+        fprintf(stdout, "%s::%d OK chunk[%d]\n", __FILE__, __LINE__, packet->ndata);
         if(conn == tasklist[c_id].c_conn && packet && cache && chunk) 
         {
             if(packet->ndata > 0 && cache->ndata > 0 && chunk->ndata > 0)
@@ -192,19 +201,21 @@ int hispider_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DAT
 int hispider_trans_handler(CONN *conn, int tid)
 {
     char buf[HTTP_BUF_SIZE], *p = NULL;
+    int n = 0;
 
     if(conn && tid >= 0 && tid < ntask)
     {
         if(conn == tasklist[tid].c_conn)
         {
+            //fprintf(stdout, "%s::%d OK nrequest:%d\n", __FILE__, __LINE__, tasklist[tid].nrequest);
             conn->set_timeout(conn, HTTP_DOWNLOAD_TIMEOUT);
             conn->push_chunk(conn, tasklist[tid].request, tasklist[tid].nrequest);      
         }
         else if(conn == tasklist[tid].s_conn)
         {
-            p = buf;
-            p += sprintf(p, "TASK %d HTTP/1.0\r\n\r\n", -1);
-            conn->push_chunk(conn, buf, (p - buf));
+            n = sprintf(buf, "TASK %d HTTP/1.0\r\n\r\n", -1);
+            //fprintf(stdout, "%s::%d OK %s\n", __FILE__, __LINE__, buf);
+            conn->push_chunk(conn, buf, n);
         }
         return 0;
     }
@@ -214,17 +225,18 @@ int hispider_trans_handler(CONN *conn, int tid)
 /* data handler */
 int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
+    CONN *s_conn = NULL;
     HTTP_RESPONSE *http_resp = NULL;
-    char buf[HTTP_BUF_SIZE], *zdata = NULL;
-    int c_id = 0, n = 0, nzdata = 0, is_gzip = 0;
+    char buf[HTTP_BUF_SIZE], *zdata = NULL, *p = NULL;
+    int  ret = -1, c_id = 0, n = 0, nzdata = 0, is_gzip = 0;
 
     if(conn && (c_id = conn->c_id) >= 0 && c_id < ntask)
     {
-        if(chunk && chunk->data && chunk->ndata > 0)
+        if(conn == tasklist[c_id].c_conn && chunk && chunk->data && chunk->ndata > 0)
         {
             http_resp = (HTTP_RESPONSE *)cache->data;
-            if(http_resp->headers[HEAD_ENT_CONTENT_ENCODING] 
-                    && strncasecmp(http_resp->headers[HEAD_ENT_CONTENT_ENCODING], "gzip", 4) == 0)
+            if((p = http_resp->headers[HEAD_ENT_CONTENT_ENCODING]) 
+                    && strncasecmp(p, "gzip", 4) == 0)
             {
                 zdata = chunk->data;
                 nzdata = chunk->ndata;
@@ -234,25 +246,45 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
             {
                 nzdata = chunk->ndata + Z_HEADER_SIZE;
                 if((zdata = (char *)calloc(1, nzdata)))
+                {
                     zcompress((Bytef *)chunk->data, chunk->ndata, 
-                            (Bytef *)zdata, (uLong * )&(nzdata));
+                    (Bytef *)zdata, (uLong * )&(nzdata));
+                }
             }
             if(nzdata > 0)
             {
-                n = sprintf(buf, "TASK %ld HTTP/1.0\r\nLast-Modified: %s\r\n"
+                if(http_resp->headers[HEAD_ENT_LAST_MODIFIED])
+                {
+                    n = sprintf(buf, "TASK %ld HTTP/1.0\r\nLast-Modified: %s\r\n"
                         "Content-Length: %d\r\n\r\n",tasklist[c_id].taskid,
                         http_resp->headers[HEAD_ENT_LAST_MODIFIED], nzdata);
-                conn->push_chunk(conn, buf, n);
-                conn->push_chunk(conn, zdata, nzdata);
-                if(is_gzip == 0 && zdata) free(zdata); 
-                return 0;
+                }
+                else
+                {
+                     n = sprintf(buf, "TASK %ld HTTP/1.0\r\nContent-Length: %d\r\n\r\n",
+                             tasklist[c_id].taskid, nzdata);
+                }
+                if((s_conn = tasklist[c_id].s_conn))
+                {
+                    fprintf(stdout, "Over task[%ld]\n", tasklist[c_id].taskid);
+                    s_conn->push_chunk(s_conn, buf, n);
+                    s_conn->push_chunk(s_conn, zdata, nzdata);
+                    if(is_gzip == 0 && zdata) free(zdata); 
+                    tasklist[c_id].taskid = -1;
+                    tasklist[c_id].c_conn = NULL;
+                }
+                ret = 0;
+                goto end;
             }
             else goto err_end;
         }
 err_end:
         http_download_error(c_id);
+end:    
+        conn->over_cstate(conn);
+        conn->over(conn);
     }
-    return -1;
+    return ret;
 }
 
 int hispider_oob_handler(CONN *conn, CB_DATA *oob)
@@ -351,7 +383,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
     interval = iniparser_getint(dict, "HISPIDER:heartbeat_interval", SB_HEARTBEAT_INTERVAL);
     service->set_heartbeat(service, interval, &cb_heartbeat_handler, service);
     /* server */
-    ntask = iniparser_getint(dict, "HISPIDER:ntask", 128);
+    ntask = iniparser_getint(dict, "HISPIDER:ntask", 64);
     if(ntask <= 0)
     {
         fprintf(stderr, "[ntask] is invalid...\n");
