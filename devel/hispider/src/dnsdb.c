@@ -38,10 +38,10 @@ int dnsdb_update(DNSDB *dnsdb, int no, char *domain, int ip)
     DNS dns = {0};
     off_t offset = 0;
 
-    if(dnsdb && no > 0 && no <= dnsdb->total)
+    if(dnsdb && no >= 0 && no <= dnsdb->total)
     {
         MUTEX_LOCK(dnsdb->mutex);
-        offset = (no-1) * sizeof(DNS);
+        offset = no * sizeof(DNS);
         if(iwrite(dnsdb->dns_fd, &ip, sizeof(int), offset) > 0)
         {
             dp = (void *)((long)ip);
@@ -102,7 +102,7 @@ int dnsdb_resolve(DNSDB *dnsdb, char *domain)
                 if(iappend(dnsdb->domain_fd, buf, n, &offset) > 0)
                 {
                     dns.offset = offset;
-                    dns.length = n;
+                    dns.length = n - 1;
                     iappend(dnsdb->dns_fd, &dns, sizeof(DNS), &offset);
                     id = -1;
                     dp = (void *)&id;
@@ -132,16 +132,18 @@ int dnsdb_get_task(DNSDB *dnsdb, char *domain)
             dns.ip = -1;
             do
             {
-                offset = sizeof(DNS) * dnsdb->current++;
-                if(iread(dnsdb->dns_fd, &dns, sizeof(DNS), offset) > 0 && dns.ip == 0)
+                offset = sizeof(DNS) * dnsdb->current;
+                if(iread(dnsdb->dns_fd, &dns, sizeof(DNS), offset) > 0)
                 {
-                    if(iread(dnsdb->domain_fd, domain, dns.length, dns.offset) > 0)
+                    taskid = dnsdb->current++;
+                    if(dns.ip == 0 && iread(dnsdb->domain_fd, domain, dns.length, dns.offset) > 0)
                     {
-                        taskid = dnsdb->current - 1;
                         domain[dns.length] = '\0';
                         break;
                     }
+                    else taskid = -1;
                 }
+                else break;
             }while(dns.ip != 0);
         }
         MUTEX_UNLOCK(dnsdb->mutex);
@@ -182,20 +184,24 @@ int dnsdb_resume(DNSDB *dnsdb)
     {
         if(fstat(dnsdb->domain_fd, &st) == 0 && (domain_list = calloc(1, st.st_size)))         
         {
-            read(dnsdb->domain_fd, domain_list, st.st_size);
-            domain_list_end = domain_list + st.st_size;
+            if(read(dnsdb->domain_fd, domain_list, st.st_size)  > 0)
+            {
+                domain_list_end = domain_list + st.st_size;
+            }
         }
         if(fstat(dnsdb->dns_fd, &st) == 0 && (dns_list = calloc(1, st.st_size)))         
         {
-            read(dnsdb->dns_fd, dns_list, st.st_size);
-            dns_list_end = dns_list + st.st_size;
+            if(read(dnsdb->dns_fd, dns_list, st.st_size) > 0)
+            {
+                dns = dns_list;
+                dns_list_end = dns_list + st.st_size;
+            }
         }
-        dns = dns_list;
         while(dns < dns_list_end)
         {
             if(dns->ip == 0) 
             {
-                dp = (void *)-1;
+                dp = (void *)((long)-1);
             }
             else 
             {
@@ -208,7 +214,7 @@ int dnsdb_resume(DNSDB *dnsdb)
                 TRIETAB_RADD(dnsdb->table, domain, dns->length, dp);
             }
             dnsdb->total++;
-            dns++;
+            dns += sizeof(DNS);
         }
         if(domain_list) free(domain_list);
         if(dns_list) free(dns_list);

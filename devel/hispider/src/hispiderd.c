@@ -30,9 +30,6 @@ static DNSTASK tasklist[DNS_TASK_MAX];
 /* dns packet reader */
 int adns_packet_reader(CONN *conn, CB_DATA *buffer)
 {
-    int n = 0, tid = 0;
-    char *buf = NULL;
-
     if(conn && buffer->ndata > 0 && buffer->data)
     {
         return buffer->ndata;
@@ -43,8 +40,9 @@ int adns_packet_reader(CONN *conn, CB_DATA *buffer)
 /* dns packet handler */
 int adns_packet_handler(CONN *conn, CB_DATA *packet)
 {
-    int tid = 0, i = 0, ip = 0;
+    int tid = 0, ip = 0;
     HOSTENT hostent = {0};
+    unsigned char *p = NULL;
 
     if(conn && (tid = conn->c_id) >= 0 && tid < DNS_TASK_MAX 
             && tasklist[tid].conn == conn && packet->ndata > 0 && packet->data)
@@ -53,6 +51,9 @@ int adns_packet_handler(CONN *conn, CB_DATA *packet)
                 && hostent.naddrs > 0)
         {
             ip = hostent.addrs[0];
+            p = (unsigned char *)&ip;
+            fprintf(stdout, "%d:Got hostname[%s]'s ip[%d:%d:%d:%d]\n", 
+                    __LINE__, tasklist[tid].host, p[0], p[1], p[2], p[3]);
             ltable->dnsdb->update(ltable->dnsdb, tasklist[tid].id, tasklist[tid].host, ip);
         }
         tasklist[tid].conn->c_id = tid;
@@ -104,17 +105,20 @@ int adns_trans_handler(CONN *conn, int tid)
 
     if(conn && tid >= 0 && tid < DNS_TASK_MAX && tasklist[tid].conn == conn)
     {
+        memset(tasklist[tid].host, 0, DNS_NAME_MAX);
         if((tasklist[tid].id = ltable->dnsdb->get_task(ltable->dnsdb, tasklist[tid].host)) >= 0)
         {
-            n = evdns_make_query(tasklist[tid].host, 1, 1, 
-                    (tasklist[tid].id % 65536), 1, (unsigned char *)buf); 
+            taskid = (tasklist[tid].id % 65536);
+            n = evdns_make_query(tasklist[tid].host, 1, 1, taskid, 1, (unsigned char *)buf); 
             conn->c_id = tid;
             conn->start_cstate(conn);
             conn->set_timeout(conn, EVDNS_TIMEOUT);
+            //fprintf(stdout, "%d::trans:%d taskid:[%d][%d]\n", __LINE__, tid, taskid, n);
             return conn->push_chunk(conn, buf, n);
         }
         else
         {
+            //fprintf(stdout, "%d::newtrans:%d\n", __LINE__, tid);
             tasklist[tid].conn->c_id = tid;
             adnservice->newtransaction(adnservice, tasklist[tid].conn, tid);
         }
@@ -135,8 +139,8 @@ void adns_heartbeat_handler(void *arg)
             QUEUE_POP(dnsqueue, int, &id);
             if(id >= 0 && id < DNS_TASK_MAX)
             {
-                if((tasklist[id].conn = adnservice->newconn(adnservice,
-                                -1, -1, tasklist[id].nameserver, DNS_DEFAULT_PORT, NULL)))
+                if((tasklist[id].conn = adnservice->newconn(adnservice, -1, 
+                    SOCK_DGRAM, tasklist[id].nameserver, DNS_DEFAULT_PORT, NULL)))
                 {
                     tasklist[id].conn->c_id = id;
                     adnservice->newtransaction(adnservice, tasklist[id].conn, id);
@@ -149,6 +153,11 @@ void adns_heartbeat_handler(void *arg)
 /* hispiderd packet reader */
 int hispiderd_packet_reader(CONN *conn, CB_DATA *buffer)
 {
+    if(conn)
+    {
+        return 0;
+    }
+    return -1;
 }
 
 /* packet handler */
@@ -207,7 +216,7 @@ err_end:
 int hispiderd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
     HTTP_REQ *http_req = NULL;
-    int taskid = 0, n = 0;
+    int taskid = 0;
 
     if(conn && packet && cache && chunk)
     {
@@ -222,13 +231,18 @@ int hispiderd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA 
 
 int hispiderd_oob_handler(CONN *conn, CB_DATA *oob)
 {
+    if(conn)
+    {
+        return 0;
+    }
+    return -1;
 }
 
 /* Initialize from ini file */
 int sbase_initialize(SBASE *sbase, char *conf)
 {
-    char *logfile = NULL, *s = NULL, *p = NULL, *basedir = NULL, *host = NULL, *path = NULL;
-    int i = 0, n = 0, interval = 0;
+    char *s = NULL, *p = NULL, *basedir = NULL, *host = NULL, *path = NULL;
+    int i = 0, interval = 0;
 
     if((dict = iniparser_new(conf)) == NULL)
     {
@@ -286,10 +300,11 @@ int sbase_initialize(SBASE *sbase, char *conf)
     {
         basedir = iniparser_getstr(dict, "HISPIDERD:basedir");
         ltable->set_basedir(ltable, basedir);
+        ltable->resume(ltable);
         host = iniparser_getstr(dict, "HISPIDERD:host");
         path = iniparser_getstr(dict, "HISPIDERD:path");
+        path = iniparser_getstr(dict, "HISPIDERD:path");
         ltable->addurl(ltable, host, path);
-        ltable->resume(ltable);
     }
     /* dns service */
     if((adnservice = service_init()) == NULL)
@@ -304,7 +319,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
     adnservice->service_name = iniparser_getstr(dict, "ADNS:service_name");
     adnservice->nprocthreads = iniparser_getint(dict, "ADNS:nprocthreads", 1);
     adnservice->ndaemons = iniparser_getint(dict, "ADNS:ndaemons", 0);
-    adnservice->set_log(service, iniparser_getstr(dict, "ADNS:logfile"));
+    adnservice->set_log(adnservice, iniparser_getstr(dict, "ADNS:logfile"));
     adnservice->session.packet_type = iniparser_getint(dict, "ADNS:packet_type", PACKET_CUSTOMIZED);
     adnservice->session.buffer_size = iniparser_getint(dict, "ADNS:buffer_size", SB_BUF_SIZE);
     adnservice->session.packet_reader = &adns_packet_reader;
@@ -319,10 +334,10 @@ int sbase_initialize(SBASE *sbase, char *conf)
     i = 0;
     while(*p != '\0' && i < DNS_TASK_MAX)
     {
-        memset(&(tasklist[i]), 0, sizeof(DNS_TASK_MAX));
-        while(*p != '\0' && (*p < '0' || *p > '5'))++p;     
+        memset(&(tasklist[i]), 0, sizeof(DNSTASK));
+        while(*p != '\0' && (*p < '0' || *p > '9'))++p;
         s = tasklist[i].nameserver;
-        while(*p != '\0' && ((*p >= '0' && *p <= '5') || *p == '.')) *s++ = *p++;
+        while(*p != '\0' && ((*p >= '0' && *p <= '9') || *p == '.')) *s++ = *p++;
         if(s > tasklist[i].nameserver)
         {
             QUEUE_PUSH(dnsqueue, int, &i);
@@ -400,4 +415,5 @@ int main(int argc, char **argv)
     sbase->stop(sbase);
     sbase->clean(&sbase);
     if(dict)iniparser_free(dict);
+    return 0;
 }

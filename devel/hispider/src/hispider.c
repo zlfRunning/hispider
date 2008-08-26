@@ -49,12 +49,16 @@ int http_download_error(int c_id)
 
 int hispider_packet_reader(CONN *conn, CB_DATA *buffer)
 {
-
+    if(conn)
+    {
+        return 0;
+    }
+    return -1;
 }
 
 int hispider_packet_handler(CONN *conn, CB_DATA *packet)
 {
-    char *p = NULL, *end = NULL, buf[HTTP_BUF_SIZE], *ip = NULL, *host = NULL, *path = NULL;
+    char *p = NULL, *end = NULL, *ip = NULL, *host = NULL, *path = NULL;
     HTTP_RESPONSE http_resp = {0};
     long taskid = 0, n = 0;
     int c_id = 0, port = 0;
@@ -188,7 +192,6 @@ int hispider_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DAT
 int hispider_trans_handler(CONN *conn, int tid)
 {
     char buf[HTTP_BUF_SIZE], *p = NULL;
-    int n = 0;
 
     if(conn && tid >= 0 && tid < ntask)
     {
@@ -200,7 +203,7 @@ int hispider_trans_handler(CONN *conn, int tid)
         else if(conn == tasklist[tid].s_conn)
         {
             p = buf;
-            p += sprintf(p, "TASK %ld HTTP/1.0\r\n\r\n", -1);
+            p += sprintf(p, "TASK %d HTTP/1.0\r\n\r\n", -1);
             conn->push_chunk(conn, buf, (p - buf));
         }
         return 0;
@@ -237,13 +240,14 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
             if(nzdata > 0)
             {
                 n = sprintf(buf, "TASK %ld HTTP/1.0\r\nLast-Modified: %s\r\n"
-                        "Content-Length: %ld\r\n\r\n",tasklist[c_id].taskid,
+                        "Content-Length: %d\r\n\r\n",tasklist[c_id].taskid,
                         http_resp->headers[HEAD_ENT_LAST_MODIFIED], nzdata);
                 conn->push_chunk(conn, buf, n);
                 conn->push_chunk(conn, zdata, nzdata);
                 if(is_gzip == 0 && zdata) free(zdata); 
                 return 0;
             }
+            else goto err_end;
         }
 err_end:
         http_download_error(c_id);
@@ -253,6 +257,11 @@ err_end:
 
 int hispider_oob_handler(CONN *conn, CB_DATA *oob)
 {
+    if(conn)
+    {
+        return 0;
+    }
+    return -1;
 }
 
 /* heartbeat */
@@ -282,8 +291,8 @@ void cb_heartbeat_handler(void *arg)
 /* Initialize from ini file */
 int sbase_initialize(SBASE *sbase, char *conf)
 {
-    char *logfile = NULL, *s = NULL, *p = NULL;
-    int n = 0, i = 0, interval = 0;
+    char *s = NULL, *p = NULL;
+    int i = 0, interval = 0;
     if((dict = iniparser_new(conf)) == NULL)
     {
         fprintf(stderr, "Initializing conf:%s failed, %s\n", conf, strerror(errno));
@@ -423,4 +432,5 @@ int main(int argc, char **argv)
     sbase->stop(sbase);
     sbase->clean(&sbase);
     if(dict)iniparser_free(dict);
+    return 0;
 }

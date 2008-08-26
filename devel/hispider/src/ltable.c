@@ -40,7 +40,7 @@ static const char *__html__body__  =
 int pmkdir(char *path, int mode)
 {
    char *p = NULL, fullpath[HTTP_PATH_MAX];
-   int n = 0, ret = 0, level = -1;
+   int ret = 0, level = -1;
    struct stat st;
 
    if(path)
@@ -112,11 +112,9 @@ int ltable_set_basedir(LTABLE *ltable, char *basedir)
 /* Parse HTML CODE for getting links */
 int ltable_parselink(LTABLE *ltable, char *host, char *path, char *content, char *end)
 {
-    char *p = NULL, *s = NULL;
+    char *p = NULL;
     char *link = NULL;
     int n = 0, pref = 0;
-    void *timer = NULL;
-    void *times = NULL;
     int count = 0;
 
     if(ltable && host && path && content && end)	
@@ -180,9 +178,8 @@ int ltable_addlink(LTABLE *ltable, unsigned char *host, unsigned char *path,
 {
     unsigned char lhost[HTTP_HOST_MAX];
     unsigned char lpath[HTTP_PATH_MAX];
-    int n = 0, isneedencode = 0, isquery = 0;
     unsigned char *p = NULL, *ps = NULL, *last = NULL, *end = lpath + HTTP_PATH_MAX;
-    void *timer = NULL;
+    int n = 0;
 
     if(ltable && host && path && href && (ehref - href) > 0 && (ehref - href) < HTTP_PATH_MAX)
     {
@@ -213,7 +210,7 @@ int ltable_addlink(LTABLE *ltable, unsigned char *host, unsigned char *path,
         {
             //delete file:// mail:// ftp:// news:// rss:// eg. 
             p = href;
-            while(p < ehref && (*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z')) p++;
+            while(p < ehref && ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z'))) p++;
             if(p < (ehref - 3) && memcmp(p, "://", 3) == 0) return -1;
             strcpy((char *)lhost, (char *)host);
             p = path;
@@ -267,7 +264,6 @@ int ltable_addurl(LTABLE *ltable, char *host, char *path)
     off_t offset = 0;
     int ret = -1, n = 0;
     long id = 0;
-    void *timer = NULL;
 
     if(ltable)
     {
@@ -322,20 +318,12 @@ err_end:
     return ret;
 }
 
-int ltable_add_white_host(LTABLE *ltable, char *host)
-{
-}
-
-int ltable_add_black_host(LTABLE *ltable, char *host)
-{
-
-}
-
 /* resume ltable */
 int ltable_resume(LTABLE *ltable)
 {
     LMETA lmeta = {0};
     void *dp = NULL;
+    int flag = 0;
 
     if(ltable)
     {
@@ -343,16 +331,20 @@ int ltable_resume(LTABLE *ltable)
         ltable->dnsdb->resume(ltable->dnsdb);
         /* resume meta to urltable */
         lseek(ltable->meta_fd, 0, SEEK_SET);
+        //fprintf(stdout, "%d::%ld:%ld\n", __LINE__, ltable->url_current, ltable->url_total);
         while(read(ltable->meta_fd, &lmeta, sizeof(LMETA)) > 0)
         {
             dp = (void *)++(ltable->url_total);
             TRIETAB_ADD(ltable->urltable, lmeta.id, DOC_KEY_LEN, dp);
             //check status
-            if(lmeta.state == TASK_STATE_OK) ltable->url_ok++;
+            if(lmeta.state == TASK_STATE_INIT && flag == 0)
+            {
+                ltable->url_current  = ltable->url_total - 1;
+            }
+            else if(lmeta.state == TASK_STATE_OK) ltable->url_ok++;
             else if(lmeta.state == TASK_STATE_ERROR) ltable->url_error++;
-            else if(lmeta.state == TASK_STATE_INIT && ltable->url_current == 0)
-                ltable->url_current = ltable->url_total;
         }
+        //fprintf(stdout, "%d::%ld:%ld\n", __LINE__, ltable->url_current, ltable->url_total);
         return 0;
     }
     return -1;
@@ -363,19 +355,19 @@ int ltable_resume(LTABLE *ltable)
 int  ltable_get_task(LTABLE *ltable, char *block, long *nblock)
 {
     char url[HTTP_URL_MAX], *p = NULL, *ps = NULL, *path = NULL, ch = 0;
-    int taskid = -1, n = 0, ip = 0, port = 0;
+    unsigned char *sip = NULL;
+    int taskid = -1, ip = 0, port = 0;
     off_t offset = 0;
     LMETA lmeta = {0};
-    char buf[HTTP_BUF_SIZE];
 
     if(ltable)
     {
         MUTEX_LOCK(ltable->mutex);
-        if(ltable->url_total > 0 && ltable->url_total >= ltable->url_current)
+        if(ltable->url_total > 0 && ltable->url_total > ltable->url_current)
         {
             do
             {
-                offset = (ltable->url_current - 1) * sizeof(LMETA);
+                offset = (ltable->url_current) * sizeof(LMETA);
                 if(iread(ltable->meta_fd, &lmeta, sizeof(LMETA), offset) > 0)
                 {
                     ltable->url_current++;
@@ -385,7 +377,6 @@ int  ltable_get_task(LTABLE *ltable, char *block, long *nblock)
                         {
                             url[lmeta.nurl] = '\0';
                             p = ps = url + strlen("http://");
-                            p = url;
                             while(*p != '\0' && *p != ':' && *p != '/')++p;
                             ch = *p;
                             *p = '\0';
@@ -402,14 +393,19 @@ int  ltable_get_task(LTABLE *ltable, char *block, long *nblock)
                                 while(*p != '\0' && *p != '/')++p;
                                 path = (p+1);
                             }
+                            sip = (unsigned char *)&ip;
                             taskid = ltable->url_current - 1;
-                            *nblock = sprintf(block, "%s\r\nFrom: %ld\r\nLocation: /%s\r\n"
-                                    "Host: %s\r\nServer: %s\r\nReferer:%d\r\n\r\n", 
-                                    HTTP_RESP_OK, taskid, path, ps, inet_ntoa(ip), port);
+                            *nblock = sprintf(block, "%s\r\nFrom: %d\r\nLocation: /%s\r\n"
+                                    "Host: %s\r\nServer: %d.%d.%d.%d\r\nReferer:%d\r\n\r\n", 
+                                    HTTP_RESP_OK, taskid, path, ps, 
+                                    sip[0], sip[1], sip[2], sip[3], port);
+                            /*
+                            fprintf(stdout, "%d::OK taskid:%d current:%d total:%d\n", 
+                                    __LINE__, taskid, ltable->url_current, ltable->url_total);
+                            */
                         }
                         else 
                         {
-                            ltable->url_current--;
                             goto err_end;
                         }
                     }

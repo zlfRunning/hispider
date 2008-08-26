@@ -72,7 +72,7 @@ do{                                                                             
     }                                                                               \
 }while(0)
 #define LOGGER_ADD(ptr, __level__, format...)                                       \
-do{                                                                                   \
+do{                                                                                 \
     if(ptr)                                                                         \
     {                                                                               \
     MUTEX_LOCK(PL(ptr)->mutex);                                                     \
@@ -82,8 +82,8 @@ do{                                                                             
     PLPS(ptr) += sprintf(PLPS(ptr), "[%02d/%s/%04d:%02d:%02d:%02d +%06u] "          \
             "[%u/%08x] #%s::%d# %s:", PLP(ptr)->tm_mday, ymonths[PLP(ptr)->tm_mon], \
             (1900+PLP(ptr)->tm_year), PLP(ptr)->tm_hour, PLP(ptr)->tm_min,          \
-            PLP(ptr)->tm_sec, (size_t)(PLTV(ptr).tv_usec), (size_t)getpid(),        \
-            THREADID(), __FILE__, __LINE__, _logger_level_s[__level__]);            \
+        PLP(ptr)->tm_sec, (unsigned int)(PLTV(ptr).tv_usec),(unsigned int)getpid(), \
+        (unsigned int)THREADID(), __FILE__, __LINE__, _logger_level_s[__level__]);  \
     PLPS(ptr) += sprintf(PLPS(ptr), format);                                        \
     *PLPS(ptr)++ = '\n';                                                            \
     write(PLFD(ptr), PLB(ptr), (PLPS(ptr) - PLB(ptr)));                             \
