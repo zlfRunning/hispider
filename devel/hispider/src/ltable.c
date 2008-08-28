@@ -27,8 +27,8 @@ static const char *__html__body__  =
 "<tr><td align=left ><li><font color=red size=72 >URL ERROR:%d </font></li></td></tr>\n"
 "<tr><td align=left ><li><font color=red size=72 >Doc Size:%lld </font></li></td></tr>\n"
 "<tr><td align=left ><li><font color=red size=72 >Doc Zsize:%lld </font></li></td></tr>\n"
-"<tr><td align=left ><li><font color=red size=72 >DNS count:%d </font></li></td></tr>\n"
-"<tr><td align=left ><li><font color=red size=72 >Time Used:%lld (usec)</font></li></td></tr>\n"
+"<tr><td align=left ><li><font color=red size=72 >DNS Count:%d/%d </font></li></td></tr>\n"
+"<tr><td align=left ><li><font color=red size=72 >Time Used: %d day(s) [%d:%02d:%02d +%06d]</font></li></td></tr>\n"
 "<tr><td align=left ><li><font color=red size=72 >Speed:%lld (k/s)</font></li></td></tr>\n"
 "</table><br><hr  noshade><em>\n"
 "<font color=white ><a href='http://code.google.com/p/hispider' >"
@@ -554,6 +554,8 @@ int ltable_resume(LTABLE *ltable)
             }
             else if(lmeta.state == TASK_STATE_OK) ltable->url_ok++;
             else if(lmeta.state == TASK_STATE_ERROR) ltable->url_error++;
+            ltable->doc_size += lmeta.ndata;
+            ltable->doc_zsize += lmeta.nzdata;
         }
         //fprintf(stdout, "%d::%ld:%ld\n", __LINE__, ltable->url_current, ltable->url_total);
         return 0;
@@ -646,13 +648,19 @@ n = sprintf(buf, "GET /%s HTTP/1.0\r\nHost: %s\r\nUser-Agent: %s\r\n"
 int ltable_get_stateinfo(LTABLE *ltable, char *block)
 {
     char buf[HTTP_BUF_SIZE];
-    int ret = -1, n = 0;
+    int ret = -1, n = 0, day = 0, hour = 0, min = 0, sec = 0, usec = 0;
 
     if(ltable)
     {
+        TIMER_SAMPLE(ltable->timer);
+        day  = (PT_SEC_U(ltable->timer) / 86400);
+        hour = ((PT_SEC_U(ltable->timer) % 86400) /360);
+        min  = ((PT_SEC_U(ltable->timer) % 360) / 60);
+        sec  = (PT_SEC_U(ltable->timer) % 60);
+        usec = (PT_USEC_U(ltable->timer) % 1000000ll);
         n = sprintf(buf, __html__body__, ltable->url_total, ltable->url_current, 
-                ltable->url_ok, ltable->url_error, ltable->doc_size, ltable->doc_size,
-                ltable->doc_zsize, ltable->dns_total);   
+                ltable->url_ok, ltable->url_error, ltable->doc_size, ltable->doc_zsize,
+                ltable->dns_ok, ltable->dns_total, day, hour, min, sec, usec);   
         ret = sprintf(block, "HTTP/1.0 200 OK \r\nContent-Type: text/html\r\n"
                                     "Content-Length: %d\r\n\r\n%s", n, buf);
     }
@@ -726,8 +734,12 @@ int ltable_add_document(LTABLE *ltable, int taskid, int date, char *content, int
                         //fprintf(stdout, "%s::%d OK offset:%lld\n", __FILE__,  __LINE__, offset);
                         lmeta.offset    = offset;
                         lmeta.length    = n;
+                        lmeta.nzdata    = ncontent;
+                        lmeta.ndata     = ndata;
                         lmeta.date      = date;
                         lmeta.state     = TASK_STATE_OK;
+                        ltable->doc_size += ndata;
+                        ltable->doc_zsize += ncontent;
                         iwrite(ltable->meta_fd, &lmeta, sizeof(LMETA), taskid * sizeof(LMETA));
                         ret = 0;
                         ltable->url_ok++;
@@ -755,6 +767,10 @@ void ltable_clean(LTABLE **pltable)
         {
             MUTEX_DESTROY((*pltable)->mutex);
         }
+        if((*pltable)->timer)
+        {
+            TIMER_CLEAN((*pltable)->timer);
+        }
         if((*pltable)->isinsidelogger)
         {
             LOGGER_CLEAN((*pltable)->logger);
@@ -772,6 +788,7 @@ LTABLE *ltable_init()
     if((ltable = calloc(1, sizeof(LTABLE))))
     {
         MUTEX_INIT(ltable->mutex);
+        TIMER_INIT(ltable->timer);
         ltable->urltable        = TRIETAB_INIT();
         ltable->dnstable        = TRIETAB_INIT();
         ltable->set_basedir     = ltable_set_basedir;

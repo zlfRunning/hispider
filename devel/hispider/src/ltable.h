@@ -46,6 +46,8 @@ typedef struct _LMETA
     int date;
     off_t offset;
     int length;
+    int nzdata;
+    int ndata;
     off_t offurl;
     int nurl;
     unsigned char id[DOC_KEY_LEN];
@@ -85,6 +87,8 @@ typedef struct _LTABLE
     long url_error;
     LLong doc_size;
     LLong doc_zsize;
+    void *timer;
+    LLong time_usec;
 
     /* DNS */
     //char last_host[DNS_NAME_MAX];
