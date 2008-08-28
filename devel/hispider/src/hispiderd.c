@@ -356,7 +356,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
         ltable->set_basedir(ltable, basedir);
         ltable->resume(ltable);
         LOGGER_INIT(logger, iniparser_getstr(dict, "HISPIDERD:access_log"));
-        //ltable->set_logger(ltable, NULL, logger);
+        ltable->set_logger(ltable, NULL, logger);
         host = iniparser_getstr(dict, "HISPIDERD:host");
         path = iniparser_getstr(dict, "HISPIDERD:path");
         path = iniparser_getstr(dict, "HISPIDERD:path");

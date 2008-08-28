@@ -157,7 +157,7 @@ int ltable_parselink(LTABLE *ltable, char *host, char *path, char *content, char
                     url[n] = '\0';
                     ltable->addlink(ltable, (unsigned char *)host, (unsigned char *)path, 
                             (unsigned char *)url, (unsigned char *)ps);
-                    DEBUG_LOGGER(ltable->logger, "NEWURL[%s] from http://%s%s", url, host, path);
+                    //DEBUG_LOGGER(ltable->logger, "NEWURL[%s] from http://%s%s", url, host, path);
                     count++;
                 }
                 //}
@@ -703,15 +703,15 @@ int ltable_add_document(LTABLE *ltable, int taskid, int date, char *content, int
                 while(*p != '\0' && *p != '/') *ps++ = *p++;
                 *ps = '\0'; 
                 path = p;
-                ndata = ncontent * 20;
+                ndata = ncontent * 40;
                 //fprintf(stdout, "%s::%d OK %d:%d\n", __FILE__,  __LINE__, ncontent, ndata);
                 if((data = calloc(1, ndata)))
                 {
                     if(zdecompress((Bytef *)content, (uLong)ncontent, 
                             (Bytef *)data, (uLong *)&ndata) != 0) 
                     {
-                        fprintf(stderr, "%s::%d decompress failed, %s\n", 
-                                __FILE__,  __LINE__, strerror(errno));
+                        ERROR_LOGGER(ltable->logger, "decompress task[%d] nzdata[%d] failed, %s", 
+                                taskid, ncontent, strerror(errno));
                         goto over;
                     }
                     //fprintf(stdout, "%s::%d OK \n", __FILE__,  __LINE__);
