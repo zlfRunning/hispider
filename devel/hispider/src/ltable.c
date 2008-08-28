@@ -190,13 +190,14 @@ int ltable_addlink(LTABLE *ltable, unsigned char *host, unsigned char *path,
         {
             ps = host;
             pp = href;
-            DEBUG_LOGGER(ltable->logger, "URL-0:http://%s %s ", ps, pp);
+            DEBUG_LOGGER(ltable->logger, "URL-0:http://%s|%s", ps, pp);
         }
         else if(*p == '.')
         {
             //n = sprintf(url, "http://%s/%s", host, path);
             ps = path;
             pp = tmp;
+            *pp++ = '/';
             while(*ps != '\0')
             {
                 if(*ps == '/') last = pp;
@@ -215,16 +216,17 @@ int ltable_addlink(LTABLE *ltable, unsigned char *host, unsigned char *path,
             while(*p != '\0') *pp++ = *p++;
             *pp = '\0';
             ps = host;
-            pp = tmp;
-            DEBUG_LOGGER(ltable->logger, "URL-1:http://%s %s ", ps, pp);
+            if(tmp[0] == '/' && tmp[1] == '/') pp = tmp+1;
+            DEBUG_LOGGER(ltable->logger, "URL-1:http://%s|%s", ps, pp);
         }
         else if((p < (ehref - 7)) && strncasecmp((char *)p, "http://", 7) == 0)
         {
             ps = p + 7;
             pp = ps;
             n = HTTP_HOST_MAX;
-            while(pp < ehref && *pp != '/')++pp; 
-            DEBUG_LOGGER(ltable->logger, "URL-2:http://%s %s ", ps, pp);
+            while(pp < ehref && *pp != '/' && *pp != '?' && *pp != 0x20) ++pp; 
+            if(*pp == '?' || *pp == 0x20) return -1;
+            DEBUG_LOGGER(ltable->logger, "URL-2:http://%s|%s", ps, pp);
         }
         else
         {
@@ -249,7 +251,7 @@ int ltable_addlink(LTABLE *ltable, unsigned char *host, unsigned char *path,
             *pp = '\0';
             ps = host;
             pp = tmp;
-            DEBUG_LOGGER(ltable->logger, "URL-3:http://%s %s ", ps, pp);
+            DEBUG_LOGGER(ltable->logger, "URL-3:http://%s|%s", ps, pp);
         }
         if(ps && pp)
         {
@@ -389,18 +391,12 @@ int ltable_add_host(LTABLE *ltable, char *host)
         host[n] = '\n';
         if(dp == NULL && iappend(ltable->host_fd, host, n+1, &offset) > 0)
         {
-            imsync(ltable->hostmap, ltable->nhostmap);
-            ltable->nhostmap = offset + n + 1;
-            ltable->hostmap = immap(ltable->host_fd, ltable->hostmap, ltable->nhostmap, 0);
             dns.offset = offset;
             dns.length = n;
             if(iappend(ltable->dns_fd, &dns, sizeof(DNS), &offset) > 0)
             {
                 dp = (void *)((long)(( offset/ sizeof(DNS) ) + 1));
                 TRIETAB_RADD(ltable->dnstable, host, n, dp);
-                imsync(ltable->dnsmap, ltable->ndnsmap);
-                ltable->ndnsmap = offset + sizeof(DNS);
-                ltable->dnsmap = immap(ltable->dns_fd, ltable->dnsmap, ltable->ndnsmap, 0);
                 ltable->dns_total++;
             }
             ret = 0;
@@ -414,25 +410,22 @@ int ltable_add_host(LTABLE *ltable, char *host)
 /* new dns task */
 int ltable_new_dnstask(LTABLE *ltable, char *host)
 {
-    DNS *dns = NULL;
+    DNS dns = {0};
     int taskid  = -1;
-    char *p = NULL;
 
-    if(ltable && (dns = (DNS *)ltable->dnsmap) && ltable->hostmap 
-            && ltable->dns_current < ltable->dns_total)
+    if(ltable && ltable->dns_current < ltable->dns_total)
     {
         MUTEX_LOCK(ltable->mutex);
-        while(ltable->dns_current < ltable->dns_total && dns[ltable->dns_current].ip != 0)
-                ltable->dns_current++;
-        if(ltable->dns_current < ltable->dns_total 
-                && dns[ltable->dns_current].ip == 0)
+        while(iread(ltable->dns_fd, &dns, sizeof(DNS), ltable->dns_current * sizeof(DNS)) > 0)
         {
-            taskid = ltable->dns_current++; 
-            p = ltable->hostmap + dns[taskid].offset;
-            memcpy(host, p, dns[taskid].length);
-            host[dns[taskid].length] = '\0';
-            DEBUG_LOGGER(ltable->logger, "Ready for resolving name[%s] %d of %d", 
-                    host, taskid, ltable->dns_total);
+            ltable->dns_current++;
+            if(dns.ip == 0 && iread(ltable->host_fd, host, dns.length, dns.offset) > 0)
+            {
+                taskid = ltable->dns_current - 1;
+                host[dns.length] = '\0';
+                DEBUG_LOGGER(ltable->logger, "Ready for resolving name[%s] %d of %d", 
+                        host, taskid, ltable->dns_total);
+            }
         }
         MUTEX_UNLOCK(ltable->mutex);
     }
@@ -462,16 +455,12 @@ int ltable_set_dns(LTABLE *ltable, char *host, int ip)
         n = strlen(host);
         TRIETAB_RGET(ltable->dnstable, host, n, dp);
         id = ((long) dp - 1);
-        if(id >= 0 && id < ltable->dns_total
-                && ltable->dnsmap && (sizeof(DNS) * id) < ltable->ndnsmap)
+        if(id >= 0 && id < ltable->dns_total && iread(ltable->dns_fd, &n, 
+                    sizeof(int), id * sizeof(DNS)) > 0 && n == 0)
         {
-            if(((DNS *)ltable->dnsmap)[id].ip == 0)
-            {
-                ((DNS *)ltable->dnsmap)[id].ip = ip;
-                ltable->dns_ok++;
-            }
-            imsync(ltable->dnsmap, ltable->ndnsmap);
-            ret = 0;
+            ltable->dns_ok++;
+            DEBUG_LOGGER(ltable->logger, "Resolved name[%s]'s ip[%d]\n", host, ip);
+            ret = iwrite(ltable->dns_fd, &ip, sizeof(int), id * sizeof(DNS));
         }
         MUTEX_UNLOCK(ltable->mutex);
     }
@@ -490,10 +479,10 @@ int ltable_resolve(LTABLE *ltable, char *host)
     {
         n = strlen(host);
         TRIETAB_RGET(ltable->dnstable, host, n, dp);
-        if((id = (long)dp - 1) >= 0 && id < ltable->dns_current
-                && ltable->dnsmap && (sizeof(DNS) * id) < ltable->ndnsmap)
+        if((id = (long)dp - 1) >= 0 && id < ltable->dns_total)
         {
-            ip = ((DNS *)ltable->dnsmap)[id].ip;
+            iread(ltable->dns_fd, &ip, sizeof(int), id * sizeof(DNS));
+            if(ip == 0) ip = -1;
         }
     }
     return ip;
@@ -506,37 +495,49 @@ int ltable_resume(LTABLE *ltable)
     DNS *dns = NULL;
     void *dp = NULL;
     char *host = NULL;
-    int i = 0, flag = 0;
+    int i = 0, flag = 0, size = 0;
 
     if(ltable)
     {
         /* resume dns */
-        ltable->ndnsmap = ifsize(ltable->dns_fd);
-        ltable->dns_total = (ltable->ndnsmap/sizeof(DNS));
-        ltable->dnsmap = immap(ltable->dns_fd, ltable->dnsmap, ltable->ndnsmap, 0);
-        ltable->nhostmap = ifsize(ltable->host_fd);
-        ltable->hostmap = immap(ltable->host_fd, ltable->hostmap, ltable->nhostmap, 0);
-        dns = (DNS *)ltable->dnsmap;
-        for(i = 0; i < ltable->dns_total; i++)
+        if((size = ifsize(ltable->dns_fd)) > 0 && (dns = calloc(1, size)))
         {
-            if(dns[i].offset < ltable->nhostmap)
+            ltable->dns_total = (size/sizeof(DNS));
+            if(read(ltable->dns_fd, dns, size) > 0)
             {
-                host = (char *)ltable->hostmap + dns[i].offset;
-                dp = (void *)((long)(i+1));
-                TRIETAB_RADD(ltable->dnstable, host, dns[i].length, dp);
-            }
-            if(dns[i].ip == 0)
-            {
-                if(flag == 0)
+                if((size = ifsize(ltable->host_fd)) > 0 && (host = calloc(1, size)))
                 {
-                    ltable->dns_current = i;   
-                    flag = 1;
+                    if(read(ltable->host_fd, host, size) > 0)
+                    {
+                        for(i = 0; i < ltable->dns_total; i++)
+                        {
+                            if(dns[i].offset < size)
+                            {
+                                host = host + dns[i].offset;
+                                dp = (void *)((long)(i+1));
+                                TRIETAB_RADD(ltable->dnstable, host, dns[i].length, dp);
+                            }
+                            if(dns[i].ip == 0)
+                            {
+                                if(flag == 0)
+                                {
+                                    ltable->dns_current = i;   
+                                    flag = 1;
+                                }
+                            }
+                            else
+                            {
+                                ltable->dns_ok++;
+                            }
+                        }
+
+                    }
+                    free(host);
+                    host = NULL;
                 }
             }
-            else
-            {
-                ltable->dns_ok++;
-            }
+            free(dns);
+            dns = NULL;
         }
         flag = 0;
         /* resume meta to urltable */
@@ -573,12 +574,7 @@ int  ltable_get_task(LTABLE *ltable, char *block, int *nblock)
     if(ltable)
     {
         MUTEX_LOCK(ltable->mutex);
-        /*
-        if(ltable->is_wait_last_host && (ip = ltable->resolve(ltable, ltable->last_host)) == -1)
-        {
-            goto err_end;
-        }*/
-        if(ltable->url_total > 0 && ltable->url_total > ltable->url_current)
+        if(ltable->url_total > 0 && ltable->url_current < ltable->url_total)
         {
             do
             {
@@ -593,57 +589,50 @@ int  ltable_get_task(LTABLE *ltable, char *block, int *nblock)
                         {
                             //fprintf(stdout, "%s:%d OK\n", __FILE__, __LINE__);
                             url[lmeta.nurl] = '\0';
+                            DEBUG_LOGGER(ltable->logger, "TASK-URL:%s", url);
                             p = ps = url + strlen("http://");
                             while(*p != '\0' && *p != ':' && *p != '/')++p;
                             ch = *p;
                             *p = '\0';
-                            /*
-                            if(ip == -1) ip = ltable->resolve(ltable, ps);
-                            ltable->is_wait_last_host = 0;
-                            if(ip == 0) continue;
-                            else if(ip == -1) 
-                            {
-                                strcpy(ltable->last_host, ps);
-                                ltable->is_wait_last_host = 1;
-                                fprintf(stderr, "Invalid Host:%s ip:%d\n", ps, ip);
-                                ltable->url_current--;
-                                goto err_end;
-                            }*/
+                            ip = ltable->resolve(ltable, ps);
                             port = 80;
-                            if(ch == ':') port = atoi((p+1));
-                            if(ch == '/') path = (p+1);
-                            else 
+                            if(ch == ':') 
                             {
+                                port = atoi((p+1));
                                 while(*p != '\0' && *p != '/')++p;
                                 path = (p+1);
                             }
-                            //fprintf(stdout, "%s:%d OK\n", __FILE__, __LINE__);
+                            else if(ch == '/') path = (p+1);
                             sip = (unsigned char *)&ip;
                             taskid = ltable->url_current - 1;
                             *nblock = sprintf(block, "%s\r\nFrom: %d\r\nLocation: /%s\r\n"
                                     "Host: %s\r\nServer: %d.%d.%d.%d\r\nReferer:%d\r\n\r\n", 
                                     HTTP_RESP_OK, taskid, path, ps, 
                                     sip[0], sip[1], sip[2], sip[3], port);
-                            /*
-                            fprintf(stdout, "%s::%d host:%s [%u][%u]ip:%d.%d.%d.%d\n", 
-                                    __FILE__, __LINE__, ps, DNS_SELF_IP,
-                                    ip, sip[0], sip[1], sip[2], sip[3]);
-                            fprintf(stdout, "%d::OK taskid:%d current:%d total:%d\n", 
-                                    __LINE__, taskid, ltable->url_current, ltable->url_total);
-                            */
+                            DEBUG_LOGGER(ltable->logger, "New task[%d][%d.%d.%d.%d:%d] "
+                                    "http://%s/%s", taskid, sip[0], sip[1], sip[2], sip[3], 
+                                    port, ps, path);
+                            goto end;
                         }
                         else 
                         {
-                            goto err_end;
+                            ERROR_LOGGER(ltable->logger, "Reading url from  %lld failed, %s", 
+                                    lmeta.offurl, strerror(errno));
+                            goto end;
                         }
                     }
-                }else goto err_end;
+                }
+                else 
+                {
+                    ERROR_LOGGER(ltable->logger, "Reading meta from  %lld failed, %s", 
+                            offset, strerror(errno));
+                    goto end;
+                }
             }while(taskid == -1);
         }
-err_end:
+end:
         MUTEX_UNLOCK(ltable->mutex);
     }
-
     return taskid;
 }
 /*
@@ -770,8 +759,6 @@ void ltable_clean(LTABLE **pltable)
         {
             LOGGER_CLEAN((*pltable)->logger);
         }
-        imunmap((*pltable)->dnsmap, (*pltable)->ndnsmap);
-        imunmap((*pltable)->hostmap, (*pltable)->nhostmap);
         free(*pltable);
         (*pltable) = NULL;
     }

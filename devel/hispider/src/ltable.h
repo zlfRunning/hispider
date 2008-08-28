@@ -87,18 +87,15 @@ typedef struct _LTABLE
     LLong doc_zsize;
 
     /* DNS */
-    char last_host[DNS_NAME_MAX];
-    int is_wait_last_host;
-    int dns_current;
-    int dns_total;
-    int dns_ok;
+    //char last_host[DNS_NAME_MAX];
+    //int is_wait_last_host;
+    int host_fd;
+    int dns_fd;
     void *dnstable;
-    int  host_fd;
-    int  dns_fd;
-    int ndnsmap;
-    void *dnsmap;
-    int nhostmap;
-    void *hostmap;
+    int *ipmap;
+    int dns_current;
+    int dns_ok;
+    int dns_total;
 
     int     (*set_basedir)(struct _LTABLE *, char *basedir);
     int     (*set_logger)(struct _LTABLE *, char *logfile, void *logger);

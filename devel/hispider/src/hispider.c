@@ -32,6 +32,7 @@ static int ntask = 0;
 static char *server_ip = NULL;
 static int server_port = 0;
 static void *taskqueue = NULL;
+static void *logger = NULL;
 /* data handler */
 int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk);
 int hispider_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk);
@@ -182,7 +183,6 @@ int hispider_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA 
     {
         if(conn == tasklist[c_id].c_conn && packet && cache && chunk) 
         {
-            fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
             if(packet->ndata > 0 && cache->ndata > 0 && chunk->ndata > 0)
             {
                 return hispider_data_handler(conn, packet, cache, chunk);
@@ -429,6 +429,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
     {
         QUEUE_PUSH(taskqueue, int, &i);
     }
+    LOGGER_INIT(logger, iniparser_getstr(dict, "HISPIDER:access_log"));
     fprintf(stdout, "Parsing for server...\n");
     return sbase->add_service(sbase, service);
 }
