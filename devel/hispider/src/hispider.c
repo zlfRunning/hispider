@@ -132,7 +132,7 @@ int hispider_packet_handler(CONN *conn, CB_DATA *packet)
                 port = (http_resp.headers[HEAD_REQ_REFERER])
                     ? atoi(http_resp.headers[HEAD_REQ_REFERER]) : 0;
                 path = http_resp.headers[HEAD_RESP_LOCATION];
-                tasklist[c_id].taskid = http_resp.headers[HEAD_REQ_FROM]
+                taskid = tasklist[c_id].taskid = (http_resp.headers[HEAD_REQ_FROM])
                     ? atoi(http_resp.headers[HEAD_REQ_FROM]) : 0;
                 //fprintf(stdout, "%s::%d OK host:%s ip:%s port:%d path:%s taskid:%d \n", 
                 //        __FILE__, __LINE__, host, ip, port, path, taskid);
@@ -157,7 +157,6 @@ int hispider_packet_handler(CONN *conn, CB_DATA *packet)
                 }
                 if((tasklist[c_id].c_conn = service->newconn(service, -1, -1, ip, port, NULL)))
                 {
-                    tasklist[c_id].taskid = taskid;
                     tasklist[c_id].nrequest = sprintf(tasklist[c_id].request, 
                         "GET %s HTTP/1.0\r\nHost: %s\r\n"
                         "User-Agent: %s\r\nAccept: %s\r\nAccept-Language: %s\r\n"
