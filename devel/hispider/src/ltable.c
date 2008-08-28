@@ -654,8 +654,8 @@ int ltable_get_stateinfo(LTABLE *ltable, char *block)
     {
         TIMER_SAMPLE(ltable->timer);
         day  = (PT_SEC_U(ltable->timer) / 86400);
-        hour = ((PT_SEC_U(ltable->timer) % 86400) /360);
-        min  = ((PT_SEC_U(ltable->timer) % 360) / 60);
+        hour = ((PT_SEC_U(ltable->timer) % 86400) /3600);
+        min  = ((PT_SEC_U(ltable->timer) % 3600) / 60);
         sec  = (PT_SEC_U(ltable->timer) % 60);
         usec = (PT_USEC_U(ltable->timer) % 1000000ll);
         n = sprintf(buf, __html__body__, ltable->url_total, ltable->url_current, 
