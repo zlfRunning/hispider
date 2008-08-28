@@ -139,10 +139,11 @@ static const char *rcodes[] = {
 };
 #define EVDNS_TIMEOUT 10000000
 #define EVDNS_TIMEOUT_MAX 6
-#define DNS_NAME_MAX  256
 #define DNS_MAX_NUM   32
+#ifndef DNS_NAME_MAX
+#define DNS_NAME_MAX  128
+#endif
 #define DNS_DEFAULT_PORT 53
-#define DNS_IP_MAX    16
 typedef struct _HOSTENT
 {
     int qid;

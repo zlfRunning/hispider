@@ -13,7 +13,6 @@
 #include "logger.h"
 #include "timer.h"
 #include "http.h"
-#include "dnsdb.h"
 static const char *__html__body__  = 
 "<HTML><HEAD>\n"
 "<TITLE>Hispider Running Status</TITLE>\n"
@@ -103,7 +102,10 @@ int ltable_set_basedir(LTABLE *ltable, char *basedir)
         ltable->url_fd = iopen(path);
         sprintf(path, "%s/%s", basedir, LTABLE_DOC_NAME);
         ltable->doc_fd = iopen(path);
-        ltable->dnsdb->set_basedir(ltable->dnsdb, basedir);
+        sprintf(path, "%s/%s", basedir, DNS_HOST_NAME);
+        ltable->host_fd = iopen(path);
+        sprintf(path, "%s/%s", basedir, DNS_IP_NAME);
+        ltable->dns_fd = iopen(path);
         return 0;
     }
     return -1;
@@ -112,8 +114,7 @@ int ltable_set_basedir(LTABLE *ltable, char *basedir)
 /* Parse HTML CODE for getting links */
 int ltable_parselink(LTABLE *ltable, char *host, char *path, char *content, char *end)
 {
-    char *p = NULL;
-    char *link = NULL;
+    char url[HTTP_URL_MAX], *p = NULL, *link = NULL, *ps = NULL;
     int n = 0, pref = 0;
     int count = 0;
 
@@ -122,7 +123,7 @@ int ltable_parselink(LTABLE *ltable, char *host, char *path, char *content, char
         p = content;
         while(p < end)
         {
-            if(p < (end - 1) && *p == '<' && (*(p+1) == 'a' || *(p+1) == 'A'))
+            if(p < (end - 2) && *p == '<' && (*(p+1) == 'a' || *(p+1) == 'A') && *(p+2) == 0x20)
             {
                 p += 2;
                 pref = 0;
@@ -146,21 +147,18 @@ int ltable_parselink(LTABLE *ltable, char *host, char *path, char *content, char
                 //{
                 //DEBUG_LOGGER(ltable->logger, "%d %c\n", __LINE__, *p);
                 link = p;
-                if(pref){while(p < end && *p != '\'' && *p != '"')++p;}
-                else {while(p < end && *p != 0x20 && *p != 0x09 && *p != '>')++p;}
-                DEBUG_LOGGER(ltable->logger, "left:%d\n",(end - p));
-                //fprintf(stdout, "%s\n", p);
-                if((n = (p - link)) > 0)
+                ps = url;
+                if(pref && *link != '#' && strncasecmp("javascript", link, 10) != 0
+                    && strncasecmp("mailto:", link, 7) != 0)
                 {
-                    if(*link != '#' && strncasecmp("javascript", link, 10) != 0)
-                    {
-                        DEBUG_LOGGER(ltable->logger, 
-                                "Ready for adding URL from page[%s%s] %d", host, path, n);
-                        ltable->addlink(ltable, (unsigned char *)host, (unsigned char *)path, 
-                                (unsigned char *)link, (unsigned char *)p);
-                        count++;
-                        //fprintf(stdout, "%s\n", link);
-                    }
+                    while(p < end && *p != '\'' && *p != '"' 
+                            && (ps - url) < HTTP_URL_MAX) *ps++ = *p++;
+                    if((n = (ps - url)) >= HTTP_URL_MAX) continue;
+                    url[n] = '\0';
+                    ltable->addlink(ltable, (unsigned char *)host, (unsigned char *)path, 
+                            (unsigned char *)url, (unsigned char *)ps);
+                    DEBUG_LOGGER(ltable->logger, "NEWURL[%s] from http://%s%s", url, host, path);
+                    count++;
                 }
                 //}
             }
@@ -176,74 +174,123 @@ int ltable_parselink(LTABLE *ltable, char *host, char *path, char *content, char
 int ltable_addlink(LTABLE *ltable, unsigned char *host, unsigned char *path, 
         unsigned char *href, unsigned char *ehref)
 {
-    unsigned char lhost[HTTP_HOST_MAX];
-    unsigned char lpath[HTTP_PATH_MAX];
-    unsigned char *p = NULL, *ps = NULL, *last = NULL, *end = lpath + HTTP_PATH_MAX;
+    unsigned char lhost[HTTP_HOST_MAX], lpath[HTTP_PATH_MAX], tmp[HTTP_PATH_MAX];
+    unsigned char *p = NULL, *ps = NULL, *pp = NULL,
+        *last = NULL, *end = NULL;
     int n = 0;
 
     if(ltable && host && path && href && (ehref - href) > 0 && (ehref - href) < HTTP_PATH_MAX)
     {
         memset(lhost, 0, HTTP_HOST_MAX);
         memset(lpath, 0, HTTP_PATH_MAX);
+        memset(tmp, 0, HTTP_PATH_MAX);
         p = href;
         //DEBUG_LOGGER(ltable->logger, "addurl:http://%s%s ", lhost, lpath);
         if(*p == '/')
         {
-            strcpy((char *)lhost, (char *)host);
-            ps = lpath;
-            p = href;
+            ps = host;
+            pp = href;
+            DEBUG_LOGGER(ltable->logger, "URL-0:http://%s %s ", ps, pp);
+        }
+        else if(*p == '.')
+        {
+            //n = sprintf(url, "http://%s/%s", host, path);
+            ps = path;
+            pp = tmp;
+            while(*ps != '\0')
+            {
+                if(*ps == '/') last = pp;
+                *pp++ = *ps++;
+            }
+            pp = last;
+            if(*(p+1) == '/') p += 2;
+            while(*p == '.' && *(p+1) == '.' && *(p+2) == '/')
+            {
+                p += 3;
+                --pp;
+                while(pp > tmp && *pp != '/')--pp;
+                if(pp <= tmp) break;
+            }
+            if(*p == '.' || pp < tmp) return -1;
+            while(*p != '\0') *pp++ = *p++;
+            *pp = '\0';
+            ps = host;
+            pp = tmp;
+            DEBUG_LOGGER(ltable->logger, "URL-1:http://%s %s ", ps, pp);
         }
         else if((p < (ehref - 7)) && strncasecmp((char *)p, "http://", 7) == 0)
         {
-            ps = lhost;
-            p = href + 7;
+            ps = p + 7;
+            pp = ps;
             n = HTTP_HOST_MAX;
-            while(p < ehref && *p != '/') 
-            {
-                *ps++ = *p++; 
-                if(--n <= 0) return 0;
-            } 
-            *ps = '\0';
-            ps = lpath;
+            while(pp < ehref && *pp != '/')++pp; 
+            DEBUG_LOGGER(ltable->logger, "URL-2:http://%s %s ", ps, pp);
         }
         else
         {
             //delete file:// mail:// ftp:// news:// rss:// eg. 
             p = href;
             while(p < ehref && ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z'))) p++;
-            if(p < (ehref - 3) && memcmp(p, "://", 3) == 0) return -1;
-            strcpy((char *)lhost, (char *)host);
-            p = path;
-            ps = lpath;
-            n = HTTP_PATH_MAX;
-            while(p < ehref)
+            if(p < (ehref - 3) && *p == ':' && *(p+1) == '/' && *(p+2) == '/') return -1;
+            ps = path;
+            pp = tmp;
+            while(*ps != '\0')
             {
-                if(*p == '/') last = ps+1;
-                *ps++ = *p++;
-                if(--n <= 0) return 0;
+                if(*ps == '/') last = (pp+1);
+                *pp++ = *ps++;
             }
-            if(last) ps = last ;
-            p = href;
-            *ps = '\0';
+            pp = last;
+            end = tmp + HTTP_PATH_MAX;
+            while(p < ehref) 
+            {
+                *pp++ = *p++;
+                if(p > end) return -1;
+            }
+            *pp = '\0';
+            ps = host;
+            pp = tmp;
+            DEBUG_LOGGER(ltable->logger, "URL-3:http://%s %s ", ps, pp);
         }
-        //DEBUG_LOGGER(ltable->logger, "addurl:http://%s%s ", lhost, lpath);
-        if(p && ps)
+        if(ps && pp)
         {
-            while(p < ehref && ps < end)
+            p = lhost;
+            end = lhost + HTTP_HOST_MAX;
+            while(*ps != '\0' && *ps != '/')
             {
-                //while(p < ehref && (*p == '/' && *(p+1) == '/')) ++p;
-                if(*((unsigned char *)p) > 127 || *p == 0x20)
-                    ps += sprintf((char *)ps, "%%%02X", *p++);
-                else *ps++ = *p++;
+                if(*ps >= 'A' && *ps <= 'Z')
+                {
+                    *p++ = *ps++ - ('A' - 'a');
+                }
+                else
+                {
+                    *p++ = *ps++;
+                }
+                if(p >= end) return -1;
             }
-            *ps = '\0';
-            ps = lpath;
-            //auto complete home page / 
-            if(*ps == '\0') *ps = '/';
+            if(p > lhost && *(p-1) == '.') *(p-1) = '\0';
+            p = lpath;
+            end = lpath + HTTP_PATH_MAX;
+            while(*pp != '\0')
+            {
+                if(*pp >= 'A' && *pp <= 'Z')
+                {
+                    *p++ = *pp++ - ('A' - 'a');
+                }
+                else if(*pp > 127 || *pp == 0x20)
+                {
+                    p += sprintf((char *)p, "%%%02x", *pp++);
+                }
+                else
+                {
+                    *p++ = *pp++;
+                }
+                if(p >= end) return -1;
+            }
+            if(lpath[0] == '\0'){lpath[0] = '/';}
+            if(lhost[0] == '\0' || lpath[0] == '\0') return -1;
+            DEBUG_LOGGER(ltable->logger, "addurl:http://%s%s", lhost, lpath);
+            ltable->addurl(ltable, (char *)lhost, (char *)lpath);
         }
-        if(lhost[0] == '\0' || lpath[0] == '\0') return -1;
-        //DEBUG_LOGGER(ltable->logger, "addurl:http://%s%s ", lhost, lpath);
-        ltable->addurl(ltable, (char *)lhost, (char *)lpath);
         //DEBUG_LOGGER(ltable->logger, "addurl:http://%s%s ", lhost, lpath);
         //TIMER_INIT(timer);
         //TIMER_SAMPLE(timer);
@@ -259,7 +306,7 @@ int ltable_addurl(LTABLE *ltable, char *host, char *path)
 {
     char url[HTTP_URL_MAX];
     LMETA lmeta = {0};
-    char *p = NULL, *ps = NULL, *dot_off = NULL;
+    char *p = NULL, *ps = NULL, *dot_off = NULL, *newhost = NULL;
     void *dp = NULL;
     off_t offset = 0;
     int ret = -1, n = 0;
@@ -270,7 +317,7 @@ int ltable_addurl(LTABLE *ltable, char *host, char *path)
         //check dns
         p = host;
         while((*p >= '0' && *p <= '9') || (*p >= 'a' && *p <= 'z') 
-            || (*p >= 'A' && *p <= 'Z') || *p == '.' || *p == '-')
+                || (*p >= 'A' && *p <= 'Z') || *p == '.' || *p == '-')
         {
             if(*p == '.') dot_off = p;
             ++p;
@@ -314,29 +361,184 @@ int ltable_addurl(LTABLE *ltable, char *host, char *path)
             if((n = (p - ps)) > 0)
             {
                 *p = '\0';
-                //add host
-                ltable->dnsdb->resolve(ltable->dnsdb, ps);
+                newhost = ps;
             }
         }
 end:
         ret = 0;
 err_end:
         MUTEX_UNLOCK(ltable->mutex);
+        if(newhost) ltable->add_host(ltable, newhost);
     }
     return ret;
+}
+
+/* add host */
+int ltable_add_host(LTABLE *ltable, char *host)
+{
+    int n = 0, ret = -1;
+    void *dp = NULL;
+    DNS dns = {0};
+    off_t offset = 0;
+
+    if(ltable)
+    {
+        MUTEX_LOCK(ltable->mutex);
+        n = strlen(host);
+        TRIETAB_RGET(ltable->dnstable, host, n, dp);
+        host[n] = '\n';
+        if(dp == NULL && iappend(ltable->host_fd, host, n+1, &offset) > 0)
+        {
+            imsync(ltable->hostmap, ltable->nhostmap);
+            ltable->nhostmap = offset + n + 1;
+            ltable->hostmap = immap(ltable->host_fd, ltable->hostmap, ltable->nhostmap, 0);
+            dns.offset = offset;
+            dns.length = n;
+            if(iappend(ltable->dns_fd, &dns, sizeof(DNS), &offset) > 0)
+            {
+                dp = (void *)((long)(( offset/ sizeof(DNS) ) + 1));
+                TRIETAB_RADD(ltable->dnstable, host, n, dp);
+                imsync(ltable->dnsmap, ltable->ndnsmap);
+                ltable->ndnsmap = offset + sizeof(DNS);
+                ltable->dnsmap = immap(ltable->dns_fd, ltable->dnsmap, ltable->ndnsmap, 0);
+                ltable->dns_total++;
+            }
+            ret = 0;
+        }
+        host[n] = '\0';
+        MUTEX_UNLOCK(ltable->mutex);
+    }
+    return ret;
+}
+
+/* new dns task */
+int ltable_new_dnstask(LTABLE *ltable, char *host)
+{
+    DNS *dns = NULL;
+    int taskid  = -1;
+    char *p = NULL;
+
+    if(ltable && (dns = (DNS *)ltable->dnsmap) && ltable->hostmap 
+            && ltable->dns_current < ltable->dns_total)
+    {
+        MUTEX_LOCK(ltable->mutex);
+        while(ltable->dns_current < ltable->dns_total && dns[ltable->dns_current].ip != 0)
+                ltable->dns_current++;
+        if(ltable->dns_current < ltable->dns_total 
+                && dns[ltable->dns_current].ip == 0)
+        {
+            taskid = ltable->dns_current++; 
+            p = ltable->hostmap + dns[taskid].offset;
+            memcpy(host, p, dns[taskid].length);
+            host[dns[taskid].length] = '\0';
+            DEBUG_LOGGER(ltable->logger, "Ready for resolving name[%s] %d of %d", 
+                    host, taskid, ltable->dns_total);
+        }
+        MUTEX_UNLOCK(ltable->mutex);
+    }
+    return taskid;
+}
+
+/* set dns timeout */
+int ltable_set_state(LTABLE *ltable, int taskid, int state)
+{
+    if(ltable)
+    {
+        return 0;
+    }
+    return -1;
+}
+
+/* set dns */
+int ltable_set_dns(LTABLE *ltable, char *host, int ip)
+{
+    int n = 0, ret = -1;
+    void *dp = NULL;
+    long id = 0;
+
+    if(ltable)
+    {
+        MUTEX_LOCK(ltable->mutex);
+        n = strlen(host);
+        TRIETAB_RGET(ltable->dnstable, host, n, dp);
+        id = ((long) dp - 1);
+        if(id >= 0 && id < ltable->dns_total
+                && ltable->dnsmap && (sizeof(DNS) * id) < ltable->ndnsmap)
+        {
+            if(((DNS *)ltable->dnsmap)[id].ip == 0)
+            {
+                ((DNS *)ltable->dnsmap)[id].ip = ip;
+                ltable->dns_ok++;
+            }
+            imsync(ltable->dnsmap, ltable->ndnsmap);
+            ret = 0;
+        }
+        MUTEX_UNLOCK(ltable->mutex);
+    }
+    return ret;
+
+}
+
+/* resolve */
+int ltable_resolve(LTABLE *ltable, char *host)
+{
+    int n = 0, ip = -1;
+    void *dp = NULL;
+    long id = 0;
+
+    if(ltable)
+    {
+        n = strlen(host);
+        TRIETAB_RGET(ltable->dnstable, host, n, dp);
+        if((id = (long)dp - 1) >= 0 && id < ltable->dns_current
+                && ltable->dnsmap && (sizeof(DNS) * id) < ltable->ndnsmap)
+        {
+            ip = ((DNS *)ltable->dnsmap)[id].ip;
+        }
+    }
+    return ip;
 }
 
 /* resume ltable */
 int ltable_resume(LTABLE *ltable)
 {
     LMETA lmeta = {0};
+    DNS *dns = NULL;
     void *dp = NULL;
-    int flag = 0;
+    char *host = NULL;
+    int i = 0, flag = 0;
 
     if(ltable)
     {
-        /* resume dnsdb */
-        ltable->dnsdb->resume(ltable->dnsdb);
+        /* resume dns */
+        ltable->ndnsmap = ifsize(ltable->dns_fd);
+        ltable->dns_total = (ltable->ndnsmap/sizeof(DNS));
+        ltable->dnsmap = immap(ltable->dns_fd, ltable->dnsmap, ltable->ndnsmap, 0);
+        ltable->nhostmap = ifsize(ltable->host_fd);
+        ltable->hostmap = immap(ltable->host_fd, ltable->hostmap, ltable->nhostmap, 0);
+        dns = (DNS *)ltable->dnsmap;
+        for(i = 0; i < ltable->dns_total; i++)
+        {
+            if(dns[i].offset < ltable->nhostmap)
+            {
+                host = (char *)ltable->hostmap + dns[i].offset;
+                dp = (void *)((long)(i+1));
+                TRIETAB_RADD(ltable->dnstable, host, dns[i].length, dp);
+            }
+            if(dns[i].ip == 0)
+            {
+                if(flag == 0)
+                {
+                    ltable->dns_current = i;   
+                    flag = 1;
+                }
+            }
+            else
+            {
+                ltable->dns_ok++;
+            }
+        }
+        flag = 0;
         /* resume meta to urltable */
         lseek(ltable->meta_fd, 0, SEEK_SET);
         //fprintf(stdout, "%d::%ld:%ld\n", __LINE__, ltable->url_current, ltable->url_total);
@@ -360,17 +562,22 @@ int ltable_resume(LTABLE *ltable)
 
 
 /* get task (return task id) */
-int  ltable_get_task(LTABLE *ltable, char *block, long *nblock)
+int  ltable_get_task(LTABLE *ltable, char *block, int *nblock)
 {
     char url[HTTP_URL_MAX], *p = NULL, *ps = NULL, *path = NULL, ch = 0;
     unsigned char *sip = NULL;
-    int taskid = -1, ip = 0, port = 0;
+    int taskid = -1, ip = -1, port = 0;
     off_t offset = 0;
     LMETA lmeta = {0};
 
     if(ltable)
     {
         MUTEX_LOCK(ltable->mutex);
+        /*
+        if(ltable->is_wait_last_host && (ip = ltable->resolve(ltable, ltable->last_host)) == -1)
+        {
+            goto err_end;
+        }*/
         if(ltable->url_total > 0 && ltable->url_total > ltable->url_current)
         {
             do
@@ -390,14 +597,18 @@ int  ltable_get_task(LTABLE *ltable, char *block, long *nblock)
                             while(*p != '\0' && *p != ':' && *p != '/')++p;
                             ch = *p;
                             *p = '\0';
-                            ip = ltable->dnsdb->get(ltable->dnsdb, ps);
-                            if(ip == DNS_SELF_IP) continue;
+                            /*
+                            if(ip == -1) ip = ltable->resolve(ltable, ps);
+                            ltable->is_wait_last_host = 0;
+                            if(ip == 0) continue;
                             else if(ip == -1) 
                             {
+                                strcpy(ltable->last_host, ps);
+                                ltable->is_wait_last_host = 1;
                                 fprintf(stderr, "Invalid Host:%s ip:%d\n", ps, ip);
                                 ltable->url_current--;
                                 goto err_end;
-                            }
+                            }*/
                             port = 80;
                             if(ch == ':') port = atoi((p+1));
                             if(ch == '/') path = (p+1);
@@ -452,7 +663,7 @@ int ltable_get_stateinfo(LTABLE *ltable, char *block)
     {
         n = sprintf(buf, __html__body__, ltable->url_total, ltable->url_current, 
                 ltable->url_ok, ltable->url_error, ltable->doc_size, ltable->doc_size,
-                ltable->doc_zsize, ltable->dnsdb->total);   
+                ltable->doc_zsize, ltable->dns_total);   
         ret = sprintf(block, "HTTP/1.0 200 OK \r\nContent-Type: text/html\r\n"
                                     "Content-Length: %d\r\n\r\n%s", n, buf);
     }
@@ -550,6 +761,7 @@ void ltable_clean(LTABLE **pltable)
     if(pltable && *pltable)
     {
         TRIETAB_CLEAN((*pltable)->urltable);
+        TRIETAB_CLEAN((*pltable)->dnstable);
         if((*pltable)->mutex)
         {
             MUTEX_DESTROY((*pltable)->mutex);
@@ -558,10 +770,8 @@ void ltable_clean(LTABLE **pltable)
         {
             LOGGER_CLEAN((*pltable)->logger);
         }
-        if((*pltable)->dnsdb)
-        {
-            (*pltable)->dnsdb->clean(&((*pltable)->dnsdb));
-        }
+        imunmap((*pltable)->dnsmap, (*pltable)->ndnsmap);
+        imunmap((*pltable)->hostmap, (*pltable)->nhostmap);
         free(*pltable);
         (*pltable) = NULL;
     }
@@ -576,8 +786,9 @@ LTABLE *ltable_init()
     {
         MUTEX_INIT(ltable->mutex);
         ltable->urltable        = TRIETAB_INIT();
-        ltable->dnsdb           = dnsdb_init();
+        ltable->dnstable        = TRIETAB_INIT();
         ltable->set_basedir     = ltable_set_basedir;
+        ltable->set_logger      = ltable_set_logger;
         ltable->resume          = ltable_resume;
         ltable->parselink       = ltable_parselink;
         ltable->addlink         = ltable_addlink;
@@ -586,6 +797,10 @@ LTABLE *ltable_init()
         ltable->set_task_state  = ltable_set_task_state;
         ltable->get_stateinfo   = ltable_get_stateinfo;
         ltable->add_document    = ltable_add_document;
+        ltable->add_host        = ltable_add_host;
+        ltable->new_dnstask     = ltable_new_dnstask;
+        ltable->set_dns         = ltable_set_dns;
+        ltable->resolve         = ltable_resolve;
         ltable->clean           = ltable_clean;
     }
     return ltable;

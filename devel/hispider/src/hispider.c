@@ -3,6 +3,8 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sys/resource.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 #include <locale.h>
 #include <sbase.h>
 #include "http.h"
@@ -18,6 +20,9 @@ typedef struct _TASK
     int  state;
     char request[HTTP_BUF_SIZE];
     int nrequest;
+    int is_new_host;
+    char host[DNS_NAME_MAX];
+    char ip[DNS_IP_MAX];
 }TASK;
 static SBASE *sbase = NULL;
 static SERVICE *service = NULL;
@@ -39,9 +44,18 @@ int http_download_error(int c_id)
     char buf[HTTP_BUF_SIZE];
     int n = 0;
 
-    if(c_id >= 0 && c_id < ntask)
+    if(c_id >= 0 && c_id < ntask && tasklist[c_id].s_conn)
     {
-        n = sprintf(buf, "TASK %ld HTTP/1.0\r\n\r\n", tasklist[c_id].taskid);
+        if(tasklist[c_id].is_new_host)
+        {
+            n = sprintf(buf, "TASK %ld HTTP/1.0\r\nHost: %s\r\n Server:%s\r\n\r\n", 
+                    tasklist[c_id].taskid, tasklist[c_id].host, tasklist[c_id].ip);
+        }
+        else
+        {
+            n = sprintf(buf, "TASK %ld HTTP/1.0\r\n\r\n", tasklist[c_id].taskid);
+        }
+        tasklist[c_id].is_new_host = 0;
         return tasklist[c_id].s_conn->push_chunk(tasklist[c_id].s_conn, buf, n);
     }
     return -1;
@@ -62,6 +76,7 @@ int hispider_packet_handler(CONN *conn, CB_DATA *packet)
     HTTP_RESPONSE http_resp = {0};
     long taskid = 0, n = 0;
     int c_id = 0, port = 0;
+    struct hostent *hp = NULL;
 
     if(conn && tasklist && (c_id = conn->c_id) >= 0 && c_id < ntask)
     {
@@ -87,7 +102,7 @@ int hispider_packet_handler(CONN *conn, CB_DATA *packet)
             else
             {
                 conn->over_cstate(conn);
-                conn->over(conn);
+                conn->close(conn);
                 http_download_error(c_id);
             }
         }
@@ -102,11 +117,28 @@ int hispider_packet_handler(CONN *conn, CB_DATA *packet)
                     ? atoi(http_resp.headers[HEAD_REQ_REFERER]) : 0;
                 path = http_resp.headers[HEAD_RESP_LOCATION];
                 taskid = http_resp.headers[HEAD_REQ_FROM]
-                    ? atol(http_resp.headers[HEAD_REQ_FROM]) : NULL;
+                    ? atol(http_resp.headers[HEAD_REQ_FROM]) : 0;
                 //fprintf(stdout, "%s::%d OK host:%s ip:%s port:%d path:%s taskid:%d \n", 
                 //        __FILE__, __LINE__, host, ip, port, path, taskid);
                 if(host == NULL || ip == NULL || path == NULL || port == 0 || taskid < 0) 
                     goto restart_task;
+                if(strcmp(ip, "255.255.255.255") == 0)
+                {
+                    if((hp = gethostbyname(host)))
+                    {
+                        tasklist[c_id].is_new_host = 1;
+                        strcpy(tasklist[c_id].host, host);
+                        sprintf(tasklist[c_id].ip, "%s", 
+                                inet_ntoa(*((struct in_addr *)(hp->h_addr))));
+                        ip = tasklist[c_id].ip;
+                    }
+                    else
+                    {
+                        fprintf(stderr, "Resolving name[%s] failed, %s\n", host, strerror(h_errno));
+                        goto restart_task;
+                    }
+                }
+
                 if((tasklist[c_id].c_conn = service->newconn(service, -1, -1, ip, port, NULL)))
                 {
                     tasklist[c_id].taskid = taskid;
@@ -129,7 +161,7 @@ int hispider_packet_handler(CONN *conn, CB_DATA *packet)
 err_end:
         if(conn == tasklist[c_id].c_conn)
         {
-            conn->over(conn);
+            conn->close(conn);
             http_download_error(c_id);
         }
         else
@@ -150,7 +182,7 @@ int hispider_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA 
     {
         if(conn == tasklist[c_id].c_conn && packet && cache && chunk) 
         {
-            //fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
+            fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
             if(packet->ndata > 0 && cache->ndata > 0 && chunk->ndata > 0)
             {
                 return hispider_data_handler(conn, packet, cache, chunk);
@@ -176,7 +208,7 @@ int hispider_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DAT
 
     if(conn && (c_id = conn->c_id) >= 0 && c_id < ntask)
     {
-        fprintf(stdout, "%s::%d OK chunk[%d]\n", __FILE__, __LINE__, packet->ndata);
+        //fprintf(stdout, "%s::%d OK chunk[%d]\n", __FILE__, __LINE__, packet->ndata);
         if(conn == tasklist[c_id].c_conn && packet && cache && chunk) 
         {
             if(packet->ndata > 0 && cache->ndata > 0 && chunk->ndata > 0)
@@ -200,7 +232,7 @@ int hispider_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DAT
 /* transaction handler */
 int hispider_trans_handler(CONN *conn, int tid)
 {
-    char buf[HTTP_BUF_SIZE], *p = NULL;
+    char buf[HTTP_BUF_SIZE];
     int n = 0;
 
     if(conn && tid >= 0 && tid < ntask)
@@ -227,7 +259,7 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
 {
     CONN *s_conn = NULL;
     HTTP_RESPONSE *http_resp = NULL;
-    char buf[HTTP_BUF_SIZE], *zdata = NULL, *p = NULL;
+    char buf[HTTP_BUF_SIZE], *zdata = NULL, *p = NULL, *ps = NULL;
     int  ret = -1, c_id = 0, n = 0, nzdata = 0, is_gzip = 0;
 
     if(conn && (c_id = conn->c_id) >= 0 && c_id < ntask)
@@ -253,20 +285,22 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
             }
             if(nzdata > 0)
             {
-                if(http_resp->headers[HEAD_ENT_LAST_MODIFIED])
+                p = buf;
+                p += sprintf(p, "TASK %ld HTTP/1.0\r\n", tasklist[c_id].taskid);
+                if((ps = http_resp->headers[HEAD_ENT_LAST_MODIFIED]))
                 {
-                    n = sprintf(buf, "TASK %ld HTTP/1.0\r\nLast-Modified: %s\r\n"
-                        "Content-Length: %d\r\n\r\n",tasklist[c_id].taskid,
-                        http_resp->headers[HEAD_ENT_LAST_MODIFIED], nzdata);
+                    p += sprintf(p, "Last-Modified: %s\r\n", ps);
                 }
-                else
+                if(tasklist[c_id].is_new_host)
                 {
-                     n = sprintf(buf, "TASK %ld HTTP/1.0\r\nContent-Length: %d\r\n\r\n",
-                             tasklist[c_id].taskid, nzdata);
+                    p += sprintf(p, "Host: %s\r\nServer: %s\r\n", 
+                            tasklist[c_id].host, tasklist[c_id].ip);
                 }
-                if((s_conn = tasklist[c_id].s_conn))
+                p += sprintf(p, "Content-Length: %d\r\n\r\n", nzdata);
+                tasklist[c_id].is_new_host = 0;
+                if((s_conn = tasklist[c_id].s_conn) && (n = p - buf) > 0)
                 {
-                    fprintf(stdout, "Over task[%ld]\n", tasklist[c_id].taskid);
+                    //fprintf(stdout, "Over task[%ld]\n", tasklist[c_id].taskid);
                     s_conn->push_chunk(s_conn, buf, n);
                     s_conn->push_chunk(s_conn, zdata, nzdata);
                     if(is_gzip == 0 && zdata) free(zdata); 
@@ -282,7 +316,7 @@ err_end:
         http_download_error(c_id);
 end:    
         conn->over_cstate(conn);
-        conn->over(conn);
+        conn->close(conn);
     }
     return ret;
 }

@@ -10,7 +10,7 @@ int evdns_make_query(char *domain, int dnsclass, int type,
         unsigned short id, int rd, unsigned char *buf)
 {
     unsigned char *p = NULL, *q = NULL, *s = NULL, *name = NULL;
-    int buflen = 0, len = 0, tmpfd = 0;
+    int buflen = 0, len = 0;
 
     if(domain)
     {
@@ -68,6 +68,7 @@ int evdns_make_query(char *domain, int dnsclass, int type,
         */
         return buflen;
     }
+    return -1;
 }
 
 /* prase name */
@@ -94,7 +95,7 @@ unsigned char *evdns_expand_name(unsigned char *ptr, unsigned char *start,
         }
     }
     if(flag == 0) ret = p+1;
-    *q == '\0';
+    *q = '\0';
     if(q > name && *(q-1) == '.') *(q-1) = '\0';
     //fprintf(stdout, "name:%s\n", name);
     return ret;
@@ -103,9 +104,9 @@ unsigned char *evdns_expand_name(unsigned char *ptr, unsigned char *start,
 /* parse reply record */
 int evdns_parse_reply(unsigned char *buf, int nbuf, HOSTENT *hostent)
 {
-    unsigned char *p = NULL, *end = NULL, *s = NULL, *ps = NULL; 
+    unsigned char name[DNS_NAME_MAX], *p = NULL, *end = NULL, *s = NULL, *ps = NULL; 
     int i = 0, qdcount = 0, ancount = 0, nscount = 0, arcount = 0, 
-        id = 0, qr = 0, opcode = 0, aa = 0, tc = 0, rd = 0, 
+        qr = 0, opcode = 0, aa = 0, tc = 0, rd = 0, 
         ra = 0, rcode = 0, type = 0, dnsclass = 0, ttl = 0, rrlen = 0;
 
     if(buf && nbuf > HFIXEDSZ)
@@ -142,30 +143,38 @@ int evdns_parse_reply(unsigned char *buf, int nbuf, HOSTENT *hostent)
                 qdcount, ancount, nscount, arcount);
         */
         /* parse question */
+        if(p > end) return -1;
         for(i = 0; i < qdcount; i++)
         {
             ps = (unsigned char *)hostent->name;
-            p = evdns_expand_name(p, buf, end, ps);
+            s = evdns_expand_name(p, buf, end, ps);
+            if(s == p || (s+QFIXEDSZ) > end) return -1;
+            p = s;
             /* Parse the question type and class. */
             type = DNS_QUESTION_TYPE(p);
             dnsclass = DNS_QUESTION_CLASS(p);
             p  += QFIXEDSZ;
+            if(p > end) return -1;
             /*
             fprintf(stdout, "qname:%-15s", name);
             fprintf(stdout, "\tqtype:%d", type);
             fprintf(stdout, "\tqclass:%d\r\n", dnsclass);
             */
         }
+        if(p > end) return -1;
         /* parse A name */
         for(i = 0; i < ancount; i++)
         {
             ps = (unsigned char *)hostent->alias[hostent->nalias++];
-            p = evdns_expand_name(p, buf, end, ps);
+            s = evdns_expand_name(p, buf, end, ps);
+            if(s == p || (s+RRFIXEDSZ) > end) return -1;
+            p = s;
             type = DNS_RR_TYPE(p);
             dnsclass = DNS_RR_CLASS(p);
             ttl = DNS_RR_TTL(p);
             rrlen = DNS_RR_LEN(p);
             p += RRFIXEDSZ;
+            if(p > end || (p+rrlen) > end) return -1;
             /*
             fprintf(stdout, "name:%s type:%d dnsclass:%d ttl:%d rrlen:%d ", 
                     name, type, dnsclass, ttl, rrlen);
@@ -192,7 +201,39 @@ int evdns_parse_reply(unsigned char *buf, int nbuf, HOSTENT *hostent)
             //fprintf(stdout, "\r\n");
             p += rrlen;
         }
-        return 0;
+        if(p > end) return -1;
+        /* parse name server  */
+        for(i = 0; i < nscount; i++)
+        {
+            ps = name;
+            s = evdns_expand_name(p, buf, end, ps);
+            if(s == p || (s+RRFIXEDSZ) > end) return -1;
+            p = s;
+            type = DNS_RR_TYPE(p);
+            dnsclass = DNS_RR_CLASS(p);
+            ttl = DNS_RR_TTL(p);
+            rrlen = DNS_RR_LEN(p);
+            p += RRFIXEDSZ;
+            if(p > end || (p+rrlen) > end) return -1;
+            p += rrlen;
+        }
+        if(p > end) return -1;
+        /* parse additional record  */
+        for(i = 0; i < arcount; i++)
+        {
+            ps = name;
+            s = evdns_expand_name(p, buf, end, ps);
+            if(s == p || (s+RRFIXEDSZ) > end) return -1;
+            p = s;
+            type = DNS_RR_TYPE(p);
+            dnsclass = DNS_RR_CLASS(p);
+            ttl = DNS_RR_TTL(p);
+            rrlen = DNS_RR_LEN(p);
+            p += RRFIXEDSZ;
+            if(p >= end || (p+rrlen) > end) return -1;
+            p += rrlen;
+        }
+        return (p - buf);
     }
     return -1;
 }

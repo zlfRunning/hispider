@@ -22,27 +22,27 @@ void md5_init(MD5_CTX *context)
 /* Update */
 void md5_update(MD5_CTX *context, unsigned char *data, u_int32_t ndata)
 {
-	u_int32_t x[_MD5_BLOCK_N];
-	u_int32_t i = 0, offset = 0, npart = 0;
-	offset = (u_int32_t)((context->total[0] >> 3) & 0x3f);	
-	if((context->total[0] += ((u_int32_t)ndata << 3)) < ((u_int32_t)ndata << 3))
-		context->total[1]++;
-	context->total[1] += ((u_int32_t)ndata >> 29);
-	npart = _MD5_BLOCK_N - offset;
-	if(ndata >= npart)
-	{
-		MEMCPY((context->buf + offset), data, npart);	
-		MD5_CALCULATE(context, context->buf, _MD5_BLOCK_N);
-		MEMSET(context->buf, 0, _MD5_BLOCK_N);
-		for(i = npart; (i + _MD5_BLOCK_N - 1) < ndata; i += _MD5_BLOCK_N)
-		{
-			MD5_CALCULATE(context, (data + i), _MD5_BLOCK_N);
-		}
-		offset = 0;
-	}
-	else i = 0;
-	MEMCPY((context->buf + offset), (data + i), (ndata - i));
-	//fprintf(stdout, "buffer:%s\n", context->buf);
+    //u_int32_t x[_MD5_BLOCK_N];
+    u_int32_t i = 0, offset = 0, npart = 0;
+    offset = (u_int32_t)((context->total[0] >> 3) & 0x3f);	
+    if((context->total[0] += ((u_int32_t)ndata << 3)) < ((u_int32_t)ndata << 3))
+        context->total[1]++;
+    context->total[1] += ((u_int32_t)ndata >> 29);
+    npart = _MD5_BLOCK_N - offset;
+    if(ndata >= npart)
+    {
+        MEMCPY((context->buf + offset), data, npart);	
+        MD5_CALCULATE(context, context->buf, _MD5_BLOCK_N);
+        MEMSET(context->buf, 0, _MD5_BLOCK_N);
+        for(i = npart; (i + _MD5_BLOCK_N - 1) < ndata; i += _MD5_BLOCK_N)
+        {
+            MD5_CALCULATE(context, (data + i), _MD5_BLOCK_N);
+        }
+        offset = 0;
+    }
+    else i = 0;
+    MEMCPY((context->buf + offset), (data + i), (ndata - i));
+    //fprintf(stdout, "buffer:%s\n", context->buf);
 }
 
 /* Final */
