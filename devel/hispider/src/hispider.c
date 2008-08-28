@@ -12,11 +12,12 @@
 #include "iniparser.h"
 #include "queue.h"
 #include "zstream.h"
+#include "logger.h"
 typedef struct _TASK
 {
     CONN *s_conn;
     CONN *c_conn;
-    long taskid;
+    int taskid;
     int  state;
     char request[HTTP_BUF_SIZE];
     int nrequest;
@@ -49,12 +50,12 @@ int http_download_error(int c_id)
     {
         if(tasklist[c_id].is_new_host)
         {
-            n = sprintf(buf, "TASK %ld HTTP/1.0\r\nHost: %s\r\n Server:%s\r\n\r\n", 
+            n = sprintf(buf, "TASK %d HTTP/1.0\r\nHost: %s\r\n Server:%s\r\n\r\n", 
                     tasklist[c_id].taskid, tasklist[c_id].host, tasklist[c_id].ip);
         }
         else
         {
-            n = sprintf(buf, "TASK %ld HTTP/1.0\r\n\r\n", tasklist[c_id].taskid);
+            n = sprintf(buf, "TASK %d HTTP/1.0\r\n\r\n", tasklist[c_id].taskid);
         }
         tasklist[c_id].is_new_host = 0;
         return tasklist[c_id].s_conn->push_chunk(tasklist[c_id].s_conn, buf, n);
@@ -75,7 +76,7 @@ int hispider_packet_handler(CONN *conn, CB_DATA *packet)
 {
     char *p = NULL, *end = NULL, *ip = NULL, *host = NULL, *path = NULL;
     HTTP_RESPONSE http_resp = {0};
-    long taskid = 0, n = 0;
+    int taskid = 0, n = 0;
     int c_id = 0, port = 0;
     struct hostent *hp = NULL;
 
@@ -83,10 +84,15 @@ int hispider_packet_handler(CONN *conn, CB_DATA *packet)
     {
         p = packet->data;
         end = packet->data + packet->ndata;
-        if(p == NULL || http_response_parse(p, end, &http_resp) == -1) goto err_end;
         /* http handler */        
         if(conn == tasklist[c_id].c_conn)
         {
+            if(p == NULL || http_response_parse(p, end, &http_resp) == -1)
+            {
+                conn->over_cstate(conn);
+                conn->over(conn);
+                return http_download_error(c_id);
+            }
             if(http_resp.respid == RESP_OK && http_resp.headers[HEAD_ENT_CONTENT_TYPE] 
                     && strncasecmp(http_resp.headers[HEAD_ENT_CONTENT_TYPE], "text", 4) == 0)
             {
@@ -97,6 +103,7 @@ int hispider_packet_handler(CONN *conn, CB_DATA *packet)
                 }
                 else
                 {
+                    conn->set_timeout(conn, HTTP_DOWNLOAD_TIMEOUT);
                     conn->recv_chunk(conn, HTML_MAX_SIZE);
                 }
             }
@@ -104,12 +111,20 @@ int hispider_packet_handler(CONN *conn, CB_DATA *packet)
             {
                 conn->over_cstate(conn);
                 conn->close(conn);
-                http_download_error(c_id);
+                return http_download_error(c_id);
             }
         }
         /* task handler */
         else if(conn == tasklist[c_id].s_conn)
         {
+            if(p == NULL || http_response_parse(p, end, &http_resp) == -1)
+            {
+                conn->over_cstate(conn);
+                conn->over(conn);
+                QUEUE_PUSH(taskqueue, int, &c_id);
+                tasklist[c_id].s_conn = NULL;
+                return -1;
+            }
             if(http_resp.respid == RESP_OK)
             {
                 host = http_resp.headers[HEAD_REQ_HOST];
@@ -117,8 +132,8 @@ int hispider_packet_handler(CONN *conn, CB_DATA *packet)
                 port = (http_resp.headers[HEAD_REQ_REFERER])
                     ? atoi(http_resp.headers[HEAD_REQ_REFERER]) : 0;
                 path = http_resp.headers[HEAD_RESP_LOCATION];
-                taskid = http_resp.headers[HEAD_REQ_FROM]
-                    ? atol(http_resp.headers[HEAD_REQ_FROM]) : 0;
+                tasklist[c_id].taskid = http_resp.headers[HEAD_REQ_FROM]
+                    ? atoi(http_resp.headers[HEAD_REQ_FROM]) : 0;
                 //fprintf(stdout, "%s::%d OK host:%s ip:%s port:%d path:%s taskid:%d \n", 
                 //        __FILE__, __LINE__, host, ip, port, path, taskid);
                 if(host == NULL || ip == NULL || path == NULL || port == 0 || taskid < 0) 
@@ -135,11 +150,11 @@ int hispider_packet_handler(CONN *conn, CB_DATA *packet)
                     }
                     else
                     {
-                        fprintf(stderr, "Resolving name[%s] failed, %s\n", host, strerror(h_errno));
+                        DEBUG_LOGGER(logger, "Resolving name[%s] failed, %s", 
+                                host, strerror(h_errno));
                         goto restart_task;
                     }
                 }
-
                 if((tasklist[c_id].c_conn = service->newconn(service, -1, -1, ip, port, NULL)))
                 {
                     tasklist[c_id].taskid = taskid;
@@ -154,22 +169,16 @@ int hispider_packet_handler(CONN *conn, CB_DATA *packet)
                     tasklist[c_id].c_conn->start_cstate(tasklist[c_id].c_conn);
                     return service->newtransaction(service, tasklist[c_id].c_conn, c_id);
                 }
+                else
+                {
+                    ERROR_LOGGER(logger, "Connect to [%s][%s:%d] failed, %s\n", 
+                            host, ip, port, strerror(errno));
+                }
             }
             restart_task:
-                service->newtransaction(service, tasklist[c_id].s_conn, c_id);
+                return http_download_error(c_id);
         }
-        return 0;
-err_end:
-        if(conn == tasklist[c_id].c_conn)
-        {
-            conn->close(conn);
-            http_download_error(c_id);
-        }
-        else
-        {
-            conn->over_cstate(conn);
-            QUEUE_PUSH(taskqueue, int, &c_id);
-        }
+        return -1;
     }
     return -1;
 }
@@ -190,12 +199,16 @@ int hispider_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA 
             else
             {
                 tasklist[c_id].state = TASK_STATE_ERROR;
+                tasklist[c_id].c_conn = NULL;
+                conn->over_cstate(conn);
+                conn->over(conn);
                 return http_download_error(c_id);
             }
         }
         else
         {
             QUEUE_PUSH(taskqueue, int, &c_id);
+            tasklist[c_id].s_conn = NULL;
         }
     }
     return -1;
@@ -218,12 +231,16 @@ int hispider_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DAT
             else
             {
                 tasklist[c_id].state = TASK_STATE_ERROR;
+                tasklist[c_id].c_conn = NULL;
+                conn->over_cstate(conn);
+                conn->over(conn);
                 return http_download_error(c_id);
             }
         }
         else
         {
             QUEUE_PUSH(taskqueue, int, &c_id);
+            tasklist[c_id].s_conn = NULL;
         }
     }
     return -1;
@@ -241,13 +258,13 @@ int hispider_trans_handler(CONN *conn, int tid)
         {
             //fprintf(stdout, "%s::%d OK nrequest:%d\n", __FILE__, __LINE__, tasklist[tid].nrequest);
             conn->set_timeout(conn, HTTP_DOWNLOAD_TIMEOUT);
-            conn->push_chunk(conn, tasklist[tid].request, tasklist[tid].nrequest);      
+            return conn->push_chunk(conn, tasklist[tid].request, tasklist[tid].nrequest);      
         }
         else if(conn == tasklist[tid].s_conn)
         {
             n = sprintf(buf, "TASK %d HTTP/1.0\r\n\r\n", -1);
             //fprintf(stdout, "%s::%d OK %s\n", __FILE__, __LINE__, buf);
-            conn->push_chunk(conn, buf, n);
+            return conn->push_chunk(conn, buf, n);
         }
         return 0;
     }
@@ -286,7 +303,7 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
             if(nzdata > 0)
             {
                 p = buf;
-                p += sprintf(p, "TASK %ld HTTP/1.0\r\n", tasklist[c_id].taskid);
+                p += sprintf(p, "TASK %d HTTP/1.0\r\n", tasklist[c_id].taskid);
                 if((ps = http_resp->headers[HEAD_ENT_LAST_MODIFIED]))
                 {
                     p += sprintf(p, "Last-Modified: %s\r\n", ps);
@@ -367,6 +384,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
     /* SBASE */
     sbase->nchilds = iniparser_getint(dict, "SBASE:nchilds", 0);
     sbase->connections_limit = iniparser_getint(dict, "SBASE:connections_limit", SB_CONN_MAX);
+    setrlimiter("RLIMIT_NOFILE", RLIMIT_NOFILE, sbase->connections_limit);
     sbase->usec_sleep = iniparser_getint(dict, "SBASE:usec_sleep", SB_USEC_SLEEP);
     sbase->set_log(sbase, iniparser_getstr(dict, "SBASE:logfile"));
     sbase->set_evlog(sbase, iniparser_getstr(dict, "SBASE:evlogfile"));

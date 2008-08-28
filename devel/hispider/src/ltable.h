@@ -15,7 +15,7 @@
 #define TASK_STATE_INIT         0x00
 #define TASK_STATE_OK           0x02
 #define TASK_STATE_ERROR        0x04
-#define HTTP_DOWNLOAD_TIMEOUT   10000000
+#define HTTP_DOWNLOAD_TIMEOUT   30000000
 #define HTML_MAX_SIZE           2097152
 #define TASK_WAIT_TIMEOUT       10000000
 #define TASK_WAIT_MAX           120000000

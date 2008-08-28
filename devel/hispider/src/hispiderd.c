@@ -24,10 +24,10 @@ static SERVICE *adnservice = NULL;
 static dictionary *dict = NULL;
 static LTABLE *ltable = NULL;
 static void *dnsqueue = NULL;
-static void *adns_logger = NULL;
+static void *logger = NULL;
 //static void *undnsqueue = NULL;
 static DNSTASK tasklist[DNS_TASK_MAX];
-static void *waitqueue = NULL;
+//static void *waitqueue = NULL;
 
 /* dns packet reader */
 int adns_packet_reader(CONN *conn, CB_DATA *buffer)
@@ -48,7 +48,7 @@ int adns_packet_reader(CONN *conn, CB_DATA *buffer)
             {
                 ip = hostent.addrs[0];
                 p = (unsigned char *)&ip;
-                DEBUG_LOGGER(adns_logger, "Got host[%s]'s ip[%d.%d.%d.%d] from %s:%d", 
+                DEBUG_LOGGER(logger, "Got host[%s]'s ip[%d.%d.%d.%d] from %s:%d", 
                         hostent.name, p[0], p[1], p[2], p[3], conn->remote_ip, conn->remote_port);
             }
             ltable->set_dns(ltable, hostent.name, ip);
@@ -124,7 +124,7 @@ int adns_trans_handler(CONN *conn, int tid)
         {
             qid %= 65536;
             n = evdns_make_query((char *)hostname, 1, 1, (unsigned short)qid, 1, buf); 
-            DEBUG_LOGGER(adns_logger, "Resolving %s from nameserver[%s]", 
+            DEBUG_LOGGER(logger, "Resolving %s from nameserver[%s]", 
                     hostname, tasklist[tid].nameserver);
             //fprintf(stdout, "%d::trans:%d taskid:[%d][%d]\n", __LINE__, tid, taskid, n);
             return conn->push_chunk(conn, buf, n);
@@ -207,12 +207,19 @@ int hispiderd_packet_handler(CONN *conn, CB_DATA *packet)
                     ltable->set_task_state(ltable, taskid, TASK_STATE_ERROR);
                 }
             }
-            if((ltable->get_task(ltable, buf, &n) == -1)) 
+            /* get new task */
+            if(ltable->get_task(ltable, buf, &n) >= 0) 
+            {
+                return conn->push_chunk(conn, buf, n);
+            }
+            else
             {
                 if(conn->timeout >= TASK_WAIT_MAX) conn->timeout = 0;
+                DEBUG_LOGGER(logger, "set_timeout(%d) on %s:%d", 
+                    conn->timeout + TASK_WAIT_TIMEOUT, conn->remote_ip, conn->remote_port);
+                conn->wait_evstate(conn);
                 return conn->set_timeout(conn, conn->timeout + TASK_WAIT_TIMEOUT);
             }
-            return conn->push_chunk(conn, buf, n);
         }
         else goto err_end;
         return 0;
@@ -238,11 +245,10 @@ int hispiderd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA 
             if(host && ip)
             {
                 ltable->set_dns(ltable, host, inet_addr(ip));
-                DEBUG_LOGGER(adns_logger, "Resolved name[%s]'s ip[%s] from client", host, ip);
+                DEBUG_LOGGER(logger, "Resolved name[%s]'s ip[%s] from client", host, ip);
             }
             taskid = atoi(http_req->path);
-            fprintf(stdout, "%s::%d path:%s taskid:%d length:%d\n", __FILE__,  __LINE__, 
-                    http_req->path, taskid, chunk->ndata);
+            DEBUG_LOGGER(logger, "taskid:%d length:%d", taskid, chunk->ndata);
             return ltable->add_document(ltable, taskid, 0, chunk->data, chunk->ndata); 
         }
     }
@@ -255,16 +261,20 @@ int hispiderd_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DA
     char buf[HTTP_BUF_SIZE];
     int n = 0;
 
-    if(conn)
+    if(conn && conn->evstate == EVSTATE_WAIT)
     {
-        if((ltable->get_task(ltable, buf, &n) == -1))
+        if(ltable->get_task(ltable, buf, &n) >= 0) 
         {
-            if(conn->timeout >= TASK_WAIT_MAX) conn->timeout = 0;
-            return conn->set_timeout(conn, conn->timeout + TASK_WAIT_TIMEOUT);
+            conn->over_evstate(conn);
+            return conn->push_chunk(conn, buf, n);
         }
         else
         {
-            return conn->push_chunk(conn, buf, n);
+            if(conn->timeout >= TASK_WAIT_MAX) conn->timeout = 0;
+            DEBUG_LOGGER(logger, "set_timeout(%d) on %s:%d", 
+                    conn->timeout + TASK_WAIT_TIMEOUT, conn->remote_ip, conn->remote_port);
+            conn->wait_evstate(conn);
+            return conn->set_timeout(conn, conn->timeout + TASK_WAIT_TIMEOUT);
         }
         return 0;
     }
@@ -294,6 +304,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
     /* SBASE */
     sbase->nchilds = iniparser_getint(dict, "SBASE:nchilds", 0);
     sbase->connections_limit = iniparser_getint(dict, "SBASE:connections_limit", SB_CONN_MAX);
+    setrlimiter("RLIMIT_NOFILE", RLIMIT_NOFILE, sbase->connections_limit);
     sbase->usec_sleep = iniparser_getint(dict, "SBASE:usec_sleep", SB_USEC_SLEEP);
     sbase->set_log(sbase, iniparser_getstr(dict, "SBASE:logfile"));
     sbase->set_evlog(sbase, iniparser_getstr(dict, "SBASE:evlogfile"));
@@ -344,7 +355,8 @@ int sbase_initialize(SBASE *sbase, char *conf)
         basedir = iniparser_getstr(dict, "HISPIDERD:basedir");
         ltable->set_basedir(ltable, basedir);
         ltable->resume(ltable);
-        ltable->set_logger(ltable, iniparser_getstr(dict, "HISPIDERD:access_log"), NULL);
+        LOGGER_INIT(logger, iniparser_getstr(dict, "HISPIDERD:access_log"));
+        //ltable->set_logger(ltable, NULL, logger);
         host = iniparser_getstr(dict, "HISPIDERD:host");
         path = iniparser_getstr(dict, "HISPIDERD:path");
         path = iniparser_getstr(dict, "HISPIDERD:path");
@@ -388,10 +400,8 @@ int sbase_initialize(SBASE *sbase, char *conf)
             i++;
         }
     }
-    p = iniparser_getstr(dict, "ADNS:access_log");
-    LOGGER_INIT(adns_logger, p);
     /* wait queue */
-    QUEUE_INIT(waitqueue);
+    //QUEUE_INIT(waitqueue);
     //while(i < DNS_TASK_MAX){QUEUE_PUSH(undnsqueue, int, &i++);}
     return (sbase->add_service(sbase, service) | sbase->add_service(sbase, adnservice));
 }
