@@ -8,4 +8,10 @@
 
 #View running state in Browser
   http://127.0.0.1:3721/
+
+#Usage
+#hispiderd is control center
+#hispider is download node 
+    ./src/hispiderd -c doc/rc.hispiderd.ini
+    ./src/hispider -c doc/rc.hispider.ini
   
