@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
+#include <signal.h>
 #include <sys/resource.h>
 #include <arpa/inet.h>
 #include <netdb.h>
