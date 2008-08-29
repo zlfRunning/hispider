@@ -410,7 +410,7 @@ static void hispiderd_stop(int sig){
     switch (sig) {
         case SIGINT:
         case SIGTERM:
-            fprintf(stderr, "lhttpd server is interrupted by user.\n");
+            fprintf(stderr, "hispiderd server is interrupted by user.\n");
             if(sbase)sbase->stop(sbase);
             break;
         default:

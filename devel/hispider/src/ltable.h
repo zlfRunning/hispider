@@ -85,8 +85,10 @@ typedef struct _LTABLE
     long url_total;
     long url_ok;
     long url_error;
-    LLong doc_size;
-    LLong doc_zsize;
+    LLong doc_total_size;
+    LLong doc_total_zsize;
+    LLong doc_current_size;
+    LLong doc_current_zsize;
     void *timer;
     LLong time_usec;
 

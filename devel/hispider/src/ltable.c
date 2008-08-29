@@ -25,11 +25,11 @@ static const char *__html__body__  =
 "<tr><td align=left ><li><font color=red size=72 >URL Current :%d </font></li></td></tr>\n"
 "<tr><td align=left ><li><font color=red size=72 >URL OK:%d </font></li></td></tr>\n"
 "<tr><td align=left ><li><font color=red size=72 >URL ERROR:%d </font></li></td></tr>\n"
-"<tr><td align=left ><li><font color=red size=72 >Doc Size:%lld </font></li></td></tr>\n"
-"<tr><td align=left ><li><font color=red size=72 >Doc Zsize:%lld </font></li></td></tr>\n"
+"<tr><td align=left ><li><font color=red size=72 >Doc Total:%lld/%lld </font></li></td></tr>\n"
+"<tr><td align=left ><li><font color=red size=72 >Doc Current:%lld/%lld </font></li></td></tr>\n"
 "<tr><td align=left ><li><font color=red size=72 >DNS Count:%d/%d </font></li></td></tr>\n"
-"<tr><td align=left ><li><font color=red size=72 >Time Used: %d day(s) [%d:%02d:%02d +%06d]</font></li></td></tr>\n"
-"<tr><td align=left ><li><font color=red size=72 >Speed:%lld (k/s)</font></li></td></tr>\n"
+"<tr><td align=left ><li><font color=red size=72 >Time Used: %d day(s) [%02d:%02d:%02d +%06d]</font></li></td></tr>\n"
+"<tr><td align=left ><li><font color=red size=72 >Speed:%f (k/s)</font></li></td></tr>\n"
 "</table><br><hr  noshade><em>\n"
 "<font color=white ><a href='http://code.google.com/p/hispider' >"
 "Hispider</a> Powered By <a href='http://code.google.com/p/hispider'>"
@@ -554,8 +554,8 @@ int ltable_resume(LTABLE *ltable)
             }
             else if(lmeta.state == TASK_STATE_OK) ltable->url_ok++;
             else if(lmeta.state == TASK_STATE_ERROR) ltable->url_error++;
-            ltable->doc_size += lmeta.ndata;
-            ltable->doc_zsize += lmeta.nzdata;
+            ltable->doc_total_size += lmeta.ndata;
+            ltable->doc_total_zsize += lmeta.nzdata;
         }
         //fprintf(stdout, "%d::%ld:%ld\n", __LINE__, ltable->url_current, ltable->url_total);
         return 0;
@@ -649,6 +649,7 @@ int ltable_get_stateinfo(LTABLE *ltable, char *block)
 {
     char buf[HTTP_BUF_SIZE];
     int ret = -1, n = 0, day = 0, hour = 0, min = 0, sec = 0, usec = 0;
+    double speed = 0.0;
 
     if(ltable)
     {
@@ -658,9 +659,11 @@ int ltable_get_stateinfo(LTABLE *ltable, char *block)
         min  = ((PT_SEC_U(ltable->timer) % 3600) / 60);
         sec  = (PT_SEC_U(ltable->timer) % 60);
         usec = (PT_USEC_U(ltable->timer) % 1000000ll);
+        speed = ((ltable->doc_current_size / 1024)/PT_SEC_U(ltable->timer));
         n = sprintf(buf, __html__body__, ltable->url_total, ltable->url_current, 
-                ltable->url_ok, ltable->url_error, ltable->doc_size, ltable->doc_zsize,
-                ltable->dns_ok, ltable->dns_total, day, hour, min, sec, usec);   
+                ltable->url_ok, ltable->url_error, ltable->doc_total_zsize, ltable->doc_total_size,
+                ltable->doc_current_zsize, ltable->doc_current_size, ltable->dns_ok, 
+                ltable->dns_total, day, hour, min, sec, usec, speed);   
         ret = sprintf(block, "HTTP/1.0 200 OK \r\nContent-Type: text/html\r\n"
                                     "Content-Length: %d\r\n\r\n%s", n, buf);
     }
@@ -738,8 +741,10 @@ int ltable_add_document(LTABLE *ltable, int taskid, int date, char *content, int
                         lmeta.ndata     = ndata;
                         lmeta.date      = date;
                         lmeta.state     = TASK_STATE_OK;
-                        ltable->doc_size += ndata;
-                        ltable->doc_zsize += ncontent;
+                        ltable->doc_total_size += ndata;
+                        ltable->doc_total_zsize += ncontent;
+                        ltable->doc_current_size += ndata;
+                        ltable->doc_current_zsize += ncontent;
                         iwrite(ltable->meta_fd, &lmeta, sizeof(LMETA), taskid * sizeof(LMETA));
                         ret = 0;
                         ltable->url_ok++;

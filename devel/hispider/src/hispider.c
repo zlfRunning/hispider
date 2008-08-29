@@ -365,9 +365,15 @@ void cb_heartbeat_handler(void *arg)
                     tasklist[id].s_conn->c_id = id;
                     service->newtransaction(service, tasklist[id].s_conn, id);
                 }
+                else
+                {
+                    QUEUE_PUSH(taskqueue, int, &id);
+                    break;
+                }
             }
         }
     }
+    return ;
 }
 
 /* Initialize from ini file */
@@ -455,7 +461,7 @@ static void hispider_stop(int sig){
     switch (sig) {
         case SIGINT:
         case SIGTERM:
-            fprintf(stderr, "lhttpd server is interrupted by user.\n");
+            fprintf(stderr, "hispider is interrupted by user.\n");
             if(sbase)sbase->stop(sbase);
             break;
         default:
