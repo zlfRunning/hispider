@@ -6,4 +6,6 @@
 #Compile && install
    ./configure && make && make install
 
-
+#View running state in Browser
+  http://127.0.0.1:3721/
+  
