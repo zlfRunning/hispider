@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.61)
-AC_INIT(hispider, [0.1.0], [SounOS@gmail.com])
+AC_INIT(hispider, [0.1.1], [SounOS@gmail.com])
 AM_INIT_AUTOMAKE
 AC_CONFIG_SRCDIR([src/basedef.h])
 AC_CONFIG_HEADER([config.h])
