@@ -322,7 +322,7 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
                     //fprintf(stdout, "Over task[%ld]\n", tasklist[c_id].taskid);
                     s_conn->push_chunk(s_conn, buf, n);
                     s_conn->push_chunk(s_conn, zdata, nzdata);
-                    if(is_gzip == 0 && zdata) free(zdata); 
+                    if(is_gzip == 0 && zdata) {free(zdata);  zdata = NULL;}
                     tasklist[c_id].taskid = -1;
                     tasklist[c_id].c_conn = NULL;
                 }
