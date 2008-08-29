@@ -137,7 +137,7 @@ static const char *rcodes[] = {
   "(unknown)", "(unknown)", "(unknown)", "(unknown)", "(unknown)",
   "(unknown)", "(unknown)", "(unknown)", "(unknown)", "NOCHANGE"
 };
-#define EVDNS_TIMEOUT 10000000
+#define EVDNS_TIMEOUT 30000000
 #define EVDNS_TIMEOUT_MAX 6
 #define DNS_MAX_NUM   32
 #ifndef DNS_NAME_MAX
