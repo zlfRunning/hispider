@@ -431,6 +431,7 @@ int ltable_new_dnstask(LTABLE *ltable, char *host)
                 host[dns.length] = '\0';
                 DEBUG_LOGGER(ltable->logger, "Ready for resolving name[%s] %d of %d", 
                         host, taskid, ltable->dns_total);
+                break;
             }
         }
         MUTEX_UNLOCK(ltable->mutex);
@@ -666,7 +667,8 @@ int ltable_get_stateinfo(LTABLE *ltable, char *block)
         min  = ((PT_SEC_U(ltable->timer) % 3600) / 60);
         sec  = (PT_SEC_U(ltable->timer) % 60);
         usec = (PT_USEC_U(ltable->timer) % 1000000ll);
-        speed = ((ltable->doc_current_size / 1024)/PT_SEC_U(ltable->timer));
+        speed = (PT_SEC_U(ltable->timer) > 0) 
+            ? ((ltable->doc_current_size / 1024)/PT_SEC_U(ltable->timer)) : 0;
         n = sprintf(buf, __html__body__, ltable->url_total, ltable->url_current, 
                 ltable->url_ok, ltable->url_error, ltable->doc_total_zsize, ltable->doc_total_size,
                 ltable->doc_current_zsize, ltable->doc_current_size, ltable->dns_ok, 

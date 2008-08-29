@@ -121,6 +121,8 @@ int adns_trans_handler(CONN *conn, int tid)
         conn->c_id = tid;
         conn->start_cstate(conn);
         conn->set_timeout(conn, EVDNS_TIMEOUT);
+        DEBUG_LOGGER(logger, "Ready for resolving dns on remote[%s:%d] local[%s:%d]", 
+                conn->remote_ip, conn->remote_port, conn->local_ip, conn->local_port);
         if((qid = ltable->new_dnstask(ltable, (char *)hostname)) >= 0)
         {
             qid %= 65536;
