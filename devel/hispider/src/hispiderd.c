@@ -150,7 +150,13 @@ void adns_heartbeat_handler(void *arg)
                     SOCK_DGRAM, tasklist[id].nameserver, DNS_DEFAULT_PORT, NULL)))
                 {
                     tasklist[id].conn->c_id = id;
+                    tasklist[id].conn->start_cstate(tasklist[id].conn);
                     adnservice->newtransaction(adnservice, tasklist[id].conn, id);
+                }
+                else
+                {
+                    QUEUE_PUSH(dnsqueue, int, &id);
+                    break;
                 }
             }
         }

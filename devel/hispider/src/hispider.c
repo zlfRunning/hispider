@@ -204,8 +204,10 @@ int hispider_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA 
                 return http_download_error(c_id);
             }
         }
-        else
+        else if(conn == tasklist[c_id].s_conn)
         {
+            ERROR_LOGGER(logger, "error_handler(%08x) on remote[%s:%d] local[%s:%d] ", (int)conn, 
+                    conn->remote_ip, conn->remote_port, conn->local_ip, conn->local_port);
             QUEUE_PUSH(taskqueue, int, &c_id);
             tasklist[c_id].s_conn = NULL;
         }
@@ -363,10 +365,13 @@ void cb_heartbeat_handler(void *arg)
                                 -1, -1, server_ip, server_port, NULL)))
                 {
                     tasklist[id].s_conn->c_id = id;
+                    tasklist[id].s_conn->start_cstate(tasklist[id].s_conn);
                     service->newtransaction(service, tasklist[id].s_conn, id);
                 }
                 else
                 {
+                    ERROR_LOGGER(logger, "Connect to %s:%d failed, %s", 
+                            server_ip, server_port, strerror(errno));
                     QUEUE_PUSH(taskqueue, int, &id);
                     break;
                 }
