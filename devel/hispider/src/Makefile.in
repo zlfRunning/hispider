@@ -52,12 +52,11 @@ hispider_OBJECTS = $(am_hispider_OBJECTS)
 hispider_LDADD = $(LDADD)
 hispider_LINK = $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(hispider_LDFLAGS) \
 	$(LDFLAGS) -o $@
-am_hispiderd_OBJECTS = hispiderd-dnsdb.$(OBJEXT) \
-	hispiderd-evdns.$(OBJEXT) hispiderd-hispiderd.$(OBJEXT) \
-	hispiderd-http.$(OBJEXT) hispiderd-iniparser.$(OBJEXT) \
-	hispiderd-ltable.$(OBJEXT) hispiderd-ibio.$(OBJEXT) \
-	hispiderd-md5.$(OBJEXT) hispiderd-trie.$(OBJEXT) \
-	hispiderd-zstream.$(OBJEXT)
+am_hispiderd_OBJECTS = hispiderd-evdns.$(OBJEXT) \
+	hispiderd-hispiderd.$(OBJEXT) hispiderd-http.$(OBJEXT) \
+	hispiderd-iniparser.$(OBJEXT) hispiderd-ltable.$(OBJEXT) \
+	hispiderd-ibio.$(OBJEXT) hispiderd-md5.$(OBJEXT) \
+	hispiderd-trie.$(OBJEXT) hispiderd-zstream.$(OBJEXT)
 hispiderd_OBJECTS = $(am_hispiderd_OBJECTS)
 hispiderd_LDADD = $(LDADD)
 hispiderd_LINK = $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(hispiderd_LDFLAGS) \
@@ -159,8 +158,6 @@ target_alias = @target_alias@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 hispiderd_SOURCES = basedef.h \
-dnsdb.c \
-dnsdb.h \
 evdns.c \
 evdns.h \
 hispiderd.c \
@@ -279,7 +276,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hispider-md5.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hispider-trie.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hispider-zstream.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hispiderd-dnsdb.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hispiderd-evdns.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hispiderd-hispiderd.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hispiderd-http.Po@am__quote@
@@ -387,20 +383,6 @@ hispider-zstream.obj: utils/zstream.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='utils/zstream.c' object='hispider-zstream.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hispider_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hispider-zstream.obj `if test -f 'utils/zstream.c'; then $(CYGPATH_W) 'utils/zstream.c'; else $(CYGPATH_W) '$(srcdir)/utils/zstream.c'; fi`
-
-hispiderd-dnsdb.o: dnsdb.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hispiderd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hispiderd-dnsdb.o -MD -MP -MF $(DEPDIR)/hispiderd-dnsdb.Tpo -c -o hispiderd-dnsdb.o `test -f 'dnsdb.c' || echo '$(srcdir)/'`dnsdb.c
-@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/hispiderd-dnsdb.Tpo $(DEPDIR)/hispiderd-dnsdb.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='dnsdb.c' object='hispiderd-dnsdb.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hispiderd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hispiderd-dnsdb.o `test -f 'dnsdb.c' || echo '$(srcdir)/'`dnsdb.c
-
-hispiderd-dnsdb.obj: dnsdb.c
-@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hispiderd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hispiderd-dnsdb.obj -MD -MP -MF $(DEPDIR)/hispiderd-dnsdb.Tpo -c -o hispiderd-dnsdb.obj `if test -f 'dnsdb.c'; then $(CYGPATH_W) 'dnsdb.c'; else $(CYGPATH_W) '$(srcdir)/dnsdb.c'; fi`
-@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/hispiderd-dnsdb.Tpo $(DEPDIR)/hispiderd-dnsdb.Po
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='dnsdb.c' object='hispiderd-dnsdb.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hispiderd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hispiderd-dnsdb.obj `if test -f 'dnsdb.c'; then $(CYGPATH_W) 'dnsdb.c'; else $(CYGPATH_W) '$(srcdir)/dnsdb.c'; fi`
 
 hispiderd-evdns.o: evdns.c
 @am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hispiderd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hispiderd-evdns.o -MD -MP -MF $(DEPDIR)/hispiderd-evdns.Tpo -c -o hispiderd-evdns.o `test -f 'evdns.c' || echo '$(srcdir)/'`evdns.c

@@ -1,8 +1,6 @@
 #Automake
 bin_PROGRAMS = hispiderd hispider
 hispiderd_SOURCES = basedef.h \
-dnsdb.c \
-dnsdb.h \
 evdns.c \
 evdns.h \
 hispiderd.c \
