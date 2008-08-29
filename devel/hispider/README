@@ -1,0 +1,9 @@
+
+#Required 
+    libevbase http://sbase.googlecode.com/files/libevbase-0.0.14.tar.gz
+    libsbase http://sbase.googlecode.com/files/libsbase-0.3.1.tar.gz
+
+#Compile && install
+   ./configure && make && make install
+
+
