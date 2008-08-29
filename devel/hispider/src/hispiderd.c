@@ -188,6 +188,14 @@ int hispiderd_packet_handler(CONN *conn, CB_DATA *packet)
         if(http_request_parse(p, end, &http_req) == -1) goto err_end;
         if(http_req.reqid == HTTP_GET)
         {
+            if(strncasecmp(http_req.path, "/stop", 5) == 0)
+            {
+                ltable->running_state = 0;
+            }
+            else if(strncasecmp(http_req.path, "/running", 8) == 0)
+            {
+                ltable->running_state = 1;
+            }
             if((n = ltable->get_stateinfo(ltable, buf)))
             {
                 conn->push_chunk(conn, buf, n);

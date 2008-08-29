@@ -91,6 +91,7 @@ typedef struct _LTABLE
     LLong doc_current_zsize;
     void *timer;
     LLong time_usec;
+    int running_state;
 
     /* DNS */
     //char last_host[DNS_NAME_MAX];

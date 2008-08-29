@@ -19,7 +19,13 @@ static const char *__html__body__  =
 "<meta http-equiv='refresh' content='10; URL=/'>\n</HEAD>\n"
 "<meta http-equiv='content-type' content='text/html; charset=UTF-8'>\n"
 "<BODY bgcolor='#000000' align=center >\n"
-"<h1><font color=white >Hispider Running State</font></h1>\n"
+"<h1><font color=white >Hispider Running State  ["
+"<script language='javascript'>\n"
+"if(location.pathname == '/stop')\n"
+"    document.write(\"<a href='/running' >running</a>\");\n"
+"else\n"
+"    document.write(\"<a href='/stop' >stop</a>\");\n"
+"</script>]</font>\n</h1>\n"
 "<hr noshade><ul><br><table  align=center width='100%%' >\n"
 "<tr><td align=left ><li><font color=red size=72 >URL Total:%d </font></li></td></tr>\n"
 "<tr><td align=left ><li><font color=red size=72 >URL Current :%d </font></li></td></tr>\n"
@@ -550,6 +556,7 @@ int ltable_resume(LTABLE *ltable)
             //check status
             if(lmeta.state == TASK_STATE_INIT && flag == 0)
             {
+                flag = 1;
                 ltable->url_current  = ltable->url_total - 1;
             }
             else if(lmeta.state == TASK_STATE_OK) ltable->url_ok++;
@@ -573,7 +580,7 @@ int  ltable_get_task(LTABLE *ltable, char *block, int *nblock)
     off_t offset = 0;
     LMETA lmeta = {0};
 
-    if(ltable)
+    if(ltable && ltable->running_state)
     {
         MUTEX_LOCK(ltable->mutex);
         if(ltable->url_total > 0 && ltable->url_current < ltable->url_total)
@@ -792,6 +799,7 @@ LTABLE *ltable_init()
 
     if((ltable = calloc(1, sizeof(LTABLE))))
     {
+        ltable->running_state = 1;
         MUTEX_INIT(ltable->mutex);
         TIMER_INIT(ltable->timer);
         ltable->urltable        = TRIETAB_INIT();
