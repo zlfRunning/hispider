@@ -494,7 +494,7 @@ int ltable_resume(LTABLE *ltable)
     LMETA lmeta = {0};
     DNS *dns = NULL;
     void *dp = NULL;
-    char *host = NULL;
+    char *host = NULL, *p = NULL;
     int i = 0, flag = 0, size = 0;
 
     if(ltable)
@@ -505,15 +505,15 @@ int ltable_resume(LTABLE *ltable)
             ltable->dns_total = (size/sizeof(DNS));
             if(read(ltable->dns_fd, dns, size) > 0)
             {
-                if((size = ifsize(ltable->host_fd)) > 0 && (host = calloc(1, size)))
+                if((size = ifsize(ltable->host_fd)) > 0 && (p = calloc(1, size)))
                 {
-                    if(read(ltable->host_fd, host, size) > 0)
+                    if(read(ltable->host_fd, p, size) > 0)
                     {
                         for(i = 0; i < ltable->dns_total; i++)
                         {
                             if(dns[i].offset < size)
                             {
-                                host = host + dns[i].offset;
+                                host = p + dns[i].offset;
                                 dp = (void *)((long)(i+1));
                                 TRIETAB_RADD(ltable->dnstable, host, dns[i].length, dp);
                             }
@@ -532,8 +532,8 @@ int ltable_resume(LTABLE *ltable)
                         }
 
                     }
-                    free(host);
-                    host = NULL;
+                    free(p);
+                    p = NULL;
                 }
             }
             free(dns);
