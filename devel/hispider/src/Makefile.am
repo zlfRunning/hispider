@@ -13,6 +13,8 @@ ltable.h \
 utils/ibio.c \
 utils/ibio.h \
 utils/logger.h \
+utils/kvmap.h \
+utils/kvmap.c \
 utils/md5.c \
 utils/md5.h \
 utils/mutex.h \

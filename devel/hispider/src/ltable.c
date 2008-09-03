@@ -13,6 +13,7 @@
 #include "logger.h"
 #include "timer.h"
 #include "http.h"
+#include "kvmap.h"
 static const char *__html__body__  = 
 "<HTML><HEAD>\n"
 "<TITLE>Hispider Running Status</TITLE>\n"
@@ -157,8 +158,9 @@ int ltable_parselink(LTABLE *ltable, char *host, char *path, char *content, char
                 if(pref && *link != '#' && strncasecmp("javascript", link, 10) != 0
                     && strncasecmp("mailto:", link, 7) != 0)
                 {
-                    while(p < end && *p != '\'' && *p != '"' 
-                            && (ps - url) < HTTP_URL_MAX) *ps++ = *p++;
+                    while(p < end && *p != '\'' && *p != '"' && *p != '\r' && *p != '\n' 
+                    && *p != '\t' && *p != 0x20 && (ps - url) < HTTP_URL_MAX) *ps++ = *p++;
+                    if(*p == '\r' || *p == '\n' || *p == '\t' || *p == 0x20) continue;
                     if((n = (ps - url)) >= HTTP_URL_MAX) continue;
                     url[n] = '\0';
                     ltable->addlink(ltable, (unsigned char *)host, (unsigned char *)path, 
@@ -315,7 +317,7 @@ int ltable_addurl(LTABLE *ltable, char *host, char *path)
     char url[HTTP_URL_MAX];
     LMETA lmeta = {0};
     char *p = NULL, *ps = NULL, *dot_off = NULL, *newhost = NULL;
-    void *dp = NULL;
+    void *dp = NULL, *olddp = NULL;
     off_t offset = 0;
     int ret = -1, n = 0;
     long id = 0;
@@ -335,7 +337,7 @@ int ltable_addurl(LTABLE *ltable, char *host, char *path)
         if((n = sprintf(url, "http://%s%s", host, path)) > 0)
         {
             md5((unsigned char *)url, n, lmeta.id);
-            TRIETAB_GET(ltable->urltable, lmeta.id, DOC_KEY_LEN, dp);
+            KVMAP_GET(ltable->urltable, lmeta.id, dp);
             if(dp) 
             {
                 DEBUG_LOGGER(ltable->logger, "URL:[http://%s%s][%ld] is exists", 
@@ -362,7 +364,7 @@ int ltable_addurl(LTABLE *ltable, char *host, char *path)
             //add to urltable
             ltable->url_total = id = (offset/sizeof(LMETA)) + 1;
             dp = (void *)id;
-            TRIETAB_ADD(ltable->urltable, lmeta.id, DOC_KEY_LEN, dp);
+            KVMAP_ADD(ltable->urltable, lmeta.id, dp, olddp);
             //host
             p = ps = url + strlen("http://");
             while(*p != '\0' && *p != ':' && *p != '/')++p;
@@ -500,7 +502,7 @@ int ltable_resume(LTABLE *ltable)
 {
     LMETA lmeta = {0};
     DNS *dns = NULL;
-    void *dp = NULL;
+    void *dp = NULL, *olddp = NULL;
     char *host = NULL, *p = NULL;
     int i = 0, flag = 0, size = 0;
 
@@ -553,7 +555,7 @@ int ltable_resume(LTABLE *ltable)
         while(read(ltable->meta_fd, &lmeta, sizeof(LMETA)) > 0)
         {
             dp = (void *)++(ltable->url_total);
-            TRIETAB_ADD(ltable->urltable, lmeta.id, DOC_KEY_LEN, dp);
+            KVMAP_ADD(ltable->urltable, lmeta.id, dp, olddp);
             //check status
             if(lmeta.state == TASK_STATE_INIT && flag == 0)
             {
@@ -775,7 +777,7 @@ void ltable_clean(LTABLE **pltable)
 {
     if(pltable && *pltable)
     {
-        TRIETAB_CLEAN((*pltable)->urltable);
+        KVMAP_CLEAN((*pltable)->urltable);
         TRIETAB_CLEAN((*pltable)->dnstable);
         if((*pltable)->mutex)
         {
@@ -804,7 +806,7 @@ LTABLE *ltable_init()
         ltable->running_state = 1;
         MUTEX_INIT(ltable->mutex);
         TIMER_INIT(ltable->timer);
-        ltable->urltable        = TRIETAB_INIT();
+        ltable->urltable        = KVMAP_INIT();
         ltable->dnstable        = TRIETAB_INIT();
         ltable->set_basedir     = ltable_set_basedir;
         ltable->set_logger      = ltable_set_logger;

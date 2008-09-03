@@ -55,8 +55,9 @@ hispider_LINK = $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(hispider_LDFLAGS) \
 am_hispiderd_OBJECTS = hispiderd-evdns.$(OBJEXT) \
 	hispiderd-hispiderd.$(OBJEXT) hispiderd-http.$(OBJEXT) \
 	hispiderd-iniparser.$(OBJEXT) hispiderd-ltable.$(OBJEXT) \
-	hispiderd-ibio.$(OBJEXT) hispiderd-md5.$(OBJEXT) \
-	hispiderd-trie.$(OBJEXT) hispiderd-zstream.$(OBJEXT)
+	hispiderd-ibio.$(OBJEXT) hispiderd-kvmap.$(OBJEXT) \
+	hispiderd-md5.$(OBJEXT) hispiderd-trie.$(OBJEXT) \
+	hispiderd-zstream.$(OBJEXT)
 hispiderd_OBJECTS = $(am_hispiderd_OBJECTS)
 hispiderd_LDADD = $(LDADD)
 hispiderd_LINK = $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(hispiderd_LDFLAGS) \
@@ -170,6 +171,8 @@ ltable.h \
 utils/ibio.c \
 utils/ibio.h \
 utils/logger.h \
+utils/kvmap.h \
+utils/kvmap.c \
 utils/md5.c \
 utils/md5.h \
 utils/mutex.h \
@@ -281,6 +284,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hispiderd-http.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hispiderd-ibio.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hispiderd-iniparser.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hispiderd-kvmap.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hispiderd-ltable.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hispiderd-md5.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hispiderd-trie.Po@am__quote@
@@ -467,6 +471,20 @@ hispiderd-ibio.obj: utils/ibio.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='utils/ibio.c' object='hispiderd-ibio.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hispiderd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hispiderd-ibio.obj `if test -f 'utils/ibio.c'; then $(CYGPATH_W) 'utils/ibio.c'; else $(CYGPATH_W) '$(srcdir)/utils/ibio.c'; fi`
+
+hispiderd-kvmap.o: utils/kvmap.c
+@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hispiderd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hispiderd-kvmap.o -MD -MP -MF $(DEPDIR)/hispiderd-kvmap.Tpo -c -o hispiderd-kvmap.o `test -f 'utils/kvmap.c' || echo '$(srcdir)/'`utils/kvmap.c
+@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/hispiderd-kvmap.Tpo $(DEPDIR)/hispiderd-kvmap.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='utils/kvmap.c' object='hispiderd-kvmap.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hispiderd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hispiderd-kvmap.o `test -f 'utils/kvmap.c' || echo '$(srcdir)/'`utils/kvmap.c
+
+hispiderd-kvmap.obj: utils/kvmap.c
+@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hispiderd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hispiderd-kvmap.obj -MD -MP -MF $(DEPDIR)/hispiderd-kvmap.Tpo -c -o hispiderd-kvmap.obj `if test -f 'utils/kvmap.c'; then $(CYGPATH_W) 'utils/kvmap.c'; else $(CYGPATH_W) '$(srcdir)/utils/kvmap.c'; fi`
+@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/hispiderd-kvmap.Tpo $(DEPDIR)/hispiderd-kvmap.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='utils/kvmap.c' object='hispiderd-kvmap.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hispiderd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hispiderd-kvmap.obj `if test -f 'utils/kvmap.c'; then $(CYGPATH_W) 'utils/kvmap.c'; else $(CYGPATH_W) '$(srcdir)/utils/kvmap.c'; fi`
 
 hispiderd-md5.o: utils/md5.c
 @am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hispiderd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hispiderd-md5.o -MD -MP -MF $(DEPDIR)/hispiderd-md5.Tpo -c -o hispiderd-md5.o `test -f 'utils/md5.c' || echo '$(srcdir)/'`utils/md5.c
