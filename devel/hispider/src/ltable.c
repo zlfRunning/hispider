@@ -198,7 +198,7 @@ int ltable_addlink(LTABLE *ltable, unsigned char *host, unsigned char *path,
         {
             ps = host;
             pp = href;
-            DEBUG_LOGGER(ltable->logger, "URL-0:http://%s|%s", ps, pp);
+            //DEBUG_LOGGER(ltable->logger, "URL-0:http://%s|%s", ps, pp);
         }
         else if(*p == '.')
         {
@@ -225,7 +225,7 @@ int ltable_addlink(LTABLE *ltable, unsigned char *host, unsigned char *path,
             *pp = '\0';
             ps = host;
             if(tmp[0] == '/' && tmp[1] == '/') pp = tmp+1;
-            DEBUG_LOGGER(ltable->logger, "URL-1:http://%s|%s", ps, pp);
+            //DEBUG_LOGGER(ltable->logger, "URL-1:http://%s|%s", ps, pp);
         }
         else if((p < (ehref - 7)) && strncasecmp((char *)p, "http://", 7) == 0)
         {
@@ -234,7 +234,7 @@ int ltable_addlink(LTABLE *ltable, unsigned char *host, unsigned char *path,
             n = HTTP_HOST_MAX;
             while(pp < ehref && *pp != '/' && *pp != '?' && *pp != 0x20) ++pp; 
             if(*pp == '?' || *pp == 0x20) return -1;
-            DEBUG_LOGGER(ltable->logger, "URL-2:http://%s|%s", ps, pp);
+            //DEBUG_LOGGER(ltable->logger, "URL-2:http://%s|%s", ps, pp);
         }
         else
         {
@@ -259,7 +259,7 @@ int ltable_addlink(LTABLE *ltable, unsigned char *host, unsigned char *path,
             *pp = '\0';
             ps = host;
             pp = tmp;
-            DEBUG_LOGGER(ltable->logger, "URL-3:http://%s|%s", ps, pp);
+            //DEBUG_LOGGER(ltable->logger, "URL-3:http://%s|%s", ps, pp);
         }
         if(ps && pp)
         {

@@ -8,12 +8,15 @@
 #include <netdb.h>
 #include <locale.h>
 #include <sbase.h>
+#include <iconv.h>
+#include <chardet.h>
 #include "http.h"
 #include "ltable.h"
 #include "iniparser.h"
 #include "queue.h"
 #include "zstream.h"
 #include "logger.h"
+#define CHARSET_MAX 256
 typedef struct _TASK
 {
     CONN *s_conn;
@@ -278,8 +281,12 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
 {
     CONN *s_conn = NULL;
     HTTP_RESPONSE *http_resp = NULL;
-    char buf[HTTP_BUF_SIZE], *zdata = NULL, *p = NULL, *ps = NULL;
-    int  ret = -1, c_id = 0, n = 0, nzdata = 0, is_gzip = 0;
+    char buf[HTTP_BUF_SIZE], charset[CHARSET_MAX], *zdata = NULL, 
+         *p = NULL, *ps = NULL, *outbuf = NULL;
+    int  ret = -1, c_id = 0, n = 0, nzdata = 0, is_gzip = 0, is_need_convert = 0;
+    size_t ninbuf = 0, noutbuf = 0;
+    chardet_t pdet = NULL;
+    iconv_t cd = NULL;
 
     if(conn && (c_id = conn->c_id) >= 0 && c_id < ntask)
     {
@@ -295,14 +302,54 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
             }
             else
             {
-                nzdata = chunk->ndata + Z_HEADER_SIZE;
+                if(chardet_create(&pdet) == 0)
+                {
+                    if(chardet_handle_data(pdet, chunk->data, chunk->ndata) == 0 
+                        && chardet_data_end(pdet) == 0 )
+                    {
+                        chardet_get_charset(pdet, charset, CHARSET_MAX);
+                        if(memcmp(charset, "UTF-8", 5) != 0) is_need_convert = 1;
+                    }
+                    chardet_destroy(pdet);
+                }
+                if(is_need_convert && (cd = iconv_open("UTF-8", charset)) != (iconv_t)-1)
+                {
+                    p = chunk->data;
+                    ninbuf = chunk->ndata;
+                    n = noutbuf = ninbuf * 4;
+                    if((ps = outbuf = calloc(1, noutbuf)))
+                    {
+                        if(iconv(cd, &p, &ninbuf, &ps, (size_t *)&n) == -1)
+                        {
+                            free(outbuf);
+                            outbuf = NULL;
+                        }
+                        else
+                        {
+                            noutbuf -= n;
+                        }
+                    }
+                    iconv_close(cd);
+                }
+                if(outbuf && noutbuf > 0)
+                {
+                    nzdata = noutbuf + Z_HEADER_SIZE;
+                    p = outbuf;
+                    n = noutbuf;
+                }
+                else
+                {
+                    nzdata = chunk->ndata + Z_HEADER_SIZE;
+                    p = chunk->data;
+                    n = chunk->ndata;
+                }
                 if((zdata = (char *)calloc(1, nzdata)))
                 {
-                    zcompress((Bytef *)chunk->data, chunk->ndata, 
-                    (Bytef *)zdata, (uLong * )&(nzdata));
+                    zcompress((Bytef *)p, n, (Bytef *)zdata, (uLong * )&(nzdata));
                 }
+                if(outbuf) {free(outbuf); outbuf = NULL;}
             }
-            if(nzdata > 0)
+            if(zdata && nzdata > 0)
             {
                 p = buf;
                 p += sprintf(p, "TASK %d HTTP/1.0\r\n", tasklist[c_id].taskid);

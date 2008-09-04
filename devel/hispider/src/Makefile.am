@@ -45,4 +45,4 @@ utils/zstream.c \
 utils/zstream.h
 
 hispider_CPPFLAGS = -I utils -D_FILE_OFFSET_BITS=64 -Wall
-hispider_LDFLAGS = -lsbase -lz
+hispider_LDFLAGS = -lsbase -lz -lchardet

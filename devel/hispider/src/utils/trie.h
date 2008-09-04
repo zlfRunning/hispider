@@ -106,7 +106,7 @@ typedef struct _TIRETAB
     unsigned char ps;
 }TRIETAB;
 void trietab_view(void *ptr);
-void trietab_clean(void *ptr);
+void trietab_CLEAN(void *ptr);
 #define  PSH(ptr) (((TRIETAB *)(ptr))->ps)
 #define  HBCNT(ptr) (((TRIETAB *)(ptr))->count)
 #define  HBSIZE(ptr) (((TRIETAB *)(ptr))->size)
@@ -256,7 +256,7 @@ do{                                                                             
                 }else break;                                                                \
             }while(++IHB(ptr) < nkey);                                                      \
         }                                                                                   \
-        if(HBND(ptr)) pdata = HBND(ptr)->dptr;                                              \
+        if(HBND(ptr) && HBND(ptr)->dptr) {pdata = HBND(ptr)->dptr; pos = IHB(ptr);}         \
     }                                                                                       \
 }while(0)                                                                                           
 
@@ -289,6 +289,7 @@ do{                                                                             
                 }else break;                                                                \
             }while(++IHB(ptr) < nkey);                                                      \
         }                                                                                   \
+        if(HBND(ptr) && HBND(ptr)->dptr) {pdata = HBND(ptr)->dptr; pos = IHB(ptr);}         \
     }                                                                                       \
 }while(0)                                                                                           
 

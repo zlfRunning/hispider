@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.61)
-AC_INIT(hispider, [0.1.2], [SounOS@gmail.com])
+AC_INIT(hispider, [0.1.3], [SounOS@gmail.com])
 AM_INIT_AUTOMAKE
 AC_CONFIG_SRCDIR([src/basedef.h])
 AC_CONFIG_HEADER([config.h])
@@ -16,6 +16,24 @@ AM_PROG_CC_C_O
 AC_CHECK_LIB([sbase], [main])
 # FIXME: Replace `main' with a function in `-lz':
 AC_CHECK_LIB([z], [main])
+
+#pthread
+havepthread=no
+AC_CHECK_LIB(pthread,pthread_create,havepthread=yes)
+if test "$havepthread" = "yes" ; then
+    CPPFLAGS="${CPPFLAGS} -DHAVE_PTHREAD"
+    LDFLAGS="${LDFLAGS} -lpthread"
+fi
+
+#iconv
+haveiconv=no
+AC_CHECK_LIB(iconv, iconv_open, haveiconv=yes)
+if test "$haveiconv" = "yes" ; then
+    CPPFLAGS="${CPPFLAGS} -DHAVE_ICONV"
+    LDFLAGS="${LDFLAGS} -liconv"
+fi
+
+AC_CHECK_EXTRA_OPTIONS
 
 # Checks for header files.
 AC_HEADER_DIRENT
