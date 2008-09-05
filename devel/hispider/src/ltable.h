@@ -54,7 +54,7 @@ typedef struct _LMETA
 }LMETA;
 typedef struct _LHEADER
 {
-    int ndate;
+    int date;
     int nurl;
     int nzdata;
     int ndata;

@@ -733,7 +733,7 @@ int ltable_add_document(LTABLE *ltable, int taskid, int date, char *content, int
                     //fprintf(stdout, "%s::%d OK \n", __FILE__,  __LINE__);
                     lheader = (LHEADER *)data;
                     p = data + sizeof(LHEADER);
-                    lheader->ndate = time(NULL);
+                    lheader->date = time(NULL);
                     lheader->nurl = lmeta.nurl;
                     lheader->nzdata = ncontent;
                     lheader->ndata = ndata;

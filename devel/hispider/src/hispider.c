@@ -336,6 +336,10 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
                     nzdata = noutbuf + Z_HEADER_SIZE;
                     p = outbuf;
                     n = noutbuf;
+                    /*
+                    DEBUG_LOGGER(logger, "iconv [%s][%d] to [UTF-8]:%d", 
+                        charset, chunk->ndata, noutbuf);
+                    */
                 }
                 else
                 {
