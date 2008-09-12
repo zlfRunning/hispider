@@ -38,6 +38,9 @@ static char *server_ip = NULL;
 static int server_port = 0;
 static void *taskqueue = NULL;
 static void *logger = NULL;
+static long long int doc_total = 0ll;
+static long long int gzdoc_total = 0ll;
+static long long int zdoc_total = 0ll;
 /* data handler */
 int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk);
 int hispider_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk);
@@ -294,6 +297,7 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
     {
         if(conn == tasklist[c_id].c_conn && chunk && chunk->data && chunk->ndata > 0)
         {
+            doc_total++;
             http_resp = (HTTP_RESPONSE *)cache->data;
             if((p = http_resp->headers[HEAD_ENT_CONTENT_ENCODING]))
             {
@@ -312,7 +316,9 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
                     if((data = calloc(1, ndata)) && (n = httpgzdecompress((Bytef *)zdata, 
                                     nzdata, (Bytef *)data, (uLong *)&ndata)) == 0)
                     {
-                        DEBUG_LOGGER(logger, "gzdecompress data from %d to %d", nzdata, ndata);
+                        gzdoc_total++;
+                        DEBUG_LOGGER(logger, "gzdecompress data from %d to %d rate:(%lld/%lld) = %f", 
+                         nzdata, ndata, gzdoc_total, doc_total, ((double)gzdoc_total/(double)doc_total));
                         rawdata = data;
                         nrawdata = ndata;
                         is_need_compress = 1;
@@ -330,7 +336,9 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
                     if( (data = calloc(1, ndata))
                         && zdecompress((Bytef *)zdata, nzdata, (Bytef *)data, (uLong *)&ndata) == 0)
                     {
-                        DEBUG_LOGGER(logger, "zdecompress data from %d to %d", nzdata, ndata);
+                        zdoc_total++;
+                        DEBUG_LOGGER(logger, "zdecompress data from %d to %d rate:(%lld/%lld) = %f", 
+                         nzdata, ndata, gzdoc_total, doc_total, ((double)zdoc_total/(double)doc_total));
                         rawdata = data;
                         nrawdata = ndata;
                     }
