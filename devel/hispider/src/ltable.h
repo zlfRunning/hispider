@@ -35,7 +35,7 @@
 #define USER_AGENT "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10.5; zh-CN; rv:1.9.0.1) Gecko/2008070206 Firefox/3.0.1"
 #define ACCEPT_TYPE          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 #define ACCEPT_LANGUAGE     "zh-cn,zh;q=0.5"
-#define ACCEPT_ENCODING     "zlib,gzip,deflate"
+#define ACCEPT_ENCODING     "gzip,deflate"
 #define ACCEPT_CHARSET      "gb2312,utf-8;q=0.7,*;q=0.7"
 #define HTTP_RESP_OK        "HTTP/1.0 200 OK"
 #define HTTP_BAD_REQUEST    "HTTP/1.0 404 Not Found\r\n\r\n"

@@ -164,10 +164,10 @@ int hispider_packet_handler(CONN *conn, CB_DATA *packet)
                     tasklist[c_id].nrequest = sprintf(tasklist[c_id].request, 
                         "GET %s HTTP/1.0\r\nHost: %s\r\n"
                         "User-Agent: %s\r\nAccept: %s\r\nAccept-Language: %s\r\n"
-                        //"Accept-Encoding: %\r\nAccept-Charset: %s\r\nConnection: close\r\n\r\n", 
-                        "Accept-Charset: %s\r\nConnection: close\r\n\r\n", 
-                        path, host, USER_AGENT, ACCEPT_TYPE, ACCEPT_LANGUAGE, ACCEPT_CHARSET);
-                        //ACCEPT_ENCODING, ACCEPT_CHARSET);
+                        "Accept-Encoding: %s\r\nAccept-Charset: %s\r\nConnection: close\r\n\r\n", 
+                        //"Accept-Charset: %s\r\nConnection: close\r\n\r\n", 
+                        path, host, USER_AGENT, ACCEPT_TYPE, ACCEPT_LANGUAGE, 
+                        ACCEPT_ENCODING, ACCEPT_CHARSET);
                     tasklist[c_id].c_conn->c_id = c_id;
                     tasklist[c_id].c_conn->start_cstate(tasklist[c_id].c_conn);
                     return service->newtransaction(service, tasklist[c_id].c_conn, c_id);
@@ -282,8 +282,9 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
     CONN *s_conn = NULL;
     HTTP_RESPONSE *http_resp = NULL;
     char buf[HTTP_BUF_SIZE], charset[CHARSET_MAX], *zdata = NULL, 
-         *p = NULL, *ps = NULL, *outbuf = NULL;
-    int  ret = -1, c_id = 0, n = 0, nzdata = 0, is_gzip = 0, is_need_convert = 0;
+         *p = NULL, *ps = NULL, *outbuf = NULL, *data = NULL, *rawdata = NULL;
+    int  ret = -1, c_id = 0, n = 0, nzdata = 0, ndata = 0, nrawdata = 0, 
+         is_need_convert = 0, is_need_compress = 0;
     size_t ninbuf = 0, noutbuf = 0;
     chardet_t pdet = NULL;
     iconv_t cd = NULL;
@@ -293,66 +294,88 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
         if(conn == tasklist[c_id].c_conn && chunk && chunk->data && chunk->ndata > 0)
         {
             http_resp = (HTTP_RESPONSE *)cache->data;
-            if((p = http_resp->headers[HEAD_ENT_CONTENT_ENCODING]) 
-                    && strncasecmp(p, "gzip", 4) == 0)
+            if((p = http_resp->headers[HEAD_ENT_CONTENT_ENCODING]))
             {
                 zdata = chunk->data;
                 nzdata = chunk->ndata;
-                is_gzip = 1;
+                if(strncasecmp(p, "gzip", 4) == 0 
+                        && (data = calloc(1, nzdata * 10 + Z_HEADER_SIZE)) 
+                        && gzdecompress((Bytef *)zdata, nzdata, (Bytef *)data, (uLong *)&ndata) == 0)
+                {
+                    rawdata = data;
+                    nrawdata = ndata;
+                    is_need_compress = 1;
+                }
+                else if(strncasecmp(p, "deflate", 7) == 0 
+                        && (data = calloc(1, nzdata * 10 + Z_HEADER_SIZE))
+                        && zdecompress((Bytef *)zdata, nzdata, (Bytef *)data, (uLong *)&ndata) == 0)
+                {
+                    rawdata = data;
+                    nrawdata = ndata;
+                }
             }
             else
             {
-                if(chardet_create(&pdet) == 0)
+                rawdata = chunk->data;
+                nrawdata = chunk->ndata;
+                is_need_compress = 1;
+            }
+            if(rawdata && nrawdata > 0 && chardet_create(&pdet) == 0)
+            {
+                if(chardet_handle_data(pdet, rawdata, nrawdata) == 0 
+                    && chardet_data_end(pdet) == 0 )
                 {
-                    if(chardet_handle_data(pdet, chunk->data, chunk->ndata) == 0 
-                        && chardet_data_end(pdet) == 0 )
-                    {
                         chardet_get_charset(pdet, charset, CHARSET_MAX);
                         if(memcmp(charset, "UTF-8", 5) != 0) is_need_convert = 1;
-                    }
+                }
                     chardet_destroy(pdet);
-                }
-                if(is_need_convert && (cd = iconv_open("UTF-8", charset)) != (iconv_t)-1)
-                {
-                    p = chunk->data;
-                    ninbuf = chunk->ndata;
-                    n = noutbuf = ninbuf * 4;
-                    if((ps = outbuf = calloc(1, noutbuf)))
-                    {
-                        if(iconv(cd, &p, &ninbuf, &ps, (size_t *)&n) == -1)
-                        {
-                            free(outbuf);
-                            outbuf = NULL;
-                        }
-                        else
-                        {
-                            noutbuf -= n;
-                        }
-                    }
-                    iconv_close(cd);
-                }
-                if(outbuf && noutbuf > 0)
-                {
-                    nzdata = noutbuf + Z_HEADER_SIZE;
-                    p = outbuf;
-                    n = noutbuf;
-                    /*
-                    DEBUG_LOGGER(logger, "iconv [%s][%d] to [UTF-8]:%d", 
-                        charset, chunk->ndata, noutbuf);
-                    */
-                }
-                else
-                {
-                    nzdata = chunk->ndata + Z_HEADER_SIZE;
-                    p = chunk->data;
-                    n = chunk->ndata;
-                }
-                if((zdata = (char *)calloc(1, nzdata)))
-                {
-                    zcompress((Bytef *)p, n, (Bytef *)zdata, (uLong * )&(nzdata));
-                }
-                if(outbuf) {free(outbuf); outbuf = NULL;}
             }
+            //convert charset 
+            if(is_need_convert && (cd = iconv_open("UTF-8", charset)) != (iconv_t)-1)
+            {
+                p = rawdata;
+                ninbuf = nrawdata;
+                n = noutbuf = ninbuf * 8;
+                if((ps = outbuf = calloc(1, noutbuf)))
+                {
+                    if(iconv(cd, &p, &ninbuf, &ps, (size_t *)&n) == -1)
+                    {
+                        free(outbuf);
+                        outbuf = NULL;
+                    }
+                    else
+                    {
+                        noutbuf -= n;
+                        rawdata = outbuf;
+                        nrawdata = noutbuf;
+                    }
+                }
+                iconv_close(cd);
+                if(is_need_compress == 0) is_need_compress = 1;
+            }
+            zdata = NULL;
+            nzdata = 0;
+            if(is_need_compress && rawdata && nrawdata  > 0)
+            {
+                if(rawdata && nrawdata > 0)
+                {
+                    nzdata = nrawdata + Z_HEADER_SIZE;
+                    p = rawdata;
+                    n = nrawdata;
+                    /*
+                       DEBUG_LOGGER(logger, "iconv [%s][%d] to [UTF-8]:%d", 
+                       charset, chunk->ndata, noutbuf);
+                       */
+                    if((zdata = (char *)calloc(1, nzdata)) == NULL
+                        && zcompress((Bytef *)p, n, (Bytef *)zdata, (uLong * )&(nzdata)) != 0)
+                    {
+                        zdata = NULL;
+                        nzdata = 0;
+                    }
+                }
+            }
+            if(data){free(data); data = NULL;}
+            if(outbuf){free(outbuf); outbuf = NULL;}
             if(zdata && nzdata > 0)
             {
                 p = buf;
@@ -373,7 +396,8 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
                     //fprintf(stdout, "Over task[%ld]\n", tasklist[c_id].taskid);
                     s_conn->push_chunk(s_conn, buf, n);
                     s_conn->push_chunk(s_conn, zdata, nzdata);
-                    if(is_gzip == 0 && zdata) {free(zdata);  zdata = NULL;}
+                    free(zdata);
+                    zdata = NULL;
                     tasklist[c_id].taskid = -1;
                     tasklist[c_id].c_conn = NULL;
                 }

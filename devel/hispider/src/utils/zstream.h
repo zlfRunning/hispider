@@ -11,4 +11,10 @@ int zcompress(Bytef *data, uLong ndata,
 /* Uncompress data */
 int zdecompress(Bytef *zdata, uLong nzdata,
         Bytef *data, uLong *ndata);
+/* gzip Compress data */
+int gzcompress(Bytef *data, uLong ndata, 
+	Bytef *zdata, uLong *nzdata);
+/* gzip Uncompress data */
+int gzdecompress(Bytef *zdata, uLong nzdata,
+        Bytef *data, uLong *ndata);
 #endif

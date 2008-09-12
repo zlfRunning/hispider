@@ -244,9 +244,6 @@ do                                                                              
         }                                                                                   \
     }                                                                                       \
 }while(0)
-    //fprintf(stdout, "NEW[%lf][%ld]\n", PKV(ptr)->p->key, (int)(PKV(ptr)->p->dptr));\
-    //fprintf(stdout, "OLD[%lf][%ld]\n", PKV(ptr)->old->key, (int)(PKV(ptr)->old->dptr));\
-    if(nkey < 1){fprintf(stdout, "0:maxk:%lf maxp:%ld node->k:%lf node->p:%ld\n", nkey, dp, PKV(ptr)->p->key, PKV(ptr)->p->dptr);}   \
 
 /* get val(dp) of nkey */
 #define KVMAP_GET(ptr, nkey, dp)                                                            \
@@ -355,7 +352,7 @@ do                                                                              
     if(ptr)                                                                                 \
     {                                                                                       \
         PKV(ptr)->p = NULL;                                                                 \
-        while(PKV(ptr)->p = KV_MAX(PKV(ptr)))                                               \
+        while((PKV(ptr)->p = KV_MAX(PKV(ptr))))                                               \
         {                                                                                   \
                 PKV(ptr)->old = kv_remove(PKV(ptr), PKV(ptr)->p);                           \
                 if(PKV(ptr)->old) free(PKV(ptr)->old);                                      \

@@ -106,7 +106,7 @@ typedef struct _TIRETAB
     unsigned char ps;
 }TRIETAB;
 void trietab_view(void *ptr);
-void trietab_CLEAN(void *ptr);
+void trietab_clean(void *ptr);
 #define  PSH(ptr) (((TRIETAB *)(ptr))->ps)
 #define  HBCNT(ptr) (((TRIETAB *)(ptr))->count)
 #define  HBSIZE(ptr) (((TRIETAB *)(ptr))->size)

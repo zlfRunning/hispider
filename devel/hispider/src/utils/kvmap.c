@@ -1,6 +1,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include "kvmap.h"
 
 void kv_insert_color(KVMAP *map, KVNODE *elm)
@@ -338,7 +339,7 @@ KVNODE *kv_minmax(KVMAP *map, int val)
 #include "md5.h"
 #include "timer.h"
 #define HTTP_URL_MAX  65536
-int main()
+int main(int argc, char **argv)
 {
     unsigned char url[HTTP_URL_MAX], *p = NULL;
     FILE *fp = NULL;
@@ -347,22 +348,30 @@ int main()
     long n = 0, id = 0;
     void *timer = NULL;
     long long total = 0;
+    char *file = NULL;
 
-    if((fp = fopen("/url/new.host", "r")))
+    if(argc < 2)
+    {
+        fprintf(stderr, "Usage:%s file\n", argv[0]);
+        _exit(-1);
+    }
+    file = argv[1];
+    if(file && (fp = fopen(file, "r")))
     {
         if((urlmap = KVMAP_INIT()))
         {
             TIMER_INIT(timer);
-            while(fgets(url, HTTP_URL_MAX, fp))
+            while(fgets((char *)url, HTTP_URL_MAX, fp))
             {
                 //fprintf(stdout, "%s", url);
                 //memset(url, 0, HTTP_URL_MAX);
                 //continue;
                 //continue;
-                //p = url;
-                //while(*p != '\0' && *p != '\r' && *p != '\n') ++p;
-                n = strlen(url) - 1;
-                if(n == 0) {fprintf(stdout, "URL:%d\n", id); continue;}
+                p = url;
+                while(*p != '\0' && *p != '\r' && *p != '\n') ++p;
+                n = p - url;
+                //n = strlen(url) - 1;
+                //if(n == 0) {fprintf(stdout, "URL:%d\n", id); continue;}
                 md5(url, n, key);
                 dp = (void *)++id;
                 olddp = NULL;
@@ -383,13 +392,14 @@ int main()
             }
             if(id > 0)
             {
-                fprintf(stdout, "add avg:%g microsecond(s)\n", (double )(total/id));
+                fprintf(stdout, "add %d sizeof(KVNODE):%d avg:%g microsecond(s)\n", 
+                        id, sizeof(KVNODE), (double )(total/id));
             }
             TIMER_CLEAN(timer);
             KVMAP_CLEAN(urlmap);
         }
         fclose(fp);
     }
-    //while(1) sleep(1);
+    while(1) sleep(1);
 }
 #endif

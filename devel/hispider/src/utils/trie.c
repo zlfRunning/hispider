@@ -8,7 +8,7 @@ void hnode_view(HNODE *hnode)
 
     if(hnode)
     {
-        if(hnode->dptr)fprintf(stdout, "%ld\n", (long)(hnode->dptr));
+        if(hnode->dptr)fprintf(stdout, "%ld\n", (long)hnode->dptr);
         if(hnode->list)
         {
             for(i = 0; i < hnode->count; i++)
