@@ -17,4 +17,8 @@ int gzcompress(Bytef *data, uLong ndata,
 /* gzip Uncompress data */
 int gzdecompress(Bytef *zdata, uLong nzdata,
         Bytef *data, uLong *ndata);
+/* http gzip Uncompress data */
+int httpgzdecompress(Bytef *zdata, uLong nzdata,
+        Bytef *data, uLong *ndata);
+
 #endif

@@ -281,8 +281,9 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
 {
     CONN *s_conn = NULL;
     HTTP_RESPONSE *http_resp = NULL;
-    char buf[HTTP_BUF_SIZE], charset[CHARSET_MAX], *zdata = NULL, 
+    char buf[HTTP_BUF_SIZE], charset[CHARSET_MAX], *zdata = NULL,
          *p = NULL, *ps = NULL, *outbuf = NULL, *data = NULL, *rawdata = NULL;
+    unsigned char *s = NULL, *end = NULL;
     int  ret = -1, c_id = 0, n = 0, nzdata = 0, ndata = 0, nrawdata = 0, 
          is_need_convert = 0, is_need_compress = 0;
     size_t ninbuf = 0, noutbuf = 0;
@@ -298,20 +299,47 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
             {
                 zdata = chunk->data;
                 nzdata = chunk->ndata;
-                if(strncasecmp(p, "gzip", 4) == 0 
-                        && (data = calloc(1, nzdata * 10 + Z_HEADER_SIZE)) 
-                        && gzdecompress((Bytef *)zdata, nzdata, (Bytef *)data, (uLong *)&ndata) == 0)
+                if(strncasecmp(p, "gzip", 4) == 0) 
                 {
-                    rawdata = data;
-                    nrawdata = ndata;
-                    is_need_compress = 1;
+                    /*
+                    s = (unsigned char *)zdata ;
+                    end = s + nzdata;
+                    while(s < end && *s != 0x1F && *(s+1) != 0x8B)s++;
+                    nzdata -= ((char *)s - zdata); 
+                    */
+                    ndata =  nzdata * 8 + Z_HEADER_SIZE;
+                    //DEBUG_LOGGER(logger, "ready for gzdecompress data %d to buf[%d]", nzdata, ndata);
+                    if((data = calloc(1, ndata)) && (n = httpgzdecompress((Bytef *)zdata, 
+                                    nzdata, (Bytef *)data, (uLong *)&ndata)) == 0)
+                    {
+                        DEBUG_LOGGER(logger, "gzdecompress data from %d to %d", nzdata, ndata);
+                        rawdata = data;
+                        nrawdata = ndata;
+                        is_need_compress = 1;
+                    }
+                    else 
+                    {
+                        ERROR_LOGGER(logger, "gzdecompress data from %d to %d failed, %d:%s", 
+                                nzdata, ndata, n, strerror(errno));
+                        goto err_end;
+                    }
                 }
-                else if(strncasecmp(p, "deflate", 7) == 0 
-                        && (data = calloc(1, nzdata * 10 + Z_HEADER_SIZE))
-                        && zdecompress((Bytef *)zdata, nzdata, (Bytef *)data, (uLong *)&ndata) == 0)
+                else if(strncasecmp(p, "deflate", 7) == 0)
                 {
-                    rawdata = data;
-                    nrawdata = ndata;
+                    ndata =  nzdata * 8 + Z_HEADER_SIZE;
+                    if( (data = calloc(1, ndata))
+                        && zdecompress((Bytef *)zdata, nzdata, (Bytef *)data, (uLong *)&ndata) == 0)
+                    {
+                        DEBUG_LOGGER(logger, "zdecompress data from %d to %d", nzdata, ndata);
+                        rawdata = data;
+                        nrawdata = ndata;
+                    }
+                    else goto err_end;
+                }
+                else
+                {
+                    DEBUG_LOGGER(logger, "unspported encoding:%s", p);
+                    goto err_end;
                 }
             }
             else
@@ -320,6 +348,7 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
                 nrawdata = chunk->ndata;
                 is_need_compress = 1;
             }
+            DEBUG_LOGGER(logger, "is_need_convert:%d data:%08x ndata:%d", is_need_convert, rawdata, nrawdata);
             if(rawdata && nrawdata > 0 && chardet_create(&pdet) == 0)
             {
                 if(chardet_handle_data(pdet, rawdata, nrawdata) == 0 
@@ -328,8 +357,9 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
                         chardet_get_charset(pdet, charset, CHARSET_MAX);
                         if(memcmp(charset, "UTF-8", 5) != 0) is_need_convert = 1;
                 }
-                    chardet_destroy(pdet);
+                chardet_destroy(pdet);
             }
+            DEBUG_LOGGER(logger, "is_need_convert:%d data:%08x ndata:%d", is_need_convert, rawdata, nrawdata);
             //convert charset 
             if(is_need_convert && (cd = iconv_open("UTF-8", charset)) != (iconv_t)-1)
             {
@@ -346,6 +376,8 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
                     else
                     {
                         noutbuf -= n;
+                        DEBUG_LOGGER(logger, "convert %s len:%d to UTF-8 len:%d", 
+                                charset, nrawdata, noutbuf);
                         rawdata = outbuf;
                         nrawdata = noutbuf;
                     }
@@ -355,24 +387,23 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
             }
             zdata = NULL;
             nzdata = 0;
+            DEBUG_LOGGER(logger, "is_need_compess:%d data:%08x ndata:%d", is_need_compress, rawdata, nrawdata);
             if(is_need_compress && rawdata && nrawdata  > 0)
             {
-                if(rawdata && nrawdata > 0)
+                nzdata = nrawdata + Z_HEADER_SIZE;
+                p = rawdata;
+                n = nrawdata;
+                /*
+                   DEBUG_LOGGER(logger, "iconv [%s][%d] to [UTF-8]:%d", 
+                   charset, chunk->ndata, noutbuf);
+                   */
+                if((zdata = (char *)calloc(1, nzdata)) == NULL
+                        || zcompress((Bytef *)p, n, (Bytef *)zdata, (uLong * )&(nzdata)) != 0)
                 {
-                    nzdata = nrawdata + Z_HEADER_SIZE;
-                    p = rawdata;
-                    n = nrawdata;
-                    /*
-                       DEBUG_LOGGER(logger, "iconv [%s][%d] to [UTF-8]:%d", 
-                       charset, chunk->ndata, noutbuf);
-                       */
-                    if((zdata = (char *)calloc(1, nzdata)) == NULL
-                        && zcompress((Bytef *)p, n, (Bytef *)zdata, (uLong * )&(nzdata)) != 0)
-                    {
-                        zdata = NULL;
-                        nzdata = 0;
-                    }
+                    zdata = NULL;
+                    nzdata = 0;
                 }
+                DEBUG_LOGGER(logger, "compressed data %d to %d", n, nzdata);
             }
             if(data){free(data); data = NULL;}
             if(outbuf){free(outbuf); outbuf = NULL;}
