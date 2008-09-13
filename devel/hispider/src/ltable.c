@@ -806,8 +806,8 @@ LTABLE *ltable_init()
         ltable->running_state = 1;
         MUTEX_INIT(ltable->mutex);
         TIMER_INIT(ltable->timer);
-        ltable->urltable        = KVMAP_INIT();
-        ltable->dnstable        = TRIETAB_INIT();
+        KVMAP_INIT(ltable->urltable);
+        TRIETAB_INIT(ltable->dnstable);
         ltable->set_basedir     = ltable_set_basedir;
         ltable->set_logger      = ltable_set_logger;
         ltable->resume          = ltable_resume;

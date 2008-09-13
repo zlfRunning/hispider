@@ -25,6 +25,7 @@ typedef struct _KVMAP
     int count;
     int total;
     int free_count;
+    void *mutex;
 }KVMAP;
 #define PKV(ptr) ((KVMAP *)ptr)
 #define KV_NEGINF	-1
@@ -46,6 +47,7 @@ typedef struct _KVMAP
 #define PKV_TMP(head)       (PKV(head)->tmp)
 #define PKV_MAX(head)       (PKV(head)->max)
 #define PKV_MIN(head)       (PKV(head)->min)
+#define PKV_MUTEX(head)     (PKV(head)->mutex)
 #define PKV_MAXK(head)      (PKV(head)->max->key)
 #define PKV_MINK(head)      (PKV(head)->min->key)
 #define KV_EMPTY(head)      (KV_ROOT(head) == NULL)
@@ -138,7 +140,15 @@ KVNODE *kv_minmax(KVMAP *map, int val);
 #define KV_MAX(map)	kv_minmax(map, KV_INF)
 #define KVMAP_MAX(ptr) PKV(ptr)->max
 #define KVMAP_MIN(ptr) PKV(ptr)->min
-#define KVMAP_INIT() (calloc(1, sizeof(KVMAP)))
+#define KVMAP_INIT(ptr)                                                                     \
+do                                                                                          \
+{                                                                                           \
+    if((ptr = calloc(1, sizeof(KVMAP))))                                                    \
+    {                                                                                       \
+        MUTEX_INIT(PKV(ptr)->mutex);                                                        \
+    }                                                                                       \
+}while(0)
+
 /* add to min/max */
 #define KVMAP_MINMAX_ADD(ptr, node)                                                         \
 do                                                                                          \
@@ -225,6 +235,7 @@ do                                                                              
     olddp = NULL;                                                                           \
     if(ptr)                                                                                 \
     {                                                                                       \
+        MUTEX_LOCK(PKV(ptr)->mutex);                                                        \
         KVMAP_POP_NODE(ptr, PKV(ptr)->p);                                                   \
         if((PKV(ptr)->pp = PKV(ptr)->p))                                                    \
         {                                                                                   \
@@ -242,6 +253,7 @@ do                                                                              
                 PKV(ptr)->count++;                                                          \
             }                                                                               \
         }                                                                                   \
+        MUTEX_UNLOCK(PKV(ptr)->mutex);                                                      \
     }                                                                                       \
 }while(0)
 
@@ -252,6 +264,7 @@ do                                                                              
     dp = NULL;                                                                              \
     if(ptr)                                                                                 \
     {                                                                                       \
+        MUTEX_LOCK(PKV(ptr)->mutex);                                                        \
         memcpy(PKV(ptr)->node.key, nkey, VK_MAX);                                           \
         PKV(ptr)->bnode = &(PKV(ptr)->node);                                                \
         PKV(ptr)->p = kv_find(PKV(ptr), PKV(ptr)->bnode);                                   \
@@ -259,6 +272,7 @@ do                                                                              
         {                                                                                   \
             dp = PKV(ptr)->p->dptr;                                                         \
         }                                                                                   \
+        MUTEX_UNLOCK(PKV(ptr)->mutex);                                                      \
     }                                                                                       \
 }while(0)
 
@@ -269,6 +283,7 @@ do                                                                              
     dp = NULL;                                                                              \
     if(ptr)                                                                                 \
     {                                                                                       \
+        MUTEX_LOCK(PKV(ptr)->mutex);                                                        \
         memcpy(PKV(ptr)->node.key, nkey, VK_MAX);                                           \
         PKV(ptr)->bnode = &(PKV(ptr)->node);                                                \
         PKV(ptr)->old = kv_remove(PKV(ptr), PKV(ptr)->bnode);                               \
@@ -279,6 +294,7 @@ do                                                                              
             PKV(ptr)->count--;                                                              \
             dp = PKV(ptr)->old->dptr;                                                       \
         }                                                                                   \
+        MUTEX_UNLOCK(PKV(ptr)->mutex);                                                      \
     }                                                                                       \
 }while(0)
 
@@ -289,6 +305,7 @@ do                                                                              
     dp = NULL;                                                                              \
     if(ptr)                                                                                 \
     {                                                                                       \
+        MUTEX_LOCK(PKV(ptr)->mutex);                                                        \
         if(PKV(ptr)->min)                                                                   \
         {                                                                                   \
             memcpy(nkey, PKV(ptr)->min->key, VK_MAX);                                       \
@@ -299,6 +316,7 @@ do                                                                              
             KVMAP_MINMAX_REBUILD(ptr, PKV(ptr)->old);                                       \
             PKV(ptr)->count--;                                                              \
         }                                                                                   \
+        MUTEX_UNLOCK(PKV(ptr)->mutex);                                                      \
     }                                                                                       \
 }while(0)
 
@@ -309,6 +327,7 @@ do                                                                              
     dp = NULL;                                                                              \
     if(ptr)                                                                                 \
     {                                                                                       \
+        MUTEX_LOCK(PKV(ptr)->mutex);                                                        \
         if(PKV(ptr)->max)                                                                   \
         {                                                                                   \
             memcpy(nkey, PKV(ptr)->max->key, VK_MAX);                                       \
@@ -319,6 +338,7 @@ do                                                                              
             KVMAP_MINMAX_REBUILD(ptr, PKV(ptr)->old);                                       \
             PKV(ptr)->count--;                                                              \
         }                                                                                   \
+        MUTEX_UNLOCK(PKV(ptr)->mutex);                                                      \
     }                                                                                       \
 }while(0)
 
@@ -329,6 +349,7 @@ do                                                                              
     dp = NULL;                                                                              \
     if(ptr)                                                                                 \
     {                                                                                       \
+        MUTEX_LOCK(PKV(ptr)->mutex);                                                        \
         if(PKV(ptr)->max)                                                                   \
         {                                                                                   \
             PKV(ptr)->bnode = NULL;                                                         \
@@ -342,6 +363,32 @@ do                                                                              
                 PKV(ptr)->count--;                                                          \
             }                                                                               \
         }                                                                                   \
+        MUTEX_UNLOCK(PKV(ptr)->mutex);                                                      \
+    }                                                                                       \
+}while(0)
+
+/* find min node and pop it */
+#define KVMAP_POP_RMIN(ptr, nkey, dp)                                                       \
+do                                                                                          \
+{                                                                                           \
+    dp = NULL;                                                                              \
+    if(ptr)                                                                                 \
+    {                                                                                       \
+        MUTEX_LOCK(PKV(ptr)->mutex);                                                        \
+        if(PKV(ptr)->min)                                                                   \
+        {                                                                                   \
+            PKV(ptr)->bnode = NULL;                                                         \
+            PKV(ptr)->bnode = KV_MIN(PKV(ptr));                                             \
+            if(PKV(ptr)->bnode)                                                             \
+            {                                                                               \
+                memcpy(nkey, PKV(ptr)->bnode->key, VK_MIN);                                 \
+                dp = PKV(ptr)->bnode->dptr;                                                 \
+                PKV(ptr)->old = kv_remove(PKV(ptr), PKV(ptr)->bnode);                       \
+                KVMAP_PUSH_NODE(ptr, PKV(ptr)->old);                                        \
+                PKV(ptr)->count--;                                                          \
+            }                                                                               \
+        }                                                                                   \
+        MUTEX_UNLOCK(PKV(ptr)->mutex);                                                      \
     }                                                                                       \
 }while(0)
 
@@ -352,13 +399,14 @@ do                                                                              
     if(ptr)                                                                                 \
     {                                                                                       \
         PKV(ptr)->p = NULL;                                                                 \
-        while((PKV(ptr)->p = KV_MAX(PKV(ptr))))                                               \
+        while((PKV(ptr)->p = KV_MAX(PKV(ptr))))                                             \
         {                                                                                   \
                 PKV(ptr)->old = kv_remove(PKV(ptr), PKV(ptr)->p);                           \
                 if(PKV(ptr)->old) free(PKV(ptr)->old);                                      \
                 PKV(ptr)->p = NULL;                                                         \
                 PKV(ptr)->old = NULL;                                                       \
         }                                                                                   \
+        MUTEX_DESTROY(PKV(ptr)->mutex);                                                     \
         KVMAP_FREE_NODES(ptr);                                                              \
         free(ptr);                                                                          \
         ptr = NULL;                                                                         \
