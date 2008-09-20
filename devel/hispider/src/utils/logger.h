@@ -26,7 +26,8 @@ extern "C" {
 #define	__WARN__ 		1
 #define	__ERROR__ 		2
 #define	__FATAL__ 		3
-static char *_logger_level_s[] = {"DEBUG", "WARN", "ERROR", "FATAL"};
+#define	__ACCESS__ 		4
+static char *_logger_level_s[] = {"DEBUG", "WARN", "ERROR", "FATAL", ""};
 #ifndef _STATIS_YMON
 #define _STATIS_YMON
 static char *ymonths[]= {
@@ -98,8 +99,9 @@ do{                                                                             
 #define WARN_LOGGER(ptr, format...) {LOGGER_ADD(ptr, __WARN__, format);}
 #define ERROR_LOGGER(ptr, format...) {LOGGER_ADD(ptr, __ERROR__, format);}
 #define FATAL_LOGGER(ptr, format...) {LOGGER_ADD(ptr, __FATAL__, format);}
+#define ACCESS_LOGGER(ptr, format...) {LOGGER_ADD(ptr, __ACCESS__, format);}
 #define LOGGER_CLEAN(ptr)                                                           \
-do{                                                                                   \
+do{                                                                                 \
     if(ptr)                                                                         \
     {                                                                               \
         close(PLFD(ptr));                                                           \
