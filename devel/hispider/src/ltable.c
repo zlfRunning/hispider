@@ -719,7 +719,7 @@ int ltable_add_document(LTABLE *ltable, int taskid, int date, char *content, int
                 path = p;
                 ndata = ncontent * 40;
                 //fprintf(stdout, "%s::%d OK %d:%d\n", __FILE__,  __LINE__, ncontent, ndata);
-                if((data = calloc(1, ndata)))
+                if((data = (char *)calloc(1, ndata)))
                 {
                     if(zdecompress((Bytef *)content, (uLong)ncontent, 
                             (Bytef *)data, (uLong *)&ndata) != 0) 
@@ -762,7 +762,7 @@ int ltable_add_document(LTABLE *ltable, int taskid, int date, char *content, int
                     }
                     //fprintf(stdout, "%s::%d OK \n", __FILE__,  __LINE__);
                     over:
-                        free(data);
+                        if(data)free(data);
                         data = NULL;
                 }
                 //fprintf(stdout, "%s::%d OK \n", __FILE__,  __LINE__);
