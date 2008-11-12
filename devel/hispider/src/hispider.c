@@ -298,6 +298,7 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
         if(conn == tasklist[c_id].c_conn && chunk && chunk->data && chunk->ndata > 0
             && cache && (http_resp = (HTTP_RESPONSE *)cache->data))
         {
+            doc_total++;
             if((p = http_resp->headers[HEAD_ENT_CONTENT_ENCODING]))
             {
                 zdata = chunk->data;
