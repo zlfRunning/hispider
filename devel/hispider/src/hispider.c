@@ -424,9 +424,11 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
                 }
                 DEBUG_LOGGER(logger, "compressed data %d to %d", n, nzdata);
             }
+            DEBUG_LOGGER(logger, "reset data %08x", data);
             if(data){free(data); data = NULL;}
+            DEBUG_LOGGER(logger, "reset outbuf %08x", outbuf);
             if(outbuf){free(outbuf); outbuf = NULL;}
-            if(zdata && nzdata > 0)
+            if(zdata && nzdata > 0 && http_resp)
             {
                 p = buf;
                 p += sprintf(p, "TASK %d HTTP/1.0\r\n", tasklist[c_id].taskid);
@@ -443,11 +445,13 @@ int hispider_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
                 tasklist[c_id].is_new_host = 0;
                 if((s_conn = tasklist[c_id].s_conn) && (n = p - buf) > 0)
                 {
+                    DEBUG_LOGGER(logger, "send data:%08x size:%d", zdata, nzdata);
                     //fprintf(stdout, "Over task[%ld]\n", tasklist[c_id].taskid);
                     s_conn->push_chunk(s_conn, buf, n);
                     s_conn->push_chunk(s_conn, zdata, nzdata);
                     if(is_new_zdata)
                     {
+                        DEBUG_LOGGER(logger, "reset zdata %08x", zdata);
                         free(zdata);
                         zdata = NULL;
                     }
