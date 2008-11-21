@@ -298,7 +298,7 @@ int ltable_addlink(LTABLE *ltable, unsigned char *host, unsigned char *path,
             }
             if(lpath[0] == '\0'){lpath[0] = '/';}
             if(lhost[0] == '\0' || lpath[0] == '\0') return -1;
-            DEBUG_LOGGER(ltable->logger, "addurl:http://%s%s", lhost, lpath);
+            //DEBUG_LOGGER(ltable->logger, "addurl:http://%s%s", lhost, lpath);
             ltable->addurl(ltable, (char *)lhost, (char *)lpath);
         }
         //DEBUG_LOGGER(ltable->logger, "addurl:http://%s%s ", lhost, lpath);
@@ -340,8 +340,8 @@ int ltable_addurl(LTABLE *ltable, char *host, char *path)
             KVMAP_GET(ltable->urltable, lmeta.id, dp);
             if(dp) 
             {
-                DEBUG_LOGGER(ltable->logger, "URL:[http://%s%s][%ld] is exists", 
-                        host, path, (long)dp);
+                //DEBUG_LOGGER(ltable->logger, "URL:[http://%s%s][%ld] is exists", 
+                //        host, path, (long)dp);
                 goto end;
             }
             //add url to url file 
