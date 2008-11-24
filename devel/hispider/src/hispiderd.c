@@ -266,7 +266,9 @@ int hispiderd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA 
             }
             taskid = atoi(http_req->path);
             DEBUG_LOGGER(logger, "taskid:%d length:%d", taskid, chunk->ndata);
-            return ltable->add_document(ltable, taskid, 0, chunk->data, chunk->ndata); 
+            ltable->add_document(ltable, taskid, 0, chunk->data, chunk->ndata); 
+            DEBUG_LOGGER(logger, "over taskid:%d length:%d", taskid, chunk->ndata);
+            return 0;
         }
     }
     return -1;
