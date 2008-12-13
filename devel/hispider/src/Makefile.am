@@ -24,7 +24,8 @@ utils/trie.c \
 utils/trie.h \
 utils/zstream.c \
 utils/zstream.h
-hispiderd_CPPFLAGS = -I utils -D_FILE_OFFSET_BITS=64 -Wall
+hispiderd_CPPFLAGS = -I utils -D_FILE_OFFSET_BITS=64
+AM_CXXFLAGS = -Wall -Wno-non-virtual-dtor
 hispiderd_LDFLAGS = -lsbase -lz 
 
 hispider_SOURCES = basedef.h \
@@ -44,5 +45,5 @@ utils/trie.h \
 utils/zstream.c \
 utils/zstream.h
 
-hispider_CPPFLAGS = -I utils -D_FILE_OFFSET_BITS=64 -Wall
+hispider_CPPFLAGS = -I utils -D_FILE_OFFSET_BITS=64
 hispider_LDFLAGS = -lsbase -lz -lchardet
