@@ -92,7 +92,8 @@ typedef struct _LTABLE
     void *timer;
     LLong time_usec;
     int running_state;
-
+    /* URL */
+    void *whitelist;
     /* DNS */
     //char last_host[DNS_NAME_MAX];
     //int is_wait_last_host;
@@ -116,6 +117,7 @@ typedef struct _LTABLE
     int     (*set_task_state)(struct _LTABLE *, int taskid, int state);
     int     (*get_stateinfo)(struct _LTABLE *, char *block);
     int     (*add_document)(struct _LTABLE *, int taskid, int date, char *content, int ncontent);
+    int     (*add_to_whitelist)(struct _LTABLE *, char *host);
     /* dns resolve */
     int     (*add_host)(struct _LTABLE *, char *host);
     int     (*new_dnstask)(struct _LTABLE *, char *host);

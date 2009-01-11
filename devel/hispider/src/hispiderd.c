@@ -312,7 +312,8 @@ int hispiderd_oob_handler(CONN *conn, CB_DATA *oob)
 /* Initialize from ini file */
 int sbase_initialize(SBASE *sbase, char *conf)
 {
-    char *s = NULL, *p = NULL, *basedir = NULL, *host = NULL, *path = NULL;
+    char *s = NULL, *p = NULL, *ep = NULL, *whitelist = NULL, *whost = NULL, 
+         *basedir = NULL, *host = NULL, *path = NULL;
     int i = 0, interval = 0;
 
     if((dict = iniparser_new(conf)) == NULL)
@@ -378,7 +379,19 @@ int sbase_initialize(SBASE *sbase, char *conf)
         ltable->set_logger(ltable, NULL, logger);
         host = iniparser_getstr(dict, "HISPIDERD:host");
         path = iniparser_getstr(dict, "HISPIDERD:path");
-        path = iniparser_getstr(dict, "HISPIDERD:path");
+        whitelist = iniparser_getstr(dict, "HISPIDERD:whitelist");
+        ep = p = whitelist;
+        while(*p != '\0' || ep)
+        {
+            if(*p == ',' || *p == ' ')
+            {
+                *p = '\0';
+                whost = ep;
+                ep = ++p;
+            }else ++p;
+            if(*p == '\0') whost = ep;
+            if(whost){ltable->add_to_whitelist(ltable, whost); whost = NULL;}
+        }
         ltable->addurl(ltable, host, path);
     }
     /* dns service */

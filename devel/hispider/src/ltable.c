@@ -184,8 +184,9 @@ int ltable_addlink(LTABLE *ltable, unsigned char *host, unsigned char *path,
 {
     unsigned char lhost[HTTP_HOST_MAX], lpath[HTTP_PATH_MAX], tmp[HTTP_PATH_MAX];
     unsigned char *p = NULL, *ps = NULL, *pp = NULL,
-        *last = NULL, *end = NULL;
-    int n = 0;
+        *last = NULL, *end = NULL, *s = NULL;
+    int n = 0, nhost = 0;
+    void *dp = NULL;
 
     if(ltable && host && path && href && (ehref - href) > 0 && (ehref - href) < HTTP_PATH_MAX)
     {
@@ -273,11 +274,14 @@ int ltable_addlink(LTABLE *ltable, unsigned char *host, unsigned char *path,
                 }
                 else
                 {
+                    if(*ps == ':') s = p;
                     *p++ = *ps++;
                 }
                 if(p >= end) return -1;
             }
             if(p > lhost && *(p-1) == '.') *(p-1) = '\0';
+            if(s) nhost = (s - lhost);
+            else nhost = (p - lhost);
             p = lpath;
             end = lpath + HTTP_PATH_MAX;
             while(*pp != '\0')
@@ -299,7 +303,11 @@ int ltable_addlink(LTABLE *ltable, unsigned char *host, unsigned char *path,
             if(lpath[0] == '\0'){lpath[0] = '/';}
             if(lhost[0] == '\0' || lpath[0] == '\0') return -1;
             //DEBUG_LOGGER(ltable->logger, "addurl:http://%s%s", lhost, lpath);
-            ltable->addurl(ltable, (char *)lhost, (char *)lpath);
+            TRIETAB_RGET(ltable->whitelist, lhost, nhost, dp);
+            if(dp)
+            {
+                ltable->addurl(ltable, (char *)lhost, (char *)lpath);
+            }
         }
         //DEBUG_LOGGER(ltable->logger, "addurl:http://%s%s ", lhost, lpath);
         //TIMER_INIT(timer);
@@ -381,6 +389,21 @@ err_end:
         if(newhost) ltable->add_host(ltable, newhost);
     }
     return ret;
+}
+
+/* add to whitelist */
+int ltable_add_to_whitelist(LTABLE *ltable, char *host)
+{
+    void *dp = NULL;
+    int n = 0;
+    
+    if(ltable && host && (n = strlen(host)) > 0)
+    {
+        dp = (void *)((long)-1);
+        TRIETAB_RADD(ltable->whitelist, host, n, dp);
+        return 0;
+    }
+    return -1;
 }
 
 /* add host */
@@ -808,22 +831,23 @@ LTABLE *ltable_init()
         TIMER_INIT(ltable->timer);
         KVMAP_INIT(ltable->urltable);
         TRIETAB_INIT(ltable->dnstable);
-        ltable->set_basedir     = ltable_set_basedir;
-        ltable->set_logger      = ltable_set_logger;
-        ltable->resume          = ltable_resume;
-        ltable->parselink       = ltable_parselink;
-        ltable->addlink         = ltable_addlink;
-        ltable->addurl          = ltable_addurl;
-        ltable->get_task        = ltable_get_task;
-        ltable->set_task_state  = ltable_set_task_state;
-        ltable->get_stateinfo   = ltable_get_stateinfo;
-        ltable->add_document    = ltable_add_document;
-        ltable->add_host        = ltable_add_host;
-        ltable->new_dnstask     = ltable_new_dnstask;
-        ltable->set_dns         = ltable_set_dns;
-        ltable->resolve         = ltable_resolve;
-        ltable->clean           = ltable_clean;
+        TRIETAB_INIT(ltable->whitelist);
+        ltable->set_basedir         = ltable_set_basedir;
+        ltable->set_logger          = ltable_set_logger;
+        ltable->resume              = ltable_resume;
+        ltable->parselink           = ltable_parselink;
+        ltable->addlink             = ltable_addlink;
+        ltable->addurl              = ltable_addurl;
+        ltable->get_task            = ltable_get_task;
+        ltable->set_task_state      = ltable_set_task_state;
+        ltable->get_stateinfo       = ltable_get_stateinfo;
+        ltable->add_document        = ltable_add_document;
+        ltable->add_to_whitelist    = ltable_add_to_whitelist;
+        ltable->add_host            = ltable_add_host;
+        ltable->new_dnstask         = ltable_new_dnstask;
+        ltable->set_dns             = ltable_set_dns;
+        ltable->resolve             = ltable_resolve;
+        ltable->clean               = ltable_clean;
     }
     return ltable;
 }
-
