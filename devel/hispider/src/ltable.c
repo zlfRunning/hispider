@@ -14,19 +14,14 @@
 #include "timer.h"
 #include "http.h"
 #include "kvmap.h"
+static const char *running_ops[] = {"running", "stop"};
 static const char *__html__body__  = 
 "<HTML><HEAD>\n"
 "<TITLE>Hispider Running Status</TITLE>\n"
 "<meta http-equiv='refresh' content='10;'>\n</HEAD>\n"
 "<meta http-equiv='content-type' content='text/html; charset=UTF-8'>\n"
 "<BODY bgcolor='#000000' align=center >\n"
-"<h1><font color=white >Hispider Running State  ["
-"<script language='javascript'>\n"
-"if(location.pathname == '/stop')\n"
-"    document.write(\"<a href='/running' >running</a>\");\n"
-"else\n"
-"    document.write(\"<a href='/stop' >stop</a>\");\n"
-"</script>]</font>\n</h1>\n"
+"<h1><font color=white >Hispider Running State  [<a href='/%s'>%s</a>]</font>\n</h1>\n"
 "<hr noshade><ul><br><table  align=center width='100%%' >\n"
 "<tr><td align=left ><li><font color=red size=72 >URL Total:%d </font></li></td></tr>\n"
 "<tr><td align=left ><li><font color=red size=72 >URL Current :%d </font></li></td></tr>\n"
@@ -109,6 +104,11 @@ int ltable_set_basedir(LTABLE *ltable, char *basedir)
         ltable->url_fd = iopen(path);
         sprintf(path, "%s/%s", basedir, LTABLE_DOC_NAME);
         ltable->doc_fd = iopen(path);
+        sprintf(path, "%s/%s", basedir, LTABLE_STATE_NAME);
+        if((ltable->state_fd = iopen(path)) > 0)
+        {
+            itruncate(ltable->state_fd, sizeof(LSTATE));
+        }
         sprintf(path, "%s/%s", basedir, DNS_HOST_NAME);
         ltable->host_fd = iopen(path);
         sprintf(path, "%s/%s", basedir, DNS_IP_NAME);
@@ -465,11 +465,12 @@ int ltable_new_dnstask(LTABLE *ltable, char *host)
     return taskid;
 }
 
-/* set dns timeout */
-int ltable_set_state(LTABLE *ltable, int taskid, int state)
+/* set ltable running state */
+int ltable_set_state(LTABLE *ltable, int state)
 {
     if(ltable)
     {
+        ltable->state->running = state;
         return 0;
     }
     return -1;
@@ -591,6 +592,11 @@ int ltable_resume(LTABLE *ltable)
             ltable->doc_total_size += lmeta.ndata;
             ltable->doc_total_zsize += lmeta.nzdata;
         }
+        //resume state
+        if(ltable->state_fd > 0)
+        {
+            ltable->state = immap(ltable->state_fd, NULL, sizeof(LSTATE), 0);
+        }
         //fprintf(stdout, "%d::%ld:%ld\n", __LINE__, ltable->url_current, ltable->url_total);
         return 0;
     }
@@ -607,7 +613,7 @@ int  ltable_get_task(LTABLE *ltable, char *block, int *nblock)
     off_t offset = 0;
     LMETA lmeta = {0};
 
-    if(ltable && ltable->running_state)
+    if(ltable && ltable->state->running)
     {
         MUTEX_LOCK(ltable->mutex);
         if(ltable->url_total > 0 && ltable->url_current < ltable->url_total)
@@ -681,11 +687,11 @@ n = sprintf(buf, "GET /%s HTTP/1.0\r\nHost: %s\r\nUser-Agent: %s\r\n"
 /* get ltable status */
 int ltable_get_stateinfo(LTABLE *ltable, char *block)
 {
-    char buf[HTTP_BUF_SIZE];
+    char buf[HTTP_BUF_SIZE], *p = NULL;
     int ret = -1, n = 0, day = 0, hour = 0, min = 0, sec = 0, usec = 0;
     double speed = 0.0;
 
-    if(ltable)
+    if(ltable && ltable->state)
     {
         TIMER_SAMPLE(ltable->timer);
         day  = (PT_SEC_U(ltable->timer) / 86400);
@@ -695,7 +701,8 @@ int ltable_get_stateinfo(LTABLE *ltable, char *block)
         usec = (PT_USEC_U(ltable->timer) % 1000000ll);
         speed = (PT_SEC_U(ltable->timer) > 0) 
             ? ((ltable->doc_current_size / 1024)/PT_SEC_U(ltable->timer)) : 0;
-        n = sprintf(buf, __html__body__, ltable->url_total, ltable->url_current, 
+        p = (char *)running_ops[ltable->state->running];
+        n = sprintf(buf, __html__body__, p, p, ltable->url_total, ltable->url_current, 
                 ltable->url_ok, ltable->url_error, ltable->doc_total_zsize, ltable->doc_total_size,
                 ltable->doc_current_zsize, ltable->doc_current_size, ltable->dns_ok, 
                 ltable->dns_total, day, hour, min, sec, usec, speed);   
@@ -803,6 +810,7 @@ void ltable_clean(LTABLE **pltable)
     {
         KVMAP_CLEAN((*pltable)->urltable);
         TRIETAB_CLEAN((*pltable)->dnstable);
+        TRIETAB_CLEAN((*pltable)->whitelist);
         if((*pltable)->mutex)
         {
             MUTEX_DESTROY((*pltable)->mutex);
@@ -815,6 +823,17 @@ void ltable_clean(LTABLE **pltable)
         {
             LOGGER_CLEAN((*pltable)->logger);
         }
+        if((*pltable)->meta_fd > 0) close((*pltable)->meta_fd);
+        if((*pltable)->url_fd > 0) close((*pltable)->url_fd);
+        if((*pltable)->doc_fd > 0) close((*pltable)->doc_fd);
+        if((*pltable)->state_fd > 0)
+        {
+            imsync((*pltable)->state, sizeof(LSTATE));
+            imunmap((*pltable)->state, sizeof(LSTATE));
+            close((*pltable)->state_fd);
+        }
+        if((*pltable)->host_fd > 0) close((*pltable)->host_fd);
+        if((*pltable)->dns_fd > 0) close((*pltable)->dns_fd);
         free(*pltable);
         (*pltable) = NULL;
     }
@@ -827,7 +846,6 @@ LTABLE *ltable_init()
 
     if((ltable = calloc(1, sizeof(LTABLE))))
     {
-        ltable->running_state = 1;
         MUTEX_INIT(ltable->mutex);
         TIMER_INIT(ltable->timer);
         KVMAP_INIT(ltable->urltable);
@@ -840,6 +858,7 @@ LTABLE *ltable_init()
         ltable->addlink             = ltable_addlink;
         ltable->addurl              = ltable_addurl;
         ltable->get_task            = ltable_get_task;
+        ltable->set_state           = ltable_set_state;
         ltable->set_task_state      = ltable_set_task_state;
         ltable->get_stateinfo       = ltable_get_stateinfo;
         ltable->add_document        = ltable_add_document;

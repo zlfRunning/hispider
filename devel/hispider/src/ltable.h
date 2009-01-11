@@ -63,6 +63,7 @@ typedef struct _LSTATE
 {
     int taskid;
     int lastid;
+    int running;
 }LSTATE;
 typedef struct _DNS
 {
@@ -81,6 +82,7 @@ typedef struct _LTABLE
     int meta_fd;
     int doc_fd;
     int state_fd;
+    LSTATE *state;
     long url_current;
     long url_total;
     long url_ok;
@@ -91,7 +93,6 @@ typedef struct _LTABLE
     LLong doc_current_zsize;
     void *timer;
     LLong time_usec;
-    int running_state;
     /* URL */
     void *whitelist;
     /* DNS */
@@ -100,7 +101,6 @@ typedef struct _LTABLE
     int host_fd;
     int dns_fd;
     void *dnstable;
-    int *ipmap;
     int dns_current;
     int dns_ok;
     int dns_total;
@@ -114,6 +114,7 @@ typedef struct _LTABLE
             unsigned char *path, unsigned char *href, unsigned char *ehref);
     int     (*addurl)(struct _LTABLE *, char *host, char *path);
     int     (*get_task)(struct _LTABLE *, char *block, int *nblock);
+    int     (*set_state)(struct _LTABLE *, int state);
     int     (*set_task_state)(struct _LTABLE *, int taskid, int state);
     int     (*get_stateinfo)(struct _LTABLE *, char *block);
     int     (*add_document)(struct _LTABLE *, int taskid, int date, char *content, int ncontent);

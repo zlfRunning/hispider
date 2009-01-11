@@ -192,11 +192,11 @@ int hispiderd_packet_handler(CONN *conn, CB_DATA *packet)
         {
             if(strncasecmp(http_req.path, "/stop", 5) == 0)
             {
-                ltable->running_state = 0;
+                ltable->set_state(ltable, 0);
             }
             else if(strncasecmp(http_req.path, "/running", 8) == 0)
             {
-                ltable->running_state = 1;
+                ltable->set_state(ltable, 1);
             }
             if((n = ltable->get_stateinfo(ltable, buf)))
             {
