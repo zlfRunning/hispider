@@ -303,7 +303,8 @@ int ltable_addlink(LTABLE *ltable, unsigned char *host, unsigned char *path,
             if(lpath[0] == '\0'){lpath[0] = '/';}
             if(lhost[0] == '\0' || lpath[0] == '\0') return -1;
             //DEBUG_LOGGER(ltable->logger, "addurl:http://%s%s", lhost, lpath);
-            TRIETAB_RGET(ltable->whitelist, lhost, nhost, dp);
+            dp = NULL;
+            TRIETAB_MIN_RFIND(ltable->whitelist, lhost, nhost, dp, n);
             if(dp)
             {
                 ltable->addurl(ltable, (char *)lhost, (char *)lpath);

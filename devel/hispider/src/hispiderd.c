@@ -390,7 +390,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
                 ep = ++p;
             }else ++p;
             if(*p == '\0') whost = ep;
-            if(whost){ltable->add_to_whitelist(ltable, whost); whost = NULL;}
+            if(whost){ltable->add_to_whitelist(ltable, whost); ep = whost = NULL;}
         }
         ltable->addurl(ltable, host, path);
     }
