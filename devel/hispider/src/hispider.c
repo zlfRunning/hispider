@@ -484,11 +484,12 @@ int hispider_oob_handler(CONN *conn, CB_DATA *oob)
 /* heartbeat */
 void cb_heartbeat_handler(void *arg)
 {
-    int id = 0;
+    int id = 0, total = 0;
 
     if(arg == (void *)service)
     {
-        while(QTOTAL(taskqueue) > 0)
+        total = QTOTAL(taskqueue);
+        while(total-- > 0)
         {
             id = -1;
             QUEUE_POP(taskqueue, int, &id);
@@ -506,7 +507,6 @@ void cb_heartbeat_handler(void *arg)
                     ERROR_LOGGER(logger, "Connect to %s:%d failed, %s", 
                             server_ip, server_port, strerror(errno));
                     QUEUE_PUSH(taskqueue, int, &id);
-                    break;
                 }
             }
         }

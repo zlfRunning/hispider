@@ -139,11 +139,12 @@ int adns_trans_handler(CONN *conn, int tid)
 /* heartbeat handler */
 void adns_heartbeat_handler(void *arg)
 {
-    int id = 0;
+    int id = 0, total = 0;
 
     if(arg == (void *)adnservice)
     {
-        while(QTOTAL(dnsqueue) > 0)
+        total = QTOTAL(dnsqueue);
+        while(total-- > 0)
         {
             id = -1;
             QUEUE_POP(dnsqueue, int, &id);
@@ -159,7 +160,6 @@ void adns_heartbeat_handler(void *arg)
                 else
                 {
                     QUEUE_PUSH(dnsqueue, int, &id);
-                    break;
                 }
             }
         }
