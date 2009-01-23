@@ -23,15 +23,15 @@ static const char *__html__body__  =
 "<BODY bgcolor='#000000' align=center >\n"
 "<h1><font color=white >Hispider Running State  [<a href='/%s'>%s</a>]</font>\n</h1>\n"
 "<hr noshade><ul><br><table  align=center width='100%%' >\n"
-"<tr><td align=left ><li><font color=red size=72 >URL Total:%d </font></li></td></tr>\n"
-"<tr><td align=left ><li><font color=red size=72 >URL Current :%d </font></li></td></tr>\n"
-"<tr><td align=left ><li><font color=red size=72 >URL OK:%d </font></li></td></tr>\n"
-"<tr><td align=left ><li><font color=red size=72 >URL ERROR:%d </font></li></td></tr>\n"
-"<tr><td align=left ><li><font color=red size=72 >Doc Total:%lld/%lld </font></li></td></tr>\n"
-"<tr><td align=left ><li><font color=red size=72 >Doc Current:%lld/%lld </font></li></td></tr>\n"
-"<tr><td align=left ><li><font color=red size=72 >DNS Count:%d/%d </font></li></td></tr>\n"
-"<tr><td align=left ><li><font color=red size=72 >Time Used: %d day(s) [%02d:%02d:%02d +%06d]</font></li></td></tr>\n"
-"<tr><td align=left ><li><font color=red size=72 >Speed:%f (k/s)</font></li></td></tr>\n"
+"<tr><td align=left ><font color=red size=72 ><li>URL Total:%d </li></font></td></tr>\n"
+"<tr><td align=left ><font color=red size=72 ><li>URL Current :%d </li></font></td></tr>\n"
+"<tr><td align=left ><font color=red size=72 ><li>URL OK:%d </li></font></td></tr>\n"
+"<tr><td align=left ><font color=red size=72 ><li>URL ERROR:%d </li></font></td></tr>\n"
+"<tr><td align=left ><font color=red size=72 ><li>Doc Total:%lld/%lld </li></font></td></tr>\n"
+"<tr><td align=left ><font color=red size=72 ><li>Doc Current:%lld/%lld </li></font></td></tr>\n"
+"<tr><td align=left ><font color=red size=72 ><li>DNS Count:%d/%d </li></font></td></tr>\n"
+"<tr><td align=left ><font color=red size=72 ><li>Time Used: %d day(s) [%02d:%02d:%02d +%06d]</li></font></td></tr>\n"
+"<tr><td align=left ><font color=red size=72 ><li>Speed:%f (k/s)</li></font></td></tr>\n"
 "</table><br><hr  noshade><em>\n"
 "<font color=white ><a href='http://code.google.com/p/hispider' >"
 "Hispider</a> Powered By <a href='http://code.google.com/p/hispider'>"
@@ -159,7 +159,8 @@ int ltable_parselink(LTABLE *ltable, char *host, char *path, char *content, char
                     && strncasecmp("mailto:", link, 7) != 0)
                 {
                     while(p < end && *p != '\'' && *p != '"' && *p != '\r' && *p != '\n' 
-                    && *p != '\t' && *p != 0x20 && (ps - url) < HTTP_URL_MAX) *ps++ = *p++;
+                    && *p != '\t' && *p != '#' && *p != 0x20 && (ps - url) < HTTP_URL_MAX) 
+                        *ps++ = *p++;
                     if(*p == '\r' || *p == '\n' || *p == '\t' || *p == 0x20) continue;
                     if((n = (ps - url)) >= HTTP_URL_MAX) continue;
                     url[n] = '\0';
