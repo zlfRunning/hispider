@@ -195,7 +195,7 @@ int ltable_addlink(LTABLE *ltable, unsigned char *host, unsigned char *path,
         memset(lpath, 0, HTTP_PATH_MAX);
         memset(tmp, 0, HTTP_PATH_MAX);
         p = href;
-        //DEBUG_LOGGER(ltable->logger, "addurl:http://%s%s ", lhost, lpath);
+        //DEBUG_LOGGER(ltable->logger, "PURL:http://%s%s ", host, path);
         if(*p == '/')
         {
             ps = host;
@@ -204,7 +204,7 @@ int ltable_addlink(LTABLE *ltable, unsigned char *host, unsigned char *path,
         }
         else if(*p == '.')
         {
-            //n = sprintf(url, "http://%s/%s", host, path);
+            //DEBUG_LOGGER(ltable->logger, "URL-0.0:http://%s|%s", host, path);
             ps = path;
             pp = tmp;
             *pp++ = '/';
@@ -241,9 +241,6 @@ int ltable_addlink(LTABLE *ltable, unsigned char *host, unsigned char *path,
         else
         {
             //delete file:// mail:// ftp:// news:// rss:// eg. 
-            p = href;
-            while(p < ehref && ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z'))) p++;
-            if(p < (ehref - 3) && *p == ':' && *(p+1) == '/' && *(p+2) == '/') return -1;
             ps = path;
             pp = tmp;
             while(*ps != '\0')
@@ -252,11 +249,16 @@ int ltable_addlink(LTABLE *ltable, unsigned char *host, unsigned char *path,
                 *pp++ = *ps++;
             }
             pp = last;
+            p = href;
+            while(p < ehref && ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z'))) 
+                *pp++ = *p++;
+            if(p < (ehref - 2) && *p == ':' && *(p+1) == '/' && *(p+2) == '/') return -1;
+            //DEBUG_LOGGER(ltable->logger, "URL-3.0:http://%s%s|%s|%s", host, path, tmp);
             end = tmp + HTTP_PATH_MAX;
             while(p < ehref) 
             {
                 *pp++ = *p++;
-                if(p > end) return -1;
+                if(pp >= end) return -1;
             }
             *pp = '\0';
             ps = host;
@@ -265,6 +267,7 @@ int ltable_addlink(LTABLE *ltable, unsigned char *host, unsigned char *path,
         }
         if(ps && pp)
         {
+            //DEBUG_LOGGER(ltable->logger, "URL-4:http://%s|%s", ps, pp);
             p = lhost;
             end = lhost + HTTP_HOST_MAX;
             while(*ps != '\0' && *ps != '/')

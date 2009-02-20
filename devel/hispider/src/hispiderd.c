@@ -232,8 +232,8 @@ int hispiderd_packet_handler(CONN *conn, CB_DATA *packet)
             else
             {
                 if(conn->timeout >= TASK_WAIT_MAX) conn->timeout = 0;
-                DEBUG_LOGGER(logger, "set_timeout(%d) on %s:%d", 
-                    conn->timeout + TASK_WAIT_TIMEOUT, conn->remote_ip, conn->remote_port);
+                //DEBUG_LOGGER(logger, "set_timeout(%d) on %s:%d", 
+                //    conn->timeout + TASK_WAIT_TIMEOUT, conn->remote_ip, conn->remote_port);
                 conn->wait_evstate(conn);
                 return conn->set_timeout(conn, conn->timeout + TASK_WAIT_TIMEOUT);
             }
@@ -290,8 +290,8 @@ int hispiderd_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DA
         else
         {
             if(conn->timeout >= TASK_WAIT_MAX) conn->timeout = 0;
-            DEBUG_LOGGER(logger, "set_timeout(%d) on %s:%d", 
-                    conn->timeout + TASK_WAIT_TIMEOUT, conn->remote_ip, conn->remote_port);
+            //DEBUG_LOGGER(logger, "set_timeout(%d) on %s:%d", 
+            //        conn->timeout + TASK_WAIT_TIMEOUT, conn->remote_ip, conn->remote_port);
             conn->wait_evstate(conn);
             return conn->set_timeout(conn, conn->timeout + TASK_WAIT_TIMEOUT);
         }
