@@ -95,6 +95,7 @@ typedef struct _LTABLE
     LLong time_usec;
     /* URL */
     void *whitelist;
+    int nwhitelist;
     /* DNS */
     //char last_host[DNS_NAME_MAX];
     //int is_wait_last_host;

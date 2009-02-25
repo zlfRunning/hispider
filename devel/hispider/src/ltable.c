@@ -404,8 +404,14 @@ int ltable_add_to_whitelist(LTABLE *ltable, char *host)
     
     if(ltable && host && (n = strlen(host)) > 0)
     {
-        dp = (void *)((long)-1);
-        TRIETAB_RADD(ltable->whitelist, host, n, dp);
+
+        TRIETAB_RGET(ltable->whitelist, host, n, dp);
+        if(dp == NULL)
+        {
+            dp = (void *)((long)-1);
+            TRIETAB_RADD(ltable->whitelist, host, n, dp);
+            ltable->nwhitelist++;
+        }
         return 0;
     }
     return -1;
