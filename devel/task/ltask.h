@@ -1,12 +1,16 @@
 #ifndef _LTASK_H
 #define _LTASK_H
 #define L_PATH_MAX      256
+#define L_HOST_MAX      256
 #define L_URL_MAX       4096
 #define HOST_INCRE_NUM  1000000   
 #define PROXY_INCRE_NUM 10000
 #define URL_INCRE_NUM   1000000   
 #define IP_INCRE_NUM    1000000
 #define QUEUE_INCRE_NUM 100000
+#define L_BUF_SIZE      65536
+#define PROXY_STATUS_OK 1
+#define PROXY_STATUS_ERR -1
 #define L_STATE_NAME    "hi.state"
 #define L_URL_NAME      "hi.url"
 #define L_PROXY_NAME    "hi.proxy"
@@ -34,9 +38,8 @@ typedef struct _LHOST
 typedef struct _LPROXY
 {
     int ip;
-    short port;
+    unsigned short port;
     short status;
-    int nfailure;
 }LPROXY;
 /* url/doc meta */
 typedef struct _LMETA
@@ -91,6 +94,8 @@ typedef struct _LTASK
     int  doc_fd;
     void *urlmap;
     void *table;
+    void *qproxy;
+    void *qtask;
     LSTATE *state;
     int state_fd;
     void *timer;
@@ -98,9 +103,9 @@ typedef struct _LTASK
     void *logger;
 
     int (*set_basedir)(struct _LTASK *, char *basedir);
-    int (*add_proxy)(struct _LTASK *, char *ip, char *port);
+    int (*add_proxy)(struct _LTASK *, char *host);
     int (*get_proxy)(struct _LTASK *, LPROXY *proxy);
-    int (*del_proxy)(struct _LTASK *, int proxy_id);
+    int (*set_proxy_status)(struct _LTASK *, int id, char *host);
     int (*add_host)(struct _LTASK *, char *host);
     int (*pop_host)(struct _LTASK *, char *host);
     int (*set_host_status)(struct _LTASK *, char *host, short status);
