@@ -312,12 +312,30 @@ int ltask_get_proxy(LTASK *task, LPROXY *proxy)
 }
 
 /* delete proxy */
-int ltask_set_proxy_status(LTASK *task, int id, char *host)
+int ltask_set_proxy_status(LTASK *task, int id, char *host, short status)
 {
-    if(task && id >= 0)
-    {
+    int ret = -1, n = 0, i = -1;
+    LPROXY *proxy = NULL;
+    void *dp = NULL;
 
+    if(task && (id >= 0  || host))
+    {
+        MUTEX_LOCK(task->mutex);
+        if(host)
+        {
+            n = strlen(host);
+            TRIETAB_GET(task->table, host, n, dp);
+            if(dp) i = (long)dp - 1;
+        }
+        else i = id;
+        if(i >= 0 && i < task->proxyio.total)
+        {
+            proxy = (LPROXY *)(task->proxyio.map + i * sizeof(LPROXY));
+            proxy->status = status;
+        }
+        MUTEX_UNLOCK(task->mutex);
     }
+    return ret;
 }
 
 /* clean */
@@ -453,6 +471,9 @@ int main()
             task->add_proxy(task, p);
         }
         fprintf(stdout, "%d::qtotal:%d\n", __LINE__, QTOTAL(task->qproxy));
+        task->set_proxy_status(task, -1, "198.82.160.220:3124", PROXY_STATUS_OK);
+        task->set_proxy_status(task, -1, "199.239.136.245:80", PROXY_STATUS_OK);
+        task->set_proxy_status(task, -1, "142.150.238.13:3124", PROXY_STATUS_OK);
         i = 0;
         while(task->get_proxy(task, &proxy) == 0)
         {
@@ -463,4 +484,5 @@ int main()
         task->clean(&task);
     }
 }
+//gcc -o task ltask.c utils/*.c -I utils/ -D_DEBUG_LTASK && ./task
 #endif

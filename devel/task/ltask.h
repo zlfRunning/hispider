@@ -105,7 +105,7 @@ typedef struct _LTASK
     int (*set_basedir)(struct _LTASK *, char *basedir);
     int (*add_proxy)(struct _LTASK *, char *host);
     int (*get_proxy)(struct _LTASK *, LPROXY *proxy);
-    int (*set_proxy_status)(struct _LTASK *, int id, char *host);
+    int (*set_proxy_status)(struct _LTASK *, int id, char *host, short status);
     int (*add_host)(struct _LTASK *, char *host);
     int (*pop_host)(struct _LTASK *, char *host);
     int (*set_host_status)(struct _LTASK *, char *host, short status);
