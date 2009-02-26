@@ -344,6 +344,7 @@ void ltask_clean(LTASK **ptask)
     if(ptask && *ptask)
     {
         if((*ptask)->mutex) {MUTEX_DESTROY((*ptask)->mutex);}
+        if((*ptask)->logger) {TIMER_CLEAN((*ptask)->logger);}
         if((*ptask)->timer) {TIMER_CLEAN((*ptask)->timer);}
         if((*ptask)->urlmap) {KVMAP_CLEAN((*ptask)->urlmap);}
         if((*ptask)->table) {TRIETAB_CLEAN((*ptask)->table);}
@@ -377,6 +378,8 @@ void ltask_clean(LTASK **ptask)
             _MUNMAP_((*ptask)->queueio.map, (*ptask)->queueio.end);
             close((*ptask)->queueio.fd);
         }
+	free(*ptask);
+	*ptask = NULL;
     }
 }
 
