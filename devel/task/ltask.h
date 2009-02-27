@@ -20,6 +20,8 @@
 #define L_DOC_NAME      "hi.doc"
 #define L_QUEUE_NAME    "hi.queue"
 #define L_LOG_NAME      "hi.log"
+#define L_KEY_NAME      "hi.key"
+#define L_META_NAME     "hi.meta"
 /* host/domain */
 typedef struct _LHOST
 {
@@ -28,11 +30,11 @@ typedef struct _LHOST
     int ip_off;
     short ip_count;
     short status;
-    int ntimeout;
     int url_first_id;
     int url_current_id;
     int url_total;
     int url_left;
+    int url_last_id;
 }LHOST;
 /* proxy */
 typedef struct _LPROXY
@@ -89,8 +91,10 @@ typedef struct _LTASK
     LIO  hostio;
     LIO  ipio;
     LIO  queueio;
+    int  key_fd;
     int  url_fd;
     int  domain_fd;
+    int  meta_fd;
     int  doc_fd;
     void *urlmap;
     void *table;
@@ -106,11 +110,11 @@ typedef struct _LTASK
     int (*add_proxy)(struct _LTASK *, char *host);
     int (*get_proxy)(struct _LTASK *, LPROXY *proxy);
     int (*set_proxy_status)(struct _LTASK *, int id, char *host, short status);
-    int (*add_host)(struct _LTASK *, char *host);
     int (*pop_host)(struct _LTASK *, char *host);
-    int (*set_host_status)(struct _LTASK *, char *host, short status);
-    int (*set_host_priority)(struct _LTASK *, char *host, short priority);
-    int (*add_url)(struct _LTASK *, char *host, char *path);
+    int (*set_host_ip)(struct _LTASK *, char *host, int *ips, int nip);
+    int (*set_host_status)(struct _LTASK *, char *host, int status);
+    int (*set_host_priority)(struct _LTASK *, char *host, int priority);
+    int (*add_url)(struct _LTASK *, char *url);
     int (*pop_url)(struct _LTASK *, char *url);
     int (*set_url_status)(struct _LTASK *, char *url, short status);
     int (*set_url_priority)(struct _LTASK *, char *url, short priority);

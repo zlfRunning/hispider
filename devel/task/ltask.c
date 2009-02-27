@@ -10,6 +10,7 @@
 #include "timer.h"
 #include "kvmap.h"
 #include "ltask.h"
+#include "md5.h"
 #include "queue.h"
 #include "logger.h"
 #define _EXIT_(format...)                                                               \
@@ -100,12 +101,13 @@ int ltask_mkdir(char *path, int mode)
 /* set basedir*/
 int ltask_set_basedir(LTASK *task, char *dir)
 {
-    char path[L_PATH_MAX], host[L_HOST_MAX], *p = NULL;
+    char path[L_PATH_MAX], host[L_HOST_MAX], *p = NULL, *pp = NULL, *end = NULL;
+    void *dp = NULL, *olddp = NULL;
     unsigned char *ip = NULL;
+    LHOST *host_node = NULL;
     struct stat st = {0};
     LPROXY *proxy = NULL;
-    void *dp = NULL;
-    int n = 0, id = 0;
+    int n = 0, i = 0;
 
     if(task && dir)
     {
@@ -145,7 +147,7 @@ int ltask_set_basedir(LTASK *task, char *dir)
             if((proxy = (LPROXY *)task->proxyio.map) && task->proxyio.total > 0)
             {
                 task->proxyio.left = 0;
-                id = 0;
+                i = 0;
                 do
                 {
                     if(proxy->status == PROXY_STATUS_OK)
@@ -153,23 +155,28 @@ int ltask_set_basedir(LTASK *task, char *dir)
                         ip = (unsigned char *)&(proxy->ip);
                         n = sprintf(host, "%d.%d.%d.%d:%d", ip[0], ip[1], 
                                 ip[2], ip[3], proxy->port);
-                        dp = (void *)((long)(id + 1));
+                        dp = (void *)((long)(i + 1));
                         TRIETAB_ADD(task->table, host, n, dp);
-                        QUEUE_PUSH(task->qproxy, int, &id);
+                        QUEUE_PUSH(task->qproxy, int, &i);
                     }
                     else
                     {
                        task->proxyio.left++;
                     }
                     ++proxy;
-                }while(id++ < task->proxyio.total);
+                }while(i++ < task->proxyio.total);
             }
         }
         else
         {
             _EXIT_("open %s failed, %s\n", path, strerror(errno));
         }
-        /* host/ip/url/domain/document */
+        /* host/key/ip/url/domain/document */
+        sprintf(path, "%s/%s", dir, L_KEY_NAME);
+        if((task->key_fd = open(path, O_CREAT|O_RDWR|O_APPEND, 0644)) < 0)
+        {
+            _EXIT_("open %s failed, %s\n", path, strerror(errno));
+        }
         sprintf(path, "%s/%s", dir, L_DOMAIN_NAME);
         if((task->domain_fd = open(path, O_CREAT|O_RDWR|O_APPEND, 0644)) < 0)
         {
@@ -177,6 +184,11 @@ int ltask_set_basedir(LTASK *task, char *dir)
         }
         sprintf(path, "%s/%s", dir, L_URL_NAME);
         if((task->url_fd = open(path, O_CREAT|O_RDWR|O_APPEND, 0644)) < 0)
+        {
+            _EXIT_("open %s failed, %s\n", path, strerror(errno));
+        }
+        sprintf(path, "%s/%s", dir, L_META_NAME);
+        if((task->meta_fd = open(path, O_CREAT|O_RDWR, 0644)) < 0)
         {
             _EXIT_("open %s failed, %s\n", path, strerror(errno));
         }
@@ -188,7 +200,7 @@ int ltask_set_basedir(LTASK *task, char *dir)
         sprintf(path, "%s/%s", dir, L_HOST_NAME);
         if((task->hostio.fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
         {
-                _MMAP_(task->hostio, st, LHOST, HOST_INCRE_NUM);
+            _MMAP_(task->hostio, st, LHOST, HOST_INCRE_NUM);
         }
         else
         {
@@ -203,6 +215,53 @@ int ltask_set_basedir(LTASK *task, char *dir)
         {
             _EXIT_("open %s failed, %s\n", path, strerror(errno));
         }
+        /* host/table */
+        if(task->hostio.total > 0 && (host_node = (LHOST *)(task->hostio.map))
+                && fstat(task->domain_fd, &st) == 0 && st.st_size > 0)
+        {
+            if((pp = (char *)mmap(NULL, st.st_size, PROT_READ, 
+                            MAP_PRIVATE, task->domain_fd, 0)) != (void *)-1)
+            {
+                i = 0;
+                do
+                {
+                    if(host_node->host_off >= 0 && host_node->host_len > 0)
+                    {
+                        p = pp + host_node->host_off;
+                        dp = (void *)((long)(i+1));
+                        TRIETAB_RADD(task->table, p, host_node->host_len, dp);
+                    }
+                    ++host_node;
+                }while(i++ < task->hostio.total);
+                munmap(pp, st.st_size);
+            }
+            else
+            {
+                _EXIT_("mmap domain(%d) failed, %s\n", task->domain_fd, strerror(errno));
+            }
+        }
+        /* urlmap */
+         if(fstat(task->key_fd, &st) == 0 && st.st_size > 0)
+         {
+             if((pp = (char *)mmap(NULL, st.st_size, PROT_READ, 
+                             MAP_PRIVATE, task->key_fd, 0)) != (void *)-1)
+             {
+                 p = pp;
+                 end = p + st.st_size;
+                 i = 0;
+                 do
+                 {
+                     dp = (void *)((long)(++i));
+                     KVMAP_ADD(task->urlmap, p, dp, olddp);
+                     p += MD5_LEN;
+                 }while(p < end);
+                 munmap(pp, st.st_size);
+             }
+             else
+             {
+                 _EXIT_("mmap domain(%d) failed, %s\n", task->domain_fd, strerror(errno));
+             }
+         }
         /* queue */
         sprintf(path, "%s/%s", dir, L_QUEUE_NAME);
         if((task->queueio.fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
@@ -338,6 +397,248 @@ int ltask_set_proxy_status(LTASK *task, int id, char *host, short status)
     return ret;
 }
 
+/* pop host for DNS resolving */
+int ltask_pop_host(LTASK *task, char *host)
+{
+    LHOST *host_node = NULL;
+    int ret = -1;
+
+    if(task && host && task->hostio.total > 0 && task->hostio.current >= 0
+            && task->hostio.current < task->hostio.total
+            && task->hostio.map && task->hostio.map != (void *)-1)
+    {
+        MUTEX_LOCK(task->mutex);
+        host_node = (LHOST *)(task->hostio.map + task->hostio.current * sizeof(LHOST));
+        do
+        {
+            if(host_node->host_len == 0) break;
+            if(host_node->host_len > 0 && host_node->ip_count == 0)
+            {
+                if(pread(task->domain_fd, host, host_node->host_len, host_node->host_off) > 0)
+                {
+                    task->hostio.current++;
+                    host[host_node->host_len] = '\0';
+                    ret = 0;
+                }
+                break;
+            }
+            ++host_node;
+            task->hostio.current++;
+        }while(task->hostio.current < task->hostio.total);
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return ret;
+}
+
+/* set host ips */
+int ltask_set_host_ip(LTASK *task, char *host, int *ips, int nips)
+{
+    LHOST *host_node = NULL;
+    int i = 0, n = 0, ret = -1;
+    struct stat st = {0};
+    void *dp = NULL;
+
+    if(task && host && (n = strlen(host)) > 0)
+    {
+        MUTEX_LOCK(task->mutex);
+        TRIETAB_RGET(task->table, host, n, dp);
+        if((i = ((long)dp - 1)) >= 0 && i < task->hostio.total 
+                && task->hostio.map && task->hostio.map != (void *)-1)
+        {
+            if((task->ipio.end + nips * sizeof(int)) >= task->ipio.size)
+            {
+                _MMAP_(task->ipio, st, int, IP_INCRE_NUM);
+            }
+            if(task->ipio.map && task->ipio.map != (void *)-1)
+            {
+                memcpy(task->ipio.map + task->ipio.end, ips, nips * sizeof(int));
+                host_node = (LHOST *)(task->hostio.map + i * sizeof(LHOST));
+                host_node->ip_off = task->ipio.end;
+                host_node->ip_count = (short)nips;
+                task->ipio.end += (off_t)(nips * sizeof(int));
+                ret = 0;
+            }
+        }
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return ret;
+}
+
+/* set host status */
+int ltask_set_host_status(LTASK *task, char *host, int status)
+{
+    LHOST *host_node = NULL;
+    int i = 0, n = 0, ret = -1;
+    void *dp = NULL;
+
+    if(task && host && (n = strlen(host)) > 0)
+    {
+        MUTEX_LOCK(task->mutex);
+        TRIETAB_RGET(task->table, host, n, dp);
+        if((i = ((long)dp - 1)) >= 0 && i < task->hostio.total 
+                && task->hostio.map && task->hostio.map != (void *)-1)
+        {
+            host_node = (LHOST *)(task->hostio.map + i * sizeof(LHOST));
+            host_node->status = (short)status;
+            ret = 0;
+        }
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return ret;
+}
+
+/* set host priority */
+int ltask_set_host_priority(LTASK *task, char *host, int priority)
+{
+    LHOST *host_node = NULL;
+    int i = 0, n = 0, ret = -1;
+    void *dp = NULL;
+
+    if(task && host && (n = strlen(host)) > 0)
+    {
+        MUTEX_LOCK(task->mutex);
+        TRIETAB_RGET(task->table, host, n, dp);
+        if((i = ((long)dp - 1)) >= 0 && i < task->hostio.total 
+                && task->hostio.map && task->hostio.map != (void *)-1)
+        {
+            host_node = (LHOST *)(task->hostio.map + i * sizeof(LHOST));
+            ret = 0;
+        }
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return ret;
+}
+
+/* add url */
+int ltask_add_url(LTASK *task, char *url)
+{
+    char newurl[L_URL_MAX], *p = NULL, *pp = NULL, 
+         *e = NULL, *host = NULL;
+    void *dp = NULL, *olddp = NULL;
+    int ret = -1, n = 0, id = 0, host_id = 0;
+    LHOST *host_node = NULL;
+    unsigned char key[MD5_LEN];
+    struct stat st = {0};
+    LMETA meta = {0};
+
+    if(task && url)
+    {
+        MUTEX_LOCK(task->mutex);
+        p = url;
+        pp = newurl;
+        while(*p != '\0')
+        {
+            if(host == NULL && *p == ':' && *(p+1) == '/' && *(p+2) == '/')
+            {
+                *pp++ = ':';
+                *pp++ = '/';
+                *pp++ = '/';
+                p += 2;
+                host = pp;
+                continue;
+            }
+            if(host && e == NULL && *p == '/') e = pp;
+            if((*p >= 'A' && *p < 'Z'))
+            {
+                *pp++ = *p++ + ('a' - 'A');
+            }
+            else
+            {
+                *pp++ = *p++;
+            }
+        }
+        if(host == NULL) goto err;
+        if(e == NULL){*pp = '/'; e = pp++;}
+        *pp = '\0';
+        /* check/add host */
+        if((n = e - host) <= 0) goto err;
+        TRIETAB_RGET(task->table, host, n, dp);
+        if(dp == NULL)
+        {
+            if(task->hostio.end >= task->hostio.size)
+            {_MMAP_(task->hostio, st, LHOST, HOST_INCRE_NUM);}
+            host_id = task->hostio.end/(off_t)sizeof(LHOST);
+            host_node = (LHOST *)(task->hostio.map + task->hostio.end);
+            if(fstat(task->domain_fd, &st) != 0) goto err;
+            host_node->host_off = st.st_size;
+            host_node->host_len = n;
+            if(pwrite(task->domain_fd, host, n, st.st_size) <= 0) goto err;
+            dp = (void *)((long)(task->hostio.end / (off_t)sizeof(LHOST)));
+            TRIETAB_RADD(task->table, host, n, dp);
+            task->hostio.end += (off_t)sizeof(LHOST);
+        }
+        else
+        {
+            host_id = (long)dp - 1;
+            host_node = (LHOST *)(task->hostio.map + (host_id * sizeof(LHOST)));
+        }
+        /* check/add url */
+        if((n = pp - newurl) <= 0) goto err;
+        memset(key, 0, MD5_LEN);
+        md5((unsigned char *)newurl, n, key);
+        if(fstat(task->meta_fd, &st) != 0) goto err;
+        id = (st.st_size/(off_t)sizeof(LMETA));
+        dp = (void *)((long)id);
+        KVMAP_ADD(task->urlmap, key, dp, olddp); 
+        if(olddp == NULL)
+        {
+            if(fstat(task->url_fd, &st) != 0) goto err;
+            if(write(task->url_fd, url, n) > 0 
+                    && write(task->key_fd, key, MD5_LEN) > 0)
+            {
+                meta.url_off = st.st_size;
+                meta.url_len = n;
+                meta.host_id = host_id;
+                meta.prev = host_node->url_last_id;
+                meta.next = -1;
+                host_node->url_left++;
+                host_node->url_total++;
+                host_node->url_last_id = id;
+                if(host_node->url_total == 0) 
+                {
+                    meta.prev = -1;
+                    host_node->url_current_id = host_node->url_first_id = id;
+                    //add to queue
+                }
+                else
+                {
+                    pwrite(task->meta_fd, &id, sizeof(int), 
+                            (off_t)(host_node->url_last_id+1) 
+                            * (off_t)sizeof(LMETA) - sizeof(int));
+                }
+                pwrite(task->meta_fd, &meta, sizeof(LMETA), (off_t)id * (off_t)sizeof(LMETA));
+                ret = 0;
+            }
+        }
+err: 
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return ret;
+}
+
+/* pop url */
+int ltask_pop_url(LTASK *task, char *url)
+{
+
+}
+
+/* set url status */
+int ltask_set_url_status(LTASK *task, char *url, int status)
+{
+
+}
+
+/* set url priority */
+int ltask_set_url_priority(LTASK *task, char *url, int priority)
+{
+}
+
+/* update url content  */
+int ltask_update_url_content(LTASK *task, int urlid, char *content, int ncontent)
+{
+    
+}
+
 /* clean */
 void ltask_clean(LTASK **ptask)
 {
@@ -350,6 +651,7 @@ void ltask_clean(LTASK **ptask)
         if((*ptask)->table) {TRIETAB_CLEAN((*ptask)->table);}
         if((*ptask)->qtask){QUEUE_CLEAN((*ptask)->qtask);}
         if((*ptask)->qproxy){QUEUE_CLEAN((*ptask)->qproxy);}
+        if((*ptask)->key_fd > 0) close((*ptask)->key_fd);
         if((*ptask)->url_fd > 0) close((*ptask)->url_fd);
         if((*ptask)->domain_fd > 0) close((*ptask)->domain_fd);
         if((*ptask)->doc_fd > 0) close((*ptask)->doc_fd);
@@ -400,6 +702,10 @@ LTASK *ltask_init()
         task->add_proxy             = ltask_add_proxy;
         task->get_proxy             = ltask_get_proxy;
         task->set_proxy_status      = ltask_set_proxy_status;
+        task->pop_host              = ltask_pop_host;
+        task->set_host_ip           = ltask_set_host_ip;
+        task->set_host_status       = ltask_set_host_status;
+        task->add_url               = ltask_add_url;
         task->clean                 = ltask_clean;
     }
     return task;
@@ -456,17 +762,24 @@ static char *proxylist[] =
     "198.82.160.220:3124"
 };
 #define NPROXY 45
+static char *urllist[] = 
+{
+    ""
+};
+#define NURL 32
 int main()
 {
     LTASK *task = NULL;
     LPROXY proxy = {0};
-    char *basedir = "/tmp/html", *p = NULL;
+    char *basedir = "/tmp/html", *p = NULL, 
+         host[L_HOST_MAX], url[L_URL_MAX];
     unsigned char *ip = NULL;
     int i = 0;
 
     if((task = ltask_init()))
     {
         task->set_basedir(task, basedir);
+        /* proxy */
         fprintf(stdout, "%d::qtotal:%d\n", __LINE__, QTOTAL(task->qproxy));
         for(i = 0; i < NPROXY; i++)
         {
@@ -483,6 +796,17 @@ int main()
             ip = (unsigned char *)&(proxy.ip);
             fprintf(stdout, "%d::[%d][%d.%d.%d.%d:%d]\n", __LINE__, 
                     i++, ip[0], ip[1], ip[2], ip[3], proxy.port);
+        }
+        /* url */
+        for(i = 0; i < NURL; i++)
+        {
+            p = urllist[i];
+            task->add_url(task, p);
+        }
+        i = 0;
+        while(task->pop_host(task, host) == 0)
+        {
+            fprintf(stdout, "[%d]%s\n", i++, host);
         }
         task->clean(&task);
     }
