@@ -11,6 +11,8 @@
 #define L_BUF_SIZE      65536
 #define PROXY_STATUS_OK 1
 #define PROXY_STATUS_ERR -1
+#define HOST_STATUS_OK 	1
+#define HOST_STATUS_ERR -1
 #define L_STATE_NAME    "hi.state"
 #define L_URL_NAME      "hi.url"
 #define L_PROXY_NAME    "hi.proxy"

@@ -401,7 +401,7 @@ int ltask_set_proxy_status(LTASK *task, int id, char *host, short status)
 int ltask_pop_host(LTASK *task, char *host)
 {
     LHOST *host_node = NULL;
-    int ret = -1;
+    int host_id = -1;
 
     if(task && host && task->hostio.total > 0 && task->hostio.current >= 0
             && task->hostio.current < task->hostio.total
@@ -416,9 +416,9 @@ int ltask_pop_host(LTASK *task, char *host)
             {
                 if(pread(task->domain_fd, host, host_node->host_len, host_node->host_off) > 0)
                 {
-                    task->hostio.current++;
+                    host_id = task->hostio.current++;
                     host[host_node->host_len] = '\0';
-                    ret = 0;
+
                 }
                 break;
             }
@@ -427,7 +427,7 @@ int ltask_pop_host(LTASK *task, char *host)
         }while(task->hostio.current < task->hostio.total);
         MUTEX_UNLOCK(task->mutex);
     }
-    return ret;
+    return host_id;
 }
 
 /* set host ips */
@@ -515,7 +515,7 @@ int ltask_add_url(LTASK *task, char *url)
     char newurl[L_URL_MAX], *p = NULL, *pp = NULL, 
          *e = NULL, *host = NULL;
     void *dp = NULL, *olddp = NULL;
-    int ret = -1, n = 0, id = 0, host_id = 0;
+    int ret = -1, n = 0, nurl = 0, id = 0, host_id = 0;
     LHOST *host_node = NULL;
     unsigned char key[MD5_LEN];
     struct stat st = {0};
@@ -533,12 +533,12 @@ int ltask_add_url(LTASK *task, char *url)
                 *pp++ = ':';
                 *pp++ = '/';
                 *pp++ = '/';
-                p += 2;
+                p += 3;
                 host = pp;
                 continue;
             }
             if(host && e == NULL && *p == '/') e = pp;
-            if((*p >= 'A' && *p < 'Z'))
+            if(*p >= 'A' && *p <= 'Z')
             {
                 *pp++ = *p++ + ('a' - 'A');
             }
@@ -547,14 +547,14 @@ int ltask_add_url(LTASK *task, char *url)
                 *pp++ = *p++;
             }
         }
-        if(host == NULL) goto err;
-        if(e == NULL){*pp = '/'; e = pp++;}
+        if(host == NULL || e == NULL) goto err;
         *pp = '\0';
         /* check/add host */
-        if((n = e - host) <= 0) goto err;
+        if((nurl = (p - url)) <= 0 || (n = (e - host)) <= 0) goto err;
         TRIETAB_RGET(task->table, host, n, dp);
         if(dp == NULL)
         {
+	  DEBUG_LOGGER(task->logger, "url[%d:%s] URL[%d:%s] path[%s]", n, newurl, nurl, url, e);
             if(task->hostio.end >= task->hostio.size)
             {_MMAP_(task->hostio, st, LHOST, HOST_INCRE_NUM);}
             host_id = task->hostio.end/(off_t)sizeof(LHOST);
@@ -764,9 +764,44 @@ static char *proxylist[] =
 #define NPROXY 45
 static char *urllist[] = 
 {
-    ""
+	"http://news.sina.com.cn/", 
+	"http://mil.news.sina.com.cn/", 
+	"http://news.sina.com.cn/society/", 
+	"http://blog.sina.com.cn/", 
+	"http://blog.sina.com.cn/lm/ruiblog/index.html?tj=1", 
+	"http://blog.sina.com.cn/lm/rank/index.html?tj=1", 
+	"http://news.sina.com.cn/guide/", 
+	"http://weather.news.sina.com.cn/", 
+	"http://news.sina.com.cn/health/index.shtml", 
+	"http://news.sina.com.cn/china/", 
+	"http://news.sina.com.cn/world/", 
+	"http://sky.news.sina.com.cn/", 
+	"http://news.sina.com.cn/opinion/index.shtml", 
+	"http://news.sina.com.cn/interview/index.shtml", 
+	"http://news.sina.com.cn/photo/", 
+	"http://survey.news.sina.com.cn/list.php?channel=news&dpc=1", 
+	"http://news.sina.com.cn/news1000/", 
+	"http://news.sina.com.cn/hotnews/", 
+	"http://news.sina.com.cn/zt/", 
+	"http://news.sina.com.cn/w/p/2009-01-28/131217118076.shtml", 
+	"http://news.sina.com.cn/z/2009europedavostrip/index.shtml", 
+	"http://news.sina.com.cn/w/2009-01-28/164817118372.shtml", 
+	"http://news.sina.com.cn/c/2009-01-28/110515088916s.shtml", 
+	"http://news.sina.com.cn/c/2009-01-28/090617117716.shtml", 
+	"http://news.sina.com.cn/z/2009chunjie/index.shtml", 
+	"http://news.sina.com.cn/c/2009-01-28/061517117393.shtml", 
+	"http://news.sina.com.cn/z/video/2009chunjie/index.shtml", 
+	"http://blog.sina.com.cn/lm/z/2009chunjie/index.html", 
+	"http://news.sina.com.cn/z/2009chunyun/index.shtml", 
+	"http://comment4.news.sina.com.cn/comment/skin/simple.html?channel=yl&newsid=28-19-3738&style=1", 
+	"http://news.sina.com.cn/c/2009-01-28/140817118125.shtml", 
+	"http://news.sina.com.cn/w/2009-01-28/171417118397.shtml", 
+	"http://news.sina.com.cn/w/2009-01-28/032417117117.shtml", 
+	"http://news.sina.com.cn/w/2009-01-28/103015088902s.shtml", 
+	"http://news.sina.com.cn/c/2009-01-28/050617117332.shtml", 
+	"http://news.sina.com.cn/w/2009-01-28/101215088878s.shtml" 
 };
-#define NURL 32
+#define NURL 36
 int main()
 {
     LTASK *task = NULL;
@@ -774,7 +809,7 @@ int main()
     char *basedir = "/tmp/html", *p = NULL, 
          host[L_HOST_MAX], url[L_URL_MAX];
     unsigned char *ip = NULL;
-    int i = 0;
+    int i = 0, n = 0;
 
     if((task = ltask_init()))
     {
@@ -804,10 +839,13 @@ int main()
             task->add_url(task, p);
         }
         i = 0;
-        while(task->pop_host(task, host) == 0)
-        {
-            fprintf(stdout, "[%d]%s\n", i++, host);
-        }
+	n = -1;
+        while(task->pop_host(task, host) >= 0)
+	{
+		task->set_host_ip(task, host, &n, 1);
+		task->set_host_status(task, host, HOST_STATUS_ERR);
+		fprintf(stdout, "%d::[%d]%s\n", __LINE__, i++, host);
+	}
         task->clean(&task);
     }
 }
