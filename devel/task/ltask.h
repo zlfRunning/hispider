@@ -2,6 +2,7 @@
 #define _LTASK_H
 #define L_PATH_MAX      256
 #define L_HOST_MAX      256
+#define L_IP_MAX        16
 #define L_URL_MAX       4096
 #define HOST_INCRE_NUM  1000000   
 #define PROXY_INCRE_NUM 10000
@@ -114,6 +115,8 @@ typedef struct _LTASK
     int (*set_proxy_status)(struct _LTASK *, int id, char *host, short status);
     int (*pop_host)(struct _LTASK *, char *host);
     int (*set_host_ip)(struct _LTASK *, char *host, int *ips, int nip);
+    int (*get_host_ip)(struct _LTASK *, char *host);
+    void(*list_host_ip)(struct _LTASK *, FILE *fp);
     int (*set_host_status)(struct _LTASK *, char *host, int status);
     int (*set_host_priority)(struct _LTASK *, char *host, int priority);
     int (*add_url)(struct _LTASK *, char *url);

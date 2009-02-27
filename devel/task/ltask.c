@@ -231,6 +231,13 @@ int ltask_set_basedir(LTASK *task, char *dir)
                         dp = (void *)((long)(i+1));
                         TRIETAB_RADD(task->table, p, host_node->host_len, dp);
                     }
+                    else 
+                    {
+                        task->hostio.end = (off_t)((char *)host_node - (char *)task->hostio.map);
+                        break;
+                    }
+                    n = host_node->ip_off + host_node->ip_count * sizeof(int);
+                    if(n > task->ipio.end) task->ipio.end = n;
                     ++host_node;
                 }while(i++ < task->hostio.total);
                 munmap(pp, st.st_size);
@@ -418,7 +425,6 @@ int ltask_pop_host(LTASK *task, char *host)
                 {
                     host_id = task->hostio.current++;
                     host[host_node->host_len] = '\0';
-
                 }
                 break;
             }
@@ -462,6 +468,76 @@ int ltask_set_host_ip(LTASK *task, char *host, int *ips, int nips)
         MUTEX_UNLOCK(task->mutex);
     }
     return ret;
+}
+
+/* get host ip */
+int ltask_get_host_ip(LTASK *task, char *host)
+{
+    LHOST *host_node = NULL;
+    int i = 0, *ips = NULL, n = 0, ip = -1;
+    void *dp = NULL;
+
+    if(task && host && (n = strlen(host)) > 0)
+    {
+        MUTEX_LOCK(task->mutex);
+        TRIETAB_RGET(task->table, host, n, dp);
+        if((i = ((long)dp - 1)) >= 0 && i < task->hostio.total 
+                && task->hostio.map && task->hostio.map != (void *)-1
+                && (host_node = (LHOST *)(task->hostio.map + i * sizeof(LHOST)))
+                && host_node->ip_count > 0 && task->ipio.size > host_node->ip_off
+                && task->ipio.map && task->ipio.map != (void *)-1
+                && (ips = (int *)(task->ipio.map + host_node->ip_off)))
+        {
+            i = 0;
+            if(host_node->ip_count > 1)
+                i = random()%(host_node->ip_count);
+            ip = ips[i];
+        }
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return ip;
+}
+
+/* list host for DNS resolving */
+void ltask_list_host_ip(LTASK *task, FILE *fp)
+{
+    char host[L_HOST_MAX];
+    LHOST *host_node = NULL;
+    int *ips = NULL, i = 0, x = 0;
+    unsigned char *pp = NULL;
+
+    if(task && task->hostio.total > 0)
+    {
+        MUTEX_LOCK(task->mutex);
+        i = 0;
+        host_node = (LHOST *)(task->hostio.map);
+        do
+        {
+            if(host_node->host_len == 0) break;
+            if(host_node->host_len > 0 && host_node->ip_count > 0 
+                    && host_node->host_len < L_HOST_MAX 
+                    && host_node->ip_off < task->ipio.size
+                    && task->ipio.map && task->ipio.map != (void *)-1)
+            {
+                if(pread(task->domain_fd, host, host_node->host_len, host_node->host_off) > 0)
+                {
+                    host[host_node->host_len] = '\0';
+                    ips = (int *)(task->ipio.map + host_node->ip_off);
+                    fprintf(stdout, "[%d][%s]", i, host);
+                    x = host_node->ip_count;
+                    while(--x >= 0)
+                    {
+                        pp = (unsigned char *)&(ips[x]);
+                        fprintf(stdout, "[%d.%d.%d.%d]", pp[0], pp[1], pp[2], pp[3]);
+                    }
+                    fprintf(stdout, "\n");
+                }
+            }
+            ++host_node;
+        }while(i++ < task->hostio.total);
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return ;
 }
 
 /* set host status */
@@ -554,7 +630,7 @@ int ltask_add_url(LTASK *task, char *url)
         TRIETAB_RGET(task->table, host, n, dp);
         if(dp == NULL)
         {
-	  DEBUG_LOGGER(task->logger, "url[%d:%s] URL[%d:%s] path[%s]", n, newurl, nurl, url, e);
+	        DEBUG_LOGGER(task->logger, "url[%d:%s] URL[%d:%s] path[%s]", n, newurl, nurl, url, e);
             if(task->hostio.end >= task->hostio.size)
             {_MMAP_(task->hostio, st, LHOST, HOST_INCRE_NUM);}
             host_id = task->hostio.end/(off_t)sizeof(LHOST);
@@ -562,8 +638,10 @@ int ltask_add_url(LTASK *task, char *url)
             if(fstat(task->domain_fd, &st) != 0) goto err;
             host_node->host_off = st.st_size;
             host_node->host_len = n;
-            if(pwrite(task->domain_fd, host, n, st.st_size) <= 0) goto err;
-            dp = (void *)((long)(task->hostio.end / (off_t)sizeof(LHOST)));
+            *e = '\n';
+            if(pwrite(task->domain_fd, host, n+1, st.st_size) <= 0) goto err;
+            *e = '/';
+            dp = (void *)((long)(host_id + 1));
             TRIETAB_RADD(task->table, host, n, dp);
             task->hostio.end += (off_t)sizeof(LHOST);
         }
@@ -583,17 +661,15 @@ int ltask_add_url(LTASK *task, char *url)
         if(olddp == NULL)
         {
             if(fstat(task->url_fd, &st) != 0) goto err;
-            if(write(task->url_fd, url, n) > 0 
+            if((n = sprintf(newurl, "%s\n", url)) > 0 
+                    &&  write(task->url_fd, newurl, n) > 0 
                     && write(task->key_fd, key, MD5_LEN) > 0)
             {
                 meta.url_off = st.st_size;
-                meta.url_len = n;
+                meta.url_len = n - 1;
                 meta.host_id = host_id;
-                meta.prev = host_node->url_last_id;
-                meta.next = -1;
-                host_node->url_left++;
-                host_node->url_total++;
-                host_node->url_last_id = id;
+                meta.prev    = host_node->url_last_id;
+                meta.next    = -1;
                 if(host_node->url_total == 0) 
                 {
                     meta.prev = -1;
@@ -606,6 +682,9 @@ int ltask_add_url(LTASK *task, char *url)
                             (off_t)(host_node->url_last_id+1) 
                             * (off_t)sizeof(LMETA) - sizeof(int));
                 }
+                host_node->url_left++;
+                host_node->url_last_id = id;
+                host_node->url_total++;
                 pwrite(task->meta_fd, &meta, sizeof(LMETA), (off_t)id * (off_t)sizeof(LMETA));
                 ret = 0;
             }
@@ -662,22 +741,22 @@ void ltask_clean(LTASK **ptask)
         }
         if((*ptask)->proxyio.fd > 0)
         {
-            _MUNMAP_((*ptask)->proxyio.map, (*ptask)->proxyio.end);
+            _MUNMAP_((*ptask)->proxyio.map, (*ptask)->proxyio.size);
             close((*ptask)->proxyio.fd);
         }
         if((*ptask)->hostio.fd > 0)
         {
-            _MUNMAP_((*ptask)->hostio.map, (*ptask)->hostio.end);
+            _MUNMAP_((*ptask)->hostio.map, (*ptask)->hostio.size);
             close((*ptask)->hostio.fd);
         }
         if((*ptask)->ipio.fd > 0)
         {
-            _MUNMAP_((*ptask)->ipio.map, (*ptask)->ipio.end);
+            _MUNMAP_((*ptask)->ipio.map, (*ptask)->ipio.size);
             close((*ptask)->ipio.fd);
         }
         if((*ptask)->queueio.fd > 0)
         {
-            _MUNMAP_((*ptask)->queueio.map, (*ptask)->queueio.end);
+            _MUNMAP_((*ptask)->queueio.map, (*ptask)->queueio.size);
             close((*ptask)->queueio.fd);
         }
 	free(*ptask);
@@ -704,6 +783,8 @@ LTASK *ltask_init()
         task->set_proxy_status      = ltask_set_proxy_status;
         task->pop_host              = ltask_pop_host;
         task->set_host_ip           = ltask_set_host_ip;
+        task->get_host_ip           = ltask_get_host_ip;
+        task->list_host_ip          = ltask_list_host_ip;
         task->set_host_status       = ltask_set_host_status;
         task->add_url               = ltask_add_url;
         task->clean                 = ltask_clean;
@@ -807,8 +888,8 @@ int main()
     LTASK *task = NULL;
     LPROXY proxy = {0};
     char *basedir = "/tmp/html", *p = NULL, 
-         host[L_HOST_MAX], url[L_URL_MAX];
-    unsigned char *ip = NULL;
+         host[L_HOST_MAX], url[L_URL_MAX], ip[L_IP_MAX];
+    unsigned char *pp = NULL;
     int i = 0, n = 0;
 
     if((task = ltask_init()))
@@ -828,24 +909,31 @@ int main()
         i = 0;
         while(task->get_proxy(task, &proxy) == 0)
         {
-            ip = (unsigned char *)&(proxy.ip);
+            pp = (unsigned char *)&(proxy.ip);
             fprintf(stdout, "%d::[%d][%d.%d.%d.%d:%d]\n", __LINE__, 
-                    i++, ip[0], ip[1], ip[2], ip[3], proxy.port);
+                    i++, pp[0], pp[1], pp[2], pp[3], proxy.port);
         }
-        /* url */
+        /* host/url */
         for(i = 0; i < NURL; i++)
         {
             p = urllist[i];
             task->add_url(task, p);
         }
         i = 0;
-	n = -1;
         while(task->pop_host(task, host) >= 0)
-	{
-		task->set_host_ip(task, host, &n, 1);
-		task->set_host_status(task, host, HOST_STATUS_ERR);
-		fprintf(stdout, "%d::[%d]%s\n", __LINE__, i++, host);
-	}
+        {
+            sprintf(ip, "202.0.16.%d", (random()%256));
+            n = inet_addr(ip);
+            pp = (unsigned char *)&n;
+            fprintf(stdout, "[%d.%d.%d.%d]\n", pp[0], pp[1], pp[2], pp[3]);
+            task->set_host_ip(task, host, &n, 1);
+            task->set_host_status(task, host, HOST_STATUS_ERR);
+            n = task->get_host_ip(task, host);
+            pp = (unsigned char *)&n;
+            fprintf(stdout, "%d::[%d][%s][%d.%d.%d.%d]\n",
+                    __LINE__, i++, host, pp[0], pp[1], pp[2], pp[3]);
+        }
+        task->list_host_ip(task, stdout);
         task->clean(&task);
     }
 }
