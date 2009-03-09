@@ -21,10 +21,11 @@
 #define L_IP_NAME       "hi.ip"
 #define L_DOMAIN_NAME   "hi.domain"
 #define L_DOC_NAME      "hi.doc"
-#define L_QUEUE_NAME    "hi.queue"
+#define L_TASK_NAME     "hi.task"
 #define L_LOG_NAME      "hi.log"
 #define L_KEY_NAME      "hi.key"
 #define L_META_NAME     "hi.meta"
+#define L_PATTERN_NAME  "hi.pattern"
 /* host/domain */
 typedef struct _LHOST
 {
@@ -93,7 +94,6 @@ typedef struct _LTASK
     LIO  proxyio;
     LIO  hostio;
     LIO  ipio;
-    LIO  queueio;
     int  key_fd;
     int  url_fd;
     int  domain_fd;

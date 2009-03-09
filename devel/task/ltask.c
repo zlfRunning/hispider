@@ -12,6 +12,7 @@
 #include "ltask.h"
 #include "md5.h"
 #include "queue.h"
+#include "fqueue.h"
 #include "logger.h"
 #define _EXIT_(format...)                                                               \
 do                                                                                      \
@@ -139,7 +140,7 @@ int ltask_set_basedir(LTASK *task, char *dir)
         {
             _EXIT_("open %s failed, %s\n", path, strerror(errno));
         }
-        /* proxy */
+        /* proxy/task */
         sprintf(path, "%s/%s", dir, L_PROXY_NAME);
         if((task->proxyio.fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
         {
@@ -171,6 +172,8 @@ int ltask_set_basedir(LTASK *task, char *dir)
         {
             _EXIT_("open %s failed, %s\n", path, strerror(errno));
         }
+        sprintf(path, "%s/%s", dir, L_TASK_NAME);
+        FQUEUE_INIT(task->qtask, path, LNODE);
         /* host/key/ip/url/domain/document */
         sprintf(path, "%s/%s", dir, L_KEY_NAME);
         if((task->key_fd = open(path, O_CREAT|O_RDWR|O_APPEND, 0644)) < 0)
@@ -269,16 +272,6 @@ int ltask_set_basedir(LTASK *task, char *dir)
                  _EXIT_("mmap domain(%d) failed, %s\n", task->domain_fd, strerror(errno));
              }
          }
-        /* queue */
-        sprintf(path, "%s/%s", dir, L_QUEUE_NAME);
-        if((task->queueio.fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
-        {
-            _MMAP_(task->queueio, st, LNODE, QUEUE_INCRE_NUM);
-        }
-        else
-        {
-            _EXIT_("open %s failed, %s\n", path, strerror(errno));
-        }
         /* document */
         return 0;
     }
@@ -698,7 +691,13 @@ err:
 /* pop url */
 int ltask_pop_url(LTASK *task, char *url)
 {
+    int urlid = -1;
 
+    if(task && url)
+    {
+         
+    }
+    return urlid;
 }
 
 /* set url status */
@@ -728,7 +727,7 @@ void ltask_clean(LTASK **ptask)
         if((*ptask)->timer) {TIMER_CLEAN((*ptask)->timer);}
         if((*ptask)->urlmap) {KVMAP_CLEAN((*ptask)->urlmap);}
         if((*ptask)->table) {TRIETAB_CLEAN((*ptask)->table);}
-        if((*ptask)->qtask){QUEUE_CLEAN((*ptask)->qtask);}
+        if((*ptask)->qtask){FQUEUE_CLEAN((*ptask)->qtask);}
         if((*ptask)->qproxy){QUEUE_CLEAN((*ptask)->qproxy);}
         if((*ptask)->key_fd > 0) close((*ptask)->key_fd);
         if((*ptask)->url_fd > 0) close((*ptask)->url_fd);
@@ -754,11 +753,6 @@ void ltask_clean(LTASK **ptask)
             _MUNMAP_((*ptask)->ipio.map, (*ptask)->ipio.size);
             close((*ptask)->ipio.fd);
         }
-        if((*ptask)->queueio.fd > 0)
-        {
-            _MUNMAP_((*ptask)->queueio.map, (*ptask)->queueio.size);
-            close((*ptask)->queueio.fd);
-        }
 	free(*ptask);
 	*ptask = NULL;
     }
@@ -775,7 +769,6 @@ LTASK *ltask_init()
         TRIETAB_INIT(task->table);
         TIMER_INIT(task->timer);
         MUTEX_INIT(task->mutex);
-        QUEUE_INIT(task->qtask);
         QUEUE_INIT(task->qproxy);
         task->set_basedir           = ltask_set_basedir;
         task->add_proxy             = ltask_add_proxy;
