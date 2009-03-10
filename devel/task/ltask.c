@@ -581,8 +581,7 @@ int ltask_set_host_priority(LTASK *task, char *host, int priority)
 /* add url */
 int ltask_add_url(LTASK *task, char *url)
 {
-    char newurl[L_URL_MAX], *p = NULL, *pp = NULL, 
-         *e = NULL, *host = NULL;
+    char newurl[L_URL_MAX], *p = NULL, *pp = NULL, *e = NULL, *host = NULL;
     void *dp = NULL, *olddp = NULL;
     int ret = -1, n = 0, nurl = 0, id = 0, host_id = 0;
     LHOST *host_node = NULL;
@@ -623,11 +622,12 @@ int ltask_add_url(LTASK *task, char *url)
         TRIETAB_RGET(task->table, host, n, dp);
         if(dp == NULL)
         {
-	        DEBUG_LOGGER(task->logger, "url[%d:%s] URL[%d:%s] path[%s]", n, newurl, nurl, url, e);
             if(task->hostio.end >= task->hostio.size)
             {_MMAP_(task->hostio, st, LHOST, HOST_INCRE_NUM);}
             host_id = task->hostio.end/(off_t)sizeof(LHOST);
             host_node = (LHOST *)(task->hostio.map + task->hostio.end);
+	        DEBUG_LOGGER(task->logger, "%d:url[%d:%s] URL[%d:%s] path[%s]", 
+                    host_id, n, newurl, nurl, url, e);
             if(fstat(task->domain_fd, &st) != 0) goto err;
             host_node->host_off = st.st_size;
             host_node->host_len = n;
@@ -637,11 +637,14 @@ int ltask_add_url(LTASK *task, char *url)
             dp = (void *)((long)(host_id + 1));
             TRIETAB_RADD(task->table, host, n, dp);
             task->hostio.end += (off_t)sizeof(LHOST);
+            task->state->host_total++;
         }
         else
         {
             host_id = (long)dp - 1;
             host_node = (LHOST *)(task->hostio.map + (host_id * sizeof(LHOST)));
+	        DEBUG_LOGGER(task->logger, "%d:url[%d:%s] URL[%d:%s] path[%s] left:%d total:%d", 
+                    host_id, n, newurl, nurl, url, e, host_node->url_left, host_node->url_total);
         }
         /* check/add url */
         if((n = pp - newurl) <= 0) goto err;
@@ -691,11 +694,60 @@ err:
 /* pop url */
 int ltask_pop_url(LTASK *task, char *url)
 {
-    int urlid = -1;
+    int urlid = -1, n = -1, x = 0;
+    LHOST *host_node = NULL;
+    LNODE node = {0};
+    LMETA meta = {0};
 
     if(task && url)
     {
-         
+        MUTEX_LOCK(task->mutex);
+        if(FQUEUE_POP(task->qtask, LNODE, &node) == 0)
+        {
+            if(node.type == Q_TYPE_HOST && node.id >= 0)
+            {
+                host_node = (LHOST *)(task->hostio.map + node.id * sizeof(LHOST));
+                urlid = host_node->url_current_id;
+            }
+            else if(node.type == Q_TYPE_URL && node.id >= 0)
+            {
+                urlid = node.id;
+            }
+            else goto end;
+        }
+        else
+        {
+            x = task->state->host_current;
+            do
+            {
+                host_node = (LHOST *)(task->hostio.map 
+                        + task->state->host_current * sizeof(LHOST));
+                if(task->state->host_current++ == task->state->host_total) 
+                    task->state->host_current = 0;
+                if(host_node && host_node->status >= 0 && host_node->url_left > 0)
+                {
+                    urlid = host_node->url_current_id;
+                    DEBUG_LOGGER(task->logger, "urlid:%d current:%d left:%d total:%d", urlid, 
+                        task->state->host_current, host_node->url_left, host_node->url_total);
+                    break;
+                }
+                else host_node = NULL;
+                if(x == task->state->host_current) break;
+            }while(host_node == NULL);
+        }
+        /* read url */
+        if(urlid >= 0 && pread(task->meta_fd, &meta, sizeof(LMETA), 
+                    (off_t)(urlid * sizeof(LMETA))) > 0 && meta.url_len <= L_URL_MAX
+                && (n = pread(task->url_fd, url, meta.url_len, meta.url_off)) > 0)
+        {
+            if(host_node == NULL) 
+                host_node = (LHOST *)(task->hostio.map + meta.host_id * sizeof(LHOST));
+            url[n] = '\0';
+            host_node->url_current_id = meta.next;
+            host_node->url_left--;
+        }
+end:
+        MUTEX_UNLOCK(task->mutex);
     }
     return urlid;
 }
@@ -780,6 +832,7 @@ LTASK *ltask_init()
         task->list_host_ip          = ltask_list_host_ip;
         task->set_host_status       = ltask_set_host_status;
         task->add_url               = ltask_add_url;
+        task->pop_url               = ltask_pop_url;
         task->clean                 = ltask_clean;
     }
     return task;
@@ -883,7 +936,7 @@ int main()
     char *basedir = "/tmp/html", *p = NULL, 
          host[L_HOST_MAX], url[L_URL_MAX], ip[L_IP_MAX];
     unsigned char *pp = NULL;
-    int i = 0, n = 0;
+    int i = 0, n = 0, urlid = -1;
 
     if((task = ltask_init()))
     {
@@ -920,13 +973,17 @@ int main()
             pp = (unsigned char *)&n;
             fprintf(stdout, "[%d.%d.%d.%d]\n", pp[0], pp[1], pp[2], pp[3]);
             task->set_host_ip(task, host, &n, 1);
-            task->set_host_status(task, host, HOST_STATUS_ERR);
+            task->set_host_status(task, host, HOST_STATUS_OK);
             n = task->get_host_ip(task, host);
             pp = (unsigned char *)&n;
             fprintf(stdout, "%d::[%d][%s][%d.%d.%d.%d]\n",
                     __LINE__, i++, host, pp[0], pp[1], pp[2], pp[3]);
         }
         task->list_host_ip(task, stdout);
+        while((urlid = task->pop_url(task, url)) >= 0)
+        {
+            fprintf(stdout, "%d::url[%s]\n", urlid, url);
+        }
         task->clean(&task);
     }
 }

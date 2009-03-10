@@ -1,31 +1,32 @@
 #ifndef _LTASK_H
 #define _LTASK_H
-#define L_PATH_MAX      256
-#define L_HOST_MAX      256
-#define L_IP_MAX        16
-#define L_URL_MAX       4096
-#define HOST_INCRE_NUM  1000000   
-#define PROXY_INCRE_NUM 10000
-#define URL_INCRE_NUM   1000000   
-#define IP_INCRE_NUM    1000000
-#define QUEUE_INCRE_NUM 100000
-#define L_BUF_SIZE      65536
-#define PROXY_STATUS_OK 1
-#define PROXY_STATUS_ERR -1
-#define HOST_STATUS_OK 	1
-#define HOST_STATUS_ERR -1
-#define L_STATE_NAME    "hi.state"
-#define L_URL_NAME      "hi.url"
-#define L_PROXY_NAME    "hi.proxy"
-#define L_HOST_NAME     "hi.host"
-#define L_IP_NAME       "hi.ip"
-#define L_DOMAIN_NAME   "hi.domain"
-#define L_DOC_NAME      "hi.doc"
-#define L_TASK_NAME     "hi.task"
-#define L_LOG_NAME      "hi.log"
-#define L_KEY_NAME      "hi.key"
-#define L_META_NAME     "hi.meta"
-#define L_PATTERN_NAME  "hi.pattern"
+#define L_PATH_MAX          256
+#define L_HOST_MAX          256
+#define L_IP_MAX            16
+#define L_URL_MAX           4096
+#define HOST_INCRE_NUM      1000000   
+#define PROXY_INCRE_NUM     10000
+#define URL_INCRE_NUM       1000000   
+#define IP_INCRE_NUM        1000000
+#define L_BUF_SIZE          65536
+#define Q_TYPE_URL          0x01
+#define Q_TYPE_HOST         0x02
+#define PROXY_STATUS_OK     1
+#define PROXY_STATUS_ERR    -1
+#define HOST_STATUS_OK 	    1
+#define HOST_STATUS_ERR     -1
+#define L_STATE_NAME        "hi.state"
+#define L_URL_NAME          "hi.url"
+#define L_PROXY_NAME        "hi.proxy"
+#define L_HOST_NAME         "hi.host"
+#define L_IP_NAME           "hi.ip"
+#define L_DOMAIN_NAME       "hi.domain"
+#define L_DOC_NAME          "hi.doc"
+#define L_TASK_NAME         "hi.task"
+#define L_LOG_NAME          "hi.log"
+#define L_KEY_NAME          "hi.key"
+#define L_META_NAME         "hi.meta"
+#define L_PATTERN_NAME      "hi.pattern"
 /* host/domain */
 typedef struct _LHOST
 {
@@ -65,8 +66,10 @@ typedef struct _LMETA
 typedef struct _LSTATE
 {
     short running;
-    short url_queue_type;
+    short is_use_proxy;
     int   url_total;
+    int   host_current;
+    int   host_total;
     off_t document_size_total;
     int   speed;
 }LSTATE;
