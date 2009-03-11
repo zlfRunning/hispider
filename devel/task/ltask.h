@@ -11,6 +11,8 @@
 #define L_BUF_SIZE          65536
 #define Q_TYPE_URL          0x01
 #define Q_TYPE_HOST         0x02
+#define L_LEVEL_UP       1
+#define L_LEVEL_DOWN     -1
 #define PROXY_STATUS_OK     1
 #define PROXY_STATUS_ERR    -1
 #define HOST_STATUS_OK 	    1
@@ -35,6 +37,8 @@ typedef struct _LHOST
     int ip_off;
     short ip_count;
     short status;
+    short level;
+    short depth;
     int url_first_id;
     int url_current_id;
     int url_total;
@@ -53,6 +57,8 @@ typedef struct _LMETA
 {
     short status;
     short type;
+    short level;
+    short depth;
     int date;
     int url_off;
     int url_len;
@@ -120,12 +126,12 @@ typedef struct _LTASK
     int (*set_host_ip)(struct _LTASK *, char *host, int *ips, int nip);
     int (*get_host_ip)(struct _LTASK *, char *host);
     void(*list_host_ip)(struct _LTASK *, FILE *fp);
-    int (*set_host_status)(struct _LTASK *, char *host, int status);
-    int (*set_host_priority)(struct _LTASK *, char *host, int priority);
+    int (*set_host_status)(struct _LTASK *, int hostid, char *host, short status);
+    int (*set_host_level)(struct _LTASK *, int hostid, char *host, short level);
     int (*add_url)(struct _LTASK *, char *url);
     int (*pop_url)(struct _LTASK *, char *url);
-    int (*set_url_status)(struct _LTASK *, char *url, short status);
-    int (*set_url_priority)(struct _LTASK *, char *url, short priority);
+    int (*set_url_status)(struct _LTASK *, int urlid, char *url, short status);
+    int (*set_url_level)(struct _LTASK *, int urlid, char *url, short level);
     int (*update_url_content)(struct _LTASK *, char *url, int date, short type, 
             char *content, int ncontent);
     void (*clean)(struct _LTASK **);

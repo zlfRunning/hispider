@@ -534,20 +534,24 @@ void ltask_list_host_ip(LTASK *task, FILE *fp)
 }
 
 /* set host status */
-int ltask_set_host_status(LTASK *task, char *host, int status)
+int ltask_set_host_status(LTASK *task, int hostid, char *host, short status)
 {
     LHOST *host_node = NULL;
-    int i = 0, n = 0, ret = -1;
+    int id = 0, n = 0, ret = -1;
     void *dp = NULL;
 
-    if(task && host && (n = strlen(host)) > 0)
+    if(task)
     {
         MUTEX_LOCK(task->mutex);
-        TRIETAB_RGET(task->table, host, n, dp);
-        if((i = ((long)dp - 1)) >= 0 && i < task->hostio.total 
+        if(host && (n = strlen(host)) > 0)
+        {
+            TRIETAB_RGET(task->table, host, n, dp);
+            id = ((long)dp - 1);
+        }else id = hostid;
+        if(id >= 0 && id < task->hostio.total 
                 && task->hostio.map && task->hostio.map != (void *)-1)
         {
-            host_node = (LHOST *)(task->hostio.map + i * sizeof(LHOST));
+            host_node = (LHOST *)(task->hostio.map + id * sizeof(LHOST));
             host_node->status = (short)status;
             ret = 0;
         }
@@ -557,20 +561,32 @@ int ltask_set_host_status(LTASK *task, char *host, int status)
 }
 
 /* set host priority */
-int ltask_set_host_priority(LTASK *task, char *host, int priority)
+int ltask_set_host_level(LTASK *task, int hostid, char *host, short level)
 {
+    int id = 0, n = 0, ret = -1;
     LHOST *host_node = NULL;
-    int i = 0, n = 0, ret = -1;
+    LNODE node = {0};
     void *dp = NULL;
 
-    if(task && host && (n = strlen(host)) > 0)
+    if(task)
     {
         MUTEX_LOCK(task->mutex);
-        TRIETAB_RGET(task->table, host, n, dp);
-        if((i = ((long)dp - 1)) >= 0 && i < task->hostio.total 
+        if(host && (n = strlen(host)) > 0)
+        {
+            TRIETAB_RGET(task->table, host, n, dp);
+            id = ((long)dp - 1);
+        }else id = hostid;
+        if(id >= 0 && id < task->hostio.total 
                 && task->hostio.map && task->hostio.map != (void *)-1)
         {
-            host_node = (LHOST *)(task->hostio.map + i * sizeof(LHOST));
+            host_node = (LHOST *)(task->hostio.map + id * sizeof(LHOST));
+            if(host_node->level != level && level == L_LEVEL_UP)
+            {
+                node.type = Q_TYPE_HOST;
+                node.id = id;
+                FQUEUE_PUSH(task->qtask, LNODE, &node);
+            }
+            host_node->level = level;
             ret = 0;
         }
         MUTEX_UNLOCK(task->mutex);
@@ -738,6 +754,7 @@ int ltask_pop_url(LTASK *task, char *url)
         /* read url */
         if(urlid >= 0 && pread(task->meta_fd, &meta, sizeof(LMETA), 
                     (off_t)(urlid * sizeof(LMETA))) > 0 && meta.url_len <= L_URL_MAX
+                && meta.status >= 0 
                 && (n = pread(task->url_fd, url, meta.url_len, meta.url_off)) > 0)
         {
             if(host_node == NULL) 
@@ -753,14 +770,87 @@ end:
 }
 
 /* set url status */
-int ltask_set_url_status(LTASK *task, char *url, int status)
+int ltask_set_url_status(LTASK *task, int urlid, char *url, short status)
 {
+    char newurl[L_URL_MAX], *p = NULL, *pp = NULL;
+    unsigned char key[MD5_LEN];
+    int n = 0, id = -1, ret = -1;
+    void *dp = NULL;
 
+    if(task)
+    {
+        MUTEX_LOCK(task->mutex);
+        if(url)
+        {
+            p = url;
+            pp = newurl;
+            while(*p != '\0')
+            {
+                if(*p >= 'A' && *p <= 'Z')
+                    *pp++ = *p++ + 'a' - 'A';
+                else *pp++ = *p++;
+            }
+            *pp = '\0';
+            if((n = (pp - newurl)) > 0)
+            {
+                md5((unsigned char *)newurl, n, key);
+                KVMAP_GET(task->urlmap, key, dp);
+                if(dp) id = (long )dp - 1;
+            }
+        }else id = urlid;
+        if(urlid >= 0) 
+        {
+            pwrite(task->meta_fd, &status, sizeof(short), id * sizeof(LMETA));        
+            ret = 0;
+        }
+end:
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return ret;
 }
 
-/* set url priority */
-int ltask_set_url_priority(LTASK *task, char *url, int priority)
+/* set url level */
+int ltask_set_url_level(LTASK *task, int urlid, char *url, short level)
 {
+    char newurl[L_URL_MAX], *p = NULL, *pp = NULL;
+    unsigned char key[MD5_LEN];
+    int n = 0, id = -1, ret = -1;
+    LNODE node = {0};
+    void *dp = NULL;
+
+    if(task)
+    {
+        MUTEX_LOCK(task->mutex);
+        if(url)
+        {
+            p = url;
+            pp = newurl;
+            while(*p != '\0')
+            {
+                if(*p >= 'A' && *p <= 'Z')
+                    *pp++ = *p++ + 'a' - 'A';
+                else *pp++ = *p++;
+            }
+            *pp = '\0';
+            if((n = (pp - newurl)) > 0)
+            {
+                md5((unsigned char *)newurl, n, key);
+                KVMAP_GET(task->urlmap, key, dp);
+                if(dp) id = (long )dp - 1;
+            }
+        }else id = urlid;
+        if(urlid >= 0) 
+        {
+            pwrite(task->meta_fd, &level, sizeof(short), id * sizeof(LMETA) + sizeof(short)*2); 
+            node.type = Q_TYPE_URL;
+            node.id = urlid;
+            FQUEUE_PUSH(task->qtask, LNODE, &node);
+            ret = 0;
+        }
+end:
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return ret;
 }
 
 /* update url content  */
@@ -831,7 +921,10 @@ LTASK *ltask_init()
         task->get_host_ip           = ltask_get_host_ip;
         task->list_host_ip          = ltask_list_host_ip;
         task->set_host_status       = ltask_set_host_status;
+        task->set_host_level        = ltask_set_host_level;
         task->add_url               = ltask_add_url;
+        task->set_url_status        = ltask_set_url_status;
+        task->set_url_level         = ltask_set_url_level;
         task->pop_url               = ltask_pop_url;
         task->clean                 = ltask_clean;
     }
@@ -973,7 +1066,7 @@ int main()
             pp = (unsigned char *)&n;
             fprintf(stdout, "[%d.%d.%d.%d]\n", pp[0], pp[1], pp[2], pp[3]);
             task->set_host_ip(task, host, &n, 1);
-            task->set_host_status(task, host, HOST_STATUS_OK);
+            task->set_host_status(task, -1, host, HOST_STATUS_OK);
             n = task->get_host_ip(task, host);
             pp = (unsigned char *)&n;
             fprintf(stdout, "%d::[%d][%s][%d.%d.%d.%d]\n",
