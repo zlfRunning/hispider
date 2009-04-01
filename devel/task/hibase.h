@@ -44,6 +44,7 @@ typedef struct _HIBASE
 	void *table_map;
 	void *template_map;
 	char basedir[HIBASE_PATH_MAX];
+	int  
 
 	int 	(*set_basedir)(struct _HIBASE *, char *dir);
 	int 	(*add_table)(struct _HIBASE *, ITABLE *tab);

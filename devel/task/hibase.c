@@ -5,6 +5,8 @@
 #include <sys/mmap.h>
 #include <sys/stat.h>
 #include "hibase.h"
+#define  HIBASE_TABLE_NAME   		".table"
+#define  HIBASE_TEMPLATE_NAME 		".template"
 
 int hibase_mkdir(char *path, int mode)
 {
@@ -42,9 +44,20 @@ int hibase_mkdir(char *path, int mode)
 /* set basedir */
 int hibase_set_basedir(HIBASE *hibase, char *dir)
 {
+	char path[HIBASE_PATH_MAX];
+	int n = 0;
+
 	if(hibase && dir)
 	{
-		
+		n = sprintf(hibase->basedir, "%s/", dir);
+		hibase_mkdir(hibase->basedir);
+		//resume table
+		sprintf(path, "%s%s", hibase->basedir, HIBASE_TABLE_NAME);	
+		if((fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
+		{
+		}
+		//resume template 
+
 	}
 	return -1;
 }
