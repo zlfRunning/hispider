@@ -5,7 +5,8 @@
 #define FTYPE_TEXT		0x04
 #define FTYPE_ALL 		(FTYPE_INT|FTYPE_FLOAT|FTYPE_TEXT)	
 #define FIELD_NUM_MAX		256
-#define FIELD_NAME_MAX		256
+#define FIELD_NAME_MAX		32
+#define TABLE_NAME_MAX		32
 #define HIBASE_PATH_MAX		256
 #define REGX_SIZE_MAX		4096
 /* field */
@@ -13,16 +14,19 @@ typedef struct _IFILED
 {
 	short  data_type;
 	short  template_id;
+	short  is_index;
+	short  is_link;
 	int    off;
 	int    len;
+	char   name[FIELD_NAME_MAX];
 }IFIELD;
 /* table */
 typedef struct _ITABLE
 {
-	short id;
+	short status;
 	short nfields;
 	IFIELD fields[FIELD_NUM_MAX];
-	char name[FIELD_NAME_MAX];
+	char name[TABLE_NAME_MAX];
 }ITABLE;
 /* regular expression */
 typedef struct _IREGX
