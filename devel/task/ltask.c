@@ -724,6 +724,10 @@ int ltask_pop_url(LTASK *task, char *url)
             {
                 host_node = (LHOST *)(task->hostio.map + node.id * sizeof(LHOST));
                 urlid = host_node->url_current_id;
+                if(host_node->url_left > 1)
+                {
+                    FQUEUE_PUSH(task->qtask, LNODE, &node);
+                }
             }
             else if(node.type == Q_TYPE_URL && node.id >= 0)
             {
@@ -839,11 +843,11 @@ int ltask_set_url_level(LTASK *task, int urlid, char *url, short level)
                 if(dp) id = (long )dp - 1;
             }
         }else id = urlid;
-        if(urlid >= 0) 
+        if(id >= 0) 
         {
             pwrite(task->meta_fd, &level, sizeof(short), id * sizeof(LMETA) + sizeof(short)*2); 
             node.type = Q_TYPE_URL;
-            node.id = urlid;
+            node.id = id;
             FQUEUE_PUSH(task->qtask, LNODE, &node);
             ret = 0;
         }
@@ -1072,7 +1076,16 @@ int main()
             fprintf(stdout, "%d::[%d][%s][%d.%d.%d.%d]\n",
                     __LINE__, i++, host, pp[0], pp[1], pp[2], pp[3]);
         }
+        task->set_host_status(task, -1, "news.sina.com.cn", HOST_STATUS_ERR);
+        task->set_host_level(task, -1, "blog.sina.com.cn", L_LEVEL_UP);
         task->list_host_ip(task, stdout);
+        task->set_host_status(task, -1, "news.sina.com.cn", HOST_STATUS_OK);
+        task->set_url_status(task, -1, 
+	        "http://news.sina.com.cn/w/2009-01-28/171417118397.shtml", 
+                URL_STATUS_ERR);
+        task->set_url_level(task, -1, 
+	"http://news.sina.com.cn/w/2009-01-28/101215088878S.shtml", 
+                L_LEVEL_UP);
         while((urlid = task->pop_url(task, url)) >= 0)
         {
             fprintf(stdout, "%d::url[%s]\n", urlid, url);
