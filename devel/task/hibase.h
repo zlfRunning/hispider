@@ -14,6 +14,8 @@
 #define F_IS_IMAGE          0x02
 #define TABLE_INCRE_NUM     256
 #define TEMPLATE_INCRE_NUM  10000
+#define TAB_STATUS_ERR      -1
+#define TAB_STATUS_OK       1
 /* field */
 typedef struct _IFILED
 {
@@ -68,16 +70,20 @@ typedef struct _HIBASE
     char    basedir[HIBASE_PATH_MAX];
     HIO     tableio;
     HIO     templateio;
+    void    *mutex;
 
     int 	(*set_basedir)(struct _HIBASE *, char *dir);
+    int     (*table_exists)(struct _HIBASE *, char *name, int len);
     int 	(*add_table)(struct _HIBASE *, ITABLE *tab);
-    int	    (*get_table)(struct _HIBASE *, int table_id, char *table_name);
+    int	    (*get_table)(struct _HIBASE *, int table_id, char *table_name, ITABLE *table);
     int 	(*update_table)(struct _HIBASE *, int table_id, ITABLE *tab);
-    int 	(*delete_table)(struct _HIBASE *, int table_id);
+    int 	(*delete_table)(struct _HIBASE *, int table_id, char *table_name);
+    int     (*template_exists)(struct _HIBASE *, char *name, int len);
     int 	(*add_template)(struct _HIBASE *, ITEMPLATE *);
-    int 	(*get_template)(struct _HIBASE *, int template_id, char *template_name);
+    int 	(*get_template)(struct _HIBASE *, int template_id, 
+            char *template_name, ITEMPLATE *);
     int 	(*update_template)(struct _HIBASE *, int template_id, ITEMPLATE *);
-    int 	(*delete_template)(struct _HIBASE *, int template_id, ITEMPLATE *);
+    int 	(*delete_template)(struct _HIBASE *, int template_id, char * template_name);
     void 	(*clean)(struct _HIBASE **);	
 }HIBASE;
 #endif

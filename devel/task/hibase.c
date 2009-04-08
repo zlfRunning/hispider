@@ -151,6 +151,71 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
 	return -1;
 }
 
+/* check table exists */
+int hibase_table_exists(HIBASE *hibase, char *table_name, int len)
+{
+    void *dp = NULL;
+    int tableid = -1;
+
+    if(hibase && table_name && len > 0 && hibase->mtable)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        TRIETAB_GET(hibase->mtable, table_name, len, dp);
+        tableid = ((long)dp - 1);
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return tableid;
+}
+
+/* add table */
+int hibase_add_table(HIBASE *hibase, ITABLE *table)
+{
+    int tableid = -1, i = 0, n = 0;
+    ITABLE *tab = NULL;
+
+    if(hibase && table && (n = strlen(table->name))  > 0 
+            && (tableid = hibase_table_exists(hibase, table->name, n)) < 0)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if(hibase->tableio.left == 0){_MMAP_(hibase->tableio, st, ITABLE, TABLE_INCRE_NUM);}        
+        if(hibase->tableio.left > 0 && (tab = (ITABLE *)hibase->tableio.map) 
+                && tab != (void *)-1)
+        {
+            for(i = 0; i < hibase->tableio.total; i++)
+            {
+                if(tab[i].status != TAB_STATUS_OK)
+                {
+                    table.status = TAB_STATUS_OK;
+                    memcpy(&(tab[i]), table, sizeof(ITABLE));
+                    tableid = i;
+                    dp = (void *)((long)(tableid + 1));
+                    TRIETAB_ADD(hibase->mtable, table->name, n, dp);
+                    hibase->tableio.left--;
+                    break;
+                }
+            }
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return tableid;
+}
+
+/* check template exists */
+int hibase_template_exists(HIBASE *hibase, char *template_name)
+{
+    void *dp = NULL;
+    int templateid = -1, n = 0;
+
+    if(hibase && template_name && (n = strlen(templatename)) > 0 && hibase->mtemplate)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        TRIETAB_GET(hibase->mtemplate, template_name, n, dp);
+        templateid = ((long)dp - 1);
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return templateid;
+}
+
 /* clean */
 void hibase_clean(HIBASE **phibase)
 {
@@ -168,6 +233,7 @@ void hibase_clean(HIBASE **phibase)
         }
         if((*phibase)->tableio.fd > 0) close((*phibase)->tableio.fd);
         if((*phibase)->templateio.fd > 0) close((*phibase)->templateio.fd);
+        if((*phibase)->mutex) MUTEX_DESTROY((*phibase)->mutex);
         free(*phibase);
         *phibase = NULL;
     }
@@ -183,6 +249,19 @@ HIBASE * hibase_init()
     {
         TRIETAB_INIT(hibase->mtable);
         TRIETAB_INIT(hibase->mtemplate);
+        MUTEX_INIT(hibase->mutex);
+        hibase->set_basedir         = hibase_set_basedir;
+        hibase->table_exists        = hibase_table_exists;
+        hibase->add_table           = hibase_add_table;
+        hibase->get_table           = hibase_get_table;
+        hibase->update_table        = hibase_update_table;
+        hibase->delete_update       = hibase_delete_table;
+        hibase->template_exists     = hibase_template_exists;
+        hibase->add_template        = hibase_add_template;
+        hibase->get_template        = hibase_get_template;
+        hibase->update_template     = hibase_update_template;
+        hibase->delete_template     = hibase_delete_template;
+        hibase->clean               = hibase_clean;
     }
     return hibase;
 }
