@@ -66,61 +66,62 @@ do                                                                              
 /* mkdir */
 int hibase_mkdir(char *path, int mode)
 {
-   char *p = NULL, fullpath[HIBASE_PATH_MAX];
-   int ret = 0, level = -1;
-   struct stat st;
+    char *p = NULL, fullpath[HIBASE_PATH_MAX];
+    int ret = 0, level = -1;
+    struct stat st;
 
-   if(path)
-   {
-       strcpy(fullpath, path);
-       p = fullpath;
-       while(*p != '\0')
-       {
-           if(*p == '/' )
-           {
-               level++;
-               while(*p != '\0' && *p == '/' && *(p+1) == '/')++p;
-               if(level > 0)
-               {
-                   *p = '\0';
-                   memset(&st, 0, sizeof(struct stat));
-                   ret = stat(fullpath, &st);
-                   if(ret == 0 && !S_ISDIR(st.st_mode)) return -1;
-                   if(ret != 0 && mkdir(fullpath, mode) != 0) return -1;
-                   *p = '/';
-               }
-           }
-           ++p;
-       }
-       return 0;
-   }
-   return -1;
+    if(path)
+    {
+        strcpy(fullpath, path);
+        p = fullpath;
+        while(*p != '\0')
+        {
+            if(*p == '/' )
+            {
+                level++;
+                while(*p != '\0' && *p == '/' && *(p+1) == '/')++p;
+                if(level > 0)
+                {
+                    *p = '\0';
+                    memset(&st, 0, sizeof(struct stat));
+                    ret = stat(fullpath, &st);
+                    if(ret == 0 && !S_ISDIR(st.st_mode)) return -1;
+                    if(ret != 0 && mkdir(fullpath, mode) != 0) return -1;
+                    *p = '/';
+                }
+            }
+            ++p;
+        }
+        return 0;
+    }
+    return -1;
 }
 
 /* set basedir */
 int hibase_set_basedir(HIBASE *hibase, char *dir)
 {
-	char path[HIBASE_PATH_MAX];
+    char path[HIBASE_PATH_MAX];
     ITEMPLATE *template = NULL;
     ITABLE *table = NULL;
     struct stat st = {0};
-	int i = 0, n = 0;
+    int i = 0, n = 0;
     void *dp = NULL;
 
-	if(hibase && dir)
-	{
-		n = sprintf(hibase->basedir, "%s/", dir);
-		hibase_mkdir(hibase->basedir, 0755);
-		//resume table
-		sprintf(path, "%s%s", hibase->basedir, HIBASE_TABLE_NAME);	
-		if((hibase->tableio.fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
-		{
+    if(hibase && dir)
+    {
+        n = sprintf(hibase->basedir, "%s/", dir);
+        hibase_mkdir(hibase->basedir, 0755);
+        //resume table
+        sprintf(path, "%s%s", hibase->basedir, HIBASE_TABLE_NAME);	
+        if((hibase->tableio.fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
+        {
             _MMAP_(hibase->tableio, st, ITABLE, TABLE_INCRE_NUM); 
             table = (ITABLE *)hibase->tableio.map;
             hibase->tableio.left = 0;
             for(i = 0; i < hibase->tableio.total; i++)
             {
-                if(table[i].nfields > 0 && (n = strlen(table[i].name)) > 0)
+                if(table[i].status == TAB_STATUS_OK && table[i].nfields > 0 
+                        && (n = strlen(table[i].name)) > 0)
                 {
                     dp = (void *)((long)(i + 1));
                     TRIETAB_ADD(hibase->mtable, table[i].name, n, dp);
@@ -128,17 +129,18 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
                 }
                 else hibase->tableio.left++;
             }
-		}
-		//resume template 
-		sprintf(path, "%s%s", hibase->basedir, HIBASE_TEMPLATE_NAME);	
-		if((hibase->templateio.fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
+        }
+        //resume template 
+        sprintf(path, "%s%s", hibase->basedir, HIBASE_TEMPLATE_NAME);	
+        if((hibase->templateio.fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
         {
             _MMAP_(hibase->templateio, st, ITEMPLATE, TEMPLATE_INCRE_NUM); 
             template = (ITEMPLATE *)hibase->templateio.map;
             hibase->templateio.left = 0;
             for(i = 0; i < hibase->templateio.total; i++)
             {
-                if(template[i].nfields > 0 && (n = strlen(template[i].name)) > 0)
+                if(template[i].status == TEMP_STATUS_OK && template[i].nfields > 0 
+                        && (n = strlen(template[i].name)) > 0)
                 {
                     dp = (void *)((long)(i + 1));
                     TRIETAB_ADD(hibase->mtemplate, template[i].name, n, dp);
@@ -147,8 +149,8 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
                 else hibase->templateio.left++;
             }
         }
-	}
-	return -1;
+    }
+    return -1;
 }
 
 /* check table exists */
@@ -171,7 +173,9 @@ int hibase_table_exists(HIBASE *hibase, char *table_name, int len)
 int hibase_add_table(HIBASE *hibase, ITABLE *table)
 {
     int tableid = -1, i = 0, n = 0;
+    struct stat st = {0};
     ITABLE *tab = NULL;
+    void *dp = NULL;
 
     if(hibase && table && (n = strlen(table->name))  > 0 
             && (tableid = hibase_table_exists(hibase, table->name, n)) < 0)
@@ -179,13 +183,13 @@ int hibase_add_table(HIBASE *hibase, ITABLE *table)
         MUTEX_LOCK(hibase->mutex);
         if(hibase->tableio.left == 0){_MMAP_(hibase->tableio, st, ITABLE, TABLE_INCRE_NUM);}        
         if(hibase->tableio.left > 0 && (tab = (ITABLE *)hibase->tableio.map) 
-                && tab != (void *)-1)
+                && tab != (ITABLE *)-1)
         {
             for(i = 0; i < hibase->tableio.total; i++)
             {
                 if(tab[i].status != TAB_STATUS_OK)
                 {
-                    table.status = TAB_STATUS_OK;
+                    table->status = TAB_STATUS_OK;
                     memcpy(&(tab[i]), table, sizeof(ITABLE));
                     tableid = i;
                     dp = (void *)((long)(tableid + 1));
@@ -200,20 +204,205 @@ int hibase_add_table(HIBASE *hibase, ITABLE *table)
     return tableid;
 }
 
+/* get table */
+int hibase_get_table(HIBASE *hibase, int tableid, char *table_name, ITABLE *ptable)
+{
+    ITABLE *tab = NULL;
+    int id = -1, n = 0;
+
+    if(hibase && hibase->mtable && ptable)
+    {
+        if(table_name && (n = strlen(table_name)) > 0) 
+            id = hibase_table_exists(hibase, table_name, n);
+        MUTEX_LOCK(hibase->mutex);
+        if(id < 0 && tableid >= 0 ) id = tableid;
+        if(id >= 0 && id < hibase->tableio.total 
+                && (tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1)
+        {
+            memcpy(ptable, &(tab[id]), sizeof(ITABLE)); 
+        }
+        else id = -1;
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return id;
+}
+
+/* update table */
+int hibase_update_table(HIBASE *hibase, int tableid, char *table_name, ITABLE *ptable)
+{
+    ITABLE *tab = NULL;
+    int id = -1, n = 0;
+
+    if(hibase && hibase->mtable && ptable)
+    {
+        if(table_name && (n = strlen(table_name)) > 0) 
+            id = hibase_table_exists(hibase, table_name, n);
+        MUTEX_LOCK(hibase->mutex);
+        if(id < 0 && tableid >= 0 ) id = tableid;
+        if(id >= 0 && id < hibase->tableio.total 
+                && (tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1)
+        {
+            memcpy(&(tab[id]), ptable, sizeof(ITABLE)); 
+        }
+        else id = -1;
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return id;
+}
+
+
+/* delete table */
+int hibase_delete_table(HIBASE *hibase, int tableid, char *table_name)
+{
+    ITABLE *tab = NULL;
+    int id = -1, n = 0;
+
+    if(hibase && hibase->mtable)
+    {
+        if(table_name && (n = strlen(table_name)) > 0) 
+            id = hibase_table_exists(hibase, table_name, n);
+        MUTEX_LOCK(hibase->mutex);
+        if(id < 0 && tableid >= 0 ) id = tableid;
+        if(id >= 0 && id < hibase->tableio.total 
+                && (tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1)
+        {
+            tab[id].status = TAB_STATUS_ERR;
+            hibase->tableio.left--;
+        }
+        else id = -1;
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return id;
+}
+
 /* check template exists */
-int hibase_template_exists(HIBASE *hibase, char *template_name)
+int hibase_template_exists(HIBASE *hibase, char *template_name, int len)
 {
     void *dp = NULL;
-    int templateid = -1, n = 0;
+    int templateid = -1;
 
-    if(hibase && template_name && (n = strlen(templatename)) > 0 && hibase->mtemplate)
+    if(hibase && template_name && len > 0 && hibase->mtemplate)
     {
         MUTEX_LOCK(hibase->mutex);
-        TRIETAB_GET(hibase->mtemplate, template_name, n, dp);
+        TRIETAB_GET(hibase->mtemplate, template_name, len, dp);
         templateid = ((long)dp - 1);
         MUTEX_UNLOCK(hibase->mutex);
     }
     return templateid;
+}
+
+/* add template */
+int hibase_add_template(HIBASE *hibase, ITEMPLATE *template)
+{
+    int templateid = -1, i = 0, n = 0;
+    struct stat st = {0};
+    ITEMPLATE *temp = NULL;
+    void *dp = NULL;
+
+    if(hibase && template && (n = strlen(template->name))  > 0 
+            && (templateid = hibase_template_exists(hibase, template->name, n)) < 0)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if(hibase->templateio.left == 0)
+        {
+            _MMAP_(hibase->templateio, st, ITEMPLATE, TEMPLATE_INCRE_NUM);
+        }        
+        if(hibase->templateio.left > 0 && (temp = (ITEMPLATE *)hibase->templateio.map) 
+                && temp != (ITEMPLATE *)-1)
+        {
+            for(i = 0; i < hibase->templateio.total; i++)
+            {
+                if(temp[i].status != TAB_STATUS_OK)
+                {
+                    template->status = TEMP_STATUS_OK;
+                    memcpy(&(temp[i]), template, sizeof(ITEMPLATE));
+                    templateid = i;
+                    dp = (void *)((long)(templateid + 1));
+                    TRIETAB_ADD(hibase->mtemplate, template->name, n, dp);
+                    hibase->templateio.left--;
+                    break;
+                }
+            }
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return templateid;
+}
+
+/* get template */
+int hibase_get_template(HIBASE *hibase, int templateid, 
+        char *template_name, ITEMPLATE *ptemplate)
+{
+    ITEMPLATE *temp = NULL;
+    int id = -1, n = 0;
+
+    if(hibase && hibase->mtemplate && ptemplate)
+    {
+        if(template_name && (n = strlen(template_name)) > 0) 
+            id = hibase_template_exists(hibase, template_name, n);
+        MUTEX_LOCK(hibase->mutex);
+        if(id < 0 && templateid >= 0 ) id = templateid;
+        if(id >= 0 && id < hibase->templateio.total 
+                && (temp = (ITEMPLATE *)(hibase->templateio.map)) 
+                && temp != (ITEMPLATE *)-1)
+        {
+            memcpy(ptemplate, &(temp[id]), sizeof(ITEMPLATE)); 
+        }
+        else id = -1;
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return id;
+}
+
+/* update template */
+int hibase_update_template(HIBASE *hibase, int templateid, 
+        char *template_name, ITEMPLATE *ptemplate)
+{
+    ITEMPLATE *temp = NULL;
+    int id = -1, n = 0;
+
+    if(hibase && hibase->mtemplate && ptemplate)
+    {
+        if(template_name && (n = strlen(template_name)) > 0) 
+            id = hibase_template_exists(hibase, template_name, n);
+        MUTEX_LOCK(hibase->mutex);
+        if(id < 0 && templateid >= 0 ) id = templateid;
+        if(id >= 0 && id < hibase->templateio.total 
+                && (temp = (ITEMPLATE *)(hibase->templateio.map)) 
+                && temp != (ITEMPLATE *)-1)
+        {
+            memcpy(&(temp[id]), ptemplate, sizeof(ITEMPLATE)); 
+        }
+        else id = -1;
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return id;
+}
+
+
+/* delete template */
+int hibase_delete_template(HIBASE *hibase, int templateid, char *template_name)
+{
+    ITEMPLATE *temp = NULL;
+    int id = -1, n = 0;
+
+    if(hibase && hibase->mtemplate)
+    {
+        if(template_name && (n = strlen(template_name)) > 0) 
+            id = hibase_template_exists(hibase, template_name, n);
+        MUTEX_LOCK(hibase->mutex);
+        if(id < 0 && templateid >= 0 ) id = templateid;
+        if(id >= 0 && id < hibase->templateio.total 
+                && (temp = (ITEMPLATE *)(hibase->templateio.map)) 
+                && temp != (ITEMPLATE *)-1)
+        {
+            temp[id].status = TEMP_STATUS_ERR;
+            hibase->templateio.left--;
+        }
+        else id = -1;
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return id;
 }
 
 /* clean */
@@ -255,7 +444,7 @@ HIBASE * hibase_init()
         hibase->add_table           = hibase_add_table;
         hibase->get_table           = hibase_get_table;
         hibase->update_table        = hibase_update_table;
-        hibase->delete_update       = hibase_delete_table;
+        hibase->delete_table        = hibase_delete_table;
         hibase->template_exists     = hibase_template_exists;
         hibase->add_template        = hibase_add_template;
         hibase->get_template        = hibase_get_template;
