@@ -398,7 +398,7 @@ do{                                                                             
     }                                                                                       \
 }while(0)         
 
-/* delete word/block from trietab */
+/* DEL word/block node from trietab */ 
 #define TRIETAB_DEL(ptr, key, nkey, pdata)                                                  \
 do{                                                                                         \
     pdata = NULL;                                                                           \
@@ -415,7 +415,7 @@ do{                                                                             
                 {                                                                           \
                     HN_FIND(HBND(ptr), PSH(ptr), MINHB(ptr), MAXHB(ptr), NHB(ptr));         \
                     if(NHB(ptr) < 0 || NHB(ptr) >= HCNT(HBND(ptr))                          \
-                            HNPC(HBND(ptr), NHB(ptr)) != PSH(ptr))                          \
+                            || HNPC(HBND(ptr), NHB(ptr)) != PSH(ptr))                       \
                     {                                                                       \
                         HBND(ptr) = NULL;                                                   \
                         break;                                                              \
@@ -423,25 +423,21 @@ do{                                                                             
                     HBND(ptr) = HNP(HBND(ptr), NHB(ptr));                                   \
                 }else break;                                                                \
             }while(++IHB(ptr) < nkey);                                                      \
-            if(HBND(ptr))                                                                   \
-            {                                                                               \
-                pdata = HBND(ptr)->dptr;                                                    \
-                HBND(ptr)->dptr = NULL;                                                     \
-            }                                                                               \
         }                                                                                   \
+        if(HBND(ptr)) {pdata = HBND(ptr)->dptr; HBND(ptr)->dptr = NULL;}                    \
         MUTEX_UNLOCK(PRT(ptr)->mutex);                                                      \
     }                                                                                       \
-}while(0)                                                                                          
+}while(0)                                                                                           
 
-/* delete reverse word/block node from trietab */ 
+/* DEL reverse word/block node from trietab */ 
 #define TRIETAB_RDEL(ptr, key, nkey, pdata)                                                 \
 do{                                                                                         \
     pdata = NULL;                                                                           \
-    if(ptr && key && nkey > 0)                                                              \
+    if(ptr && key)                                                                          \
     {                                                                                       \
         MUTEX_LOCK(PRT(ptr)->mutex);                                                        \
-        HBND(ptr) = (HNODE *)&(HBTBN(ptr, UNS(key[nkey - 1])));                             \
-        if((IHB(ptr) = (nkey - 2)) >= 0)                                                    \
+        HBND(ptr) = (HNODE *)&(HBTBN(ptr, UNS(key[nkey -1])));                              \
+        if((IHB(ptr) = (nkey-2)) >= 0)                                                      \
         {                                                                                   \
             do                                                                              \
             {                                                                               \
@@ -450,7 +446,7 @@ do{                                                                             
                 {                                                                           \
                     HN_FIND(HBND(ptr), PSH(ptr), MINHB(ptr), MAXHB(ptr), NHB(ptr));         \
                     if(NHB(ptr) < 0 || NHB(ptr) >= HCNT(HBND(ptr))                          \
-                            HNPC(HBND(ptr), NHB(ptr)) != PSH(ptr))                          \
+                            || HNPC(HBND(ptr), NHB(ptr)) != PSH(ptr))                       \
                     {                                                                       \
                         HBND(ptr) = NULL;                                                   \
                         break;                                                              \
@@ -458,15 +454,11 @@ do{                                                                             
                     HBND(ptr) = HNP(HBND(ptr), NHB(ptr));                                   \
                 }else break;                                                                \
             }while(--IHB(ptr) >= 0);                                                        \
-            if(HBND(ptr))                                                                   \
-            {                                                                               \
-                pdata = HBND(ptr)->dptr;                                                    \
-                HBND(ptr)->dptr = NULL;                                                     \
-            }                                                                               \
         }                                                                                   \
+        if(HBND(ptr)) {pdata = HBND(ptr)->dptr; HBND(ptr)->dptr = NULL;}                    \
         MUTEX_UNLOCK(PRT(ptr)->mutex);                                                      \
     }                                                                                       \
-}while(0) 
+}while(0)
 
 /* clean trietab */
 #define TRIETAB_CLEAN(ptr)                                                                  \
