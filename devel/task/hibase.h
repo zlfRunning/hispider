@@ -82,8 +82,7 @@ typedef struct _HIBASE
     int 	(*delete_table)(struct _HIBASE *, int table_id, char *table_name);
     int     (*template_exists)(struct _HIBASE *, char *name, int len);
     int 	(*add_template)(struct _HIBASE *, ITEMPLATE *);
-    int 	(*get_template)(struct _HIBASE *, int template_id, 
-            char *template_name, ITEMPLATE *);
+    int 	(*get_template)(struct _HIBASE *, int template_id, char *template_name, ITEMPLATE *);
     int 	(*update_template)(struct _HIBASE *, int template_id, char *template_name, ITEMPLATE *);
     int 	(*delete_template)(struct _HIBASE *, int template_id, char *template_name);
     void 	(*clean)(struct _HIBASE **);	
