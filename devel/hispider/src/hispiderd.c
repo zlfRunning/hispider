@@ -187,6 +187,12 @@ int hispiderd_packet_handler(CONN *conn, CB_DATA *packet)
     {
         p = packet->data;
         end = packet->data + packet->ndata;
+        int fd = 0;
+        if((fd = open("/tmp/header.txt", O_CREAT|O_RDWR|O_TRUNC, 0644)) > 0)
+        {
+            write(fd, packet->data, packet->ndata);
+            close(fd);
+        }
         if(http_request_parse(p, end, &http_req) == -1) goto err_end;
         if(http_req.reqid == HTTP_GET)
         {
@@ -205,6 +211,14 @@ int hispiderd_packet_handler(CONN *conn, CB_DATA *packet)
             else
             {
                 goto err_end;
+            }
+        }
+        else if(http_req.reqid == HTTP_POST)
+        {
+            if((p = http_req.headers[HEAD_ENT_CONTENT_LENGTH]) && (n = atol(p)) > 0)
+            {
+                conn->save_cache(conn, &http_req, sizeof(HTTP_REQ));
+                conn->recv_file(conn, "/tmp/recv.txt", 0, n);
             }
         }
         else if(http_req.reqid == HTTP_TASK)

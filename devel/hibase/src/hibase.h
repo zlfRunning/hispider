@@ -15,6 +15,8 @@ extern "C" {
 #define REGX_SIZE_MAX		    4096
 #define F_IS_LINK               0x01
 #define F_IS_IMAGE              0x02
+#define F_IS_MULTI              0x04
+#define F_IS_INDEX              0x08
 #define TABLE_INCRE_NUM         256
 #define TEMPLATE_INCRE_NUM      10000
 #define TAB_STATUS_ERR          -1
