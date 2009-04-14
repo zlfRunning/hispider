@@ -68,7 +68,7 @@ do                                                                              
 /* mkdir */
 int ltask_mkdir(char *path, int mode)
 {
-    char *p = NULL, fullpath[L_PATH_MAX];
+    char *p = NULL, fullpath[HTTP_PATH_MAX];
     int ret = 0, level = -1;
     struct stat st;
 
@@ -102,7 +102,7 @@ int ltask_mkdir(char *path, int mode)
 /* set basedir*/
 int ltask_set_basedir(LTASK *task, char *dir)
 {
-    char path[L_PATH_MAX], host[L_HOST_MAX], *p = NULL, *pp = NULL, *end = NULL;
+    char path[HTTP_PATH_MAX], host[HTTP_HOST_MAX], *p = NULL, *pp = NULL, *end = NULL;
     void *dp = NULL, *olddp = NULL;
     unsigned char *ip = NULL;
     LHOST *host_node = NULL;
@@ -278,8 +278,8 @@ int ltask_set_basedir(LTASK *task, char *dir)
     return -1;
 }
 
-/* set state */
-int ltask_set_state(LTASK *task, int state)
+/* set state running */
+int ltask_set_state_running(LTASK *task, int state)
 {
     if(task)
     {
@@ -290,11 +290,22 @@ int ltask_set_state(LTASK *task, int state)
     return 0;
 }
 
+/* set state proxy */
+int ltask_set_state_proxy(LTASK *task, int state)
+{
+    if(task)
+    {
+        MUTEX_LOCK(task->mutex);
+        if(task->state) task->state->is_use_proxy = (short)state;
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return 0;
+}
 
 /* add proxy */
 int ltask_add_proxy(LTASK *task, char *host)
 {
-    char *p = NULL, *e = NULL, *pp = NULL, *ps = NULL, ip[L_HOST_MAX];
+    char *p = NULL, *e = NULL, *pp = NULL, *ps = NULL, ip[HTTP_HOST_MAX];
     int n = 0, i = 0, ret = -1;
     struct stat st = {0};
     LPROXY *proxy = NULL;
@@ -507,7 +518,7 @@ int ltask_get_host_ip(LTASK *task, char *host)
 /* list host for DNS resolving */
 void ltask_list_host_ip(LTASK *task, FILE *fp)
 {
-    char host[L_HOST_MAX];
+    char host[HTTP_HOST_MAX];
     LHOST *host_node = NULL;
     int *ips = NULL, i = 0, x = 0;
     unsigned char *pp = NULL;
@@ -521,7 +532,7 @@ void ltask_list_host_ip(LTASK *task, FILE *fp)
         {
             if(host_node->host_len == 0) break;
             if(host_node->host_len > 0 && host_node->ip_count > 0 
-                    && host_node->host_len < L_HOST_MAX 
+                    && host_node->host_len < HTTP_HOST_MAX 
                     && host_node->ip_off < task->ipio.size
                     && task->ipio.map && task->ipio.map != (void *)-1)
             {
@@ -610,7 +621,7 @@ int ltask_set_host_level(LTASK *task, int hostid, char *host, short level)
 /* add url */
 int ltask_add_url(LTASK *task, char *url)
 {
-    char newurl[L_URL_MAX], *p = NULL, *pp = NULL, *e = NULL, *host = NULL;
+    char newurl[HTTP_URL_MAX], *p = NULL, *pp = NULL, *e = NULL, *host = NULL;
     void *dp = NULL, *olddp = NULL;
     int ret = -1, n = 0, nurl = 0, id = 0, host_id = 0;
     LHOST *host_node = NULL;
@@ -770,7 +781,7 @@ int ltask_pop_url(LTASK *task, char *url)
         }
         /* read url */
         if(urlid >= 0 && pread(task->meta_fd, &meta, sizeof(LMETA), 
-                    (off_t)(urlid * sizeof(LMETA))) > 0 && meta.url_len <= L_URL_MAX
+                    (off_t)(urlid * sizeof(LMETA))) > 0 && meta.url_len <= HTTP_URL_MAX
                 && meta.status >= 0 
                 && (n = pread(task->url_fd, url, meta.url_len, meta.url_off)) > 0)
         {
@@ -789,7 +800,7 @@ end:
 /* set url status */
 int ltask_set_url_status(LTASK *task, int urlid, char *url, short status)
 {
-    char newurl[L_URL_MAX], *p = NULL, *pp = NULL;
+    char newurl[HTTP_URL_MAX], *p = NULL, *pp = NULL;
     unsigned char key[MD5_LEN];
     int n = 0, id = -1, ret = -1;
     void *dp = NULL;
@@ -829,7 +840,7 @@ end:
 /* set url level */
 int ltask_set_url_level(LTASK *task, int urlid, char *url, short level)
 {
-    char newurl[L_URL_MAX], *p = NULL, *pp = NULL;
+    char newurl[HTTP_URL_MAX], *p = NULL, *pp = NULL;
     unsigned char key[MD5_LEN];
     int n = 0, id = -1, ret = -1;
     LNODE node = {0};
@@ -868,6 +879,52 @@ end:
         MUTEX_UNLOCK(task->mutex);
     }
     return ret;
+}
+
+/* NEW TASK */
+int ltask_get_task(LTASK *task, char *buf, int *nbuf)
+{
+    char url[HTTP_URL_MAX], ch = 0, *p = NULL, *ps = NULL, *path = NULL;
+    unsigned char *sip = NULL, *pip = NULL;
+    int urlid = -1, n = 0, ip = 0, port = 0;
+    LPROXY proxy = {0};
+
+    if(task && buf && nbuf && (urlid = ltask_pop_url(task, url)) >= 0)
+    {
+        p = ps = url + strlen("http://");
+        while(*p != '\0' && *p != ':' && *p != '/')++p;
+        ch = *p;
+        *p = '\0';
+        ip = ltask_get_host_ip(task, ps);
+        port = 80;
+        if(ch == ':')
+        {
+            port = atoi((p+1));
+            while(*p != '\0' && *p != '/')++p;
+            path = (p+1);
+        }
+        else if(ch == '/') path = (p+1);
+        sip = (unsigned char *)&ip;
+        if(task->state->is_use_proxy && ltask_get_proxy(task, &proxy) >= 0)
+        {
+            pip = (unsigned char *)&(proxy.ip);
+            *nbuf = sprintf(buf, "HTTP/1.0 200 OK\r\nFrom: %d\r\nLocation: /%s\r\n"
+                    "Host: %s\r\nServer: %d.%d.%d.%d\r\nReferer:%d\r\n"
+                    "User-Agent: %s\r\nVia: %d\r\n\r\n", urlid, path, ps,
+                    sip[0], sip[1], sip[2], sip[3], port,
+                    pip[0], pip[1], pip[2], pip[3], proxy.port);
+        }
+        else
+        {
+            *nbuf = sprintf(buf, "HTTP/1.0 200 OK\r\nFrom: %d\r\nLocation: /%s\r\n"
+                    "Host: %s\r\nServer: %d.%d.%d.%d\r\nReferer:%d\r\n\r\n",
+                    urlid, path, ps, sip[0], sip[1], sip[2], sip[3], port);
+        }
+        DEBUG_LOGGER(ltask->logger, "New TASK[%d] ip[%d.%d.%d.%d:%d] "
+                "http://%s/%s", urlid, sip[0], sip[1], sip[2], sip[3],
+                port, ps, path);
+    }
+    return urlid;
 }
 
 /* update url content  */
@@ -930,7 +987,8 @@ LTASK *ltask_init()
         MUTEX_INIT(task->mutex);
         QUEUE_INIT(task->qproxy);
         task->set_basedir           = ltask_set_basedir;
-        task->set_state             = ltask_set_state;
+        task->set_state_running     = ltask_set_state_running;
+        task->set_state_proxy       = ltask_set_state_proxy;
         task->add_proxy             = ltask_add_proxy;
         task->get_proxy             = ltask_get_proxy;
         task->set_proxy_status      = ltask_set_proxy_status;
@@ -1041,14 +1099,15 @@ static char *urllist[] =
 	"http://news.sina.com.cn/w/2009-01-28/101215088878s.shtml" 
 };
 #define NURL 36
+#define HTTP_BUF_MAX    65536
 int main()
 {
     LTASK *task = NULL;
     LPROXY proxy = {0};
-    char *basedir = "/tmp/html", *p = NULL, 
-         host[L_HOST_MAX], url[L_URL_MAX], ip[L_IP_MAX];
+    char *basedir = "/tmp/html", *p = NULL, buf[HTTP_BUF_MAX],
+         host[HTTP_HOST_MAX], url[HTTP_URL_MAX], ip[HTTP_IP_MAX];
     unsigned char *pp = NULL;
-    int i = 0, n = 0, urlid = -1;
+    int i = 0, n = 0, urlid = -1, nbuf = 0;
 
     if((task = ltask_init()))
     {
@@ -1101,9 +1160,9 @@ int main()
         task->set_url_level(task, -1, 
 	"http://news.sina.com.cn/w/2009-01-28/101215088878S.shtml", 
                 L_LEVEL_UP);
-        while((urlid = task->pop_url(task, url)) >= 0)
+        while((urlid = task->get_task(task, buf, &nbuf)) >= 0)
         {
-            fprintf(stdout, "%d::url[%s]\n", urlid, url);
+            fprintf(stdout, "%d::block[%s]\n", urlid, buf);
         }
         task->clean(&task);
     }

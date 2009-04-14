@@ -1,9 +1,9 @@
 #ifndef _LTASK_H
 #define _LTASK_H
-#define L_PATH_MAX          256
-#define L_HOST_MAX          256
-#define L_IP_MAX            16
-#define L_URL_MAX           4096
+#define HTTP_PATH_MAX          256
+#define HTTP_HOST_MAX          256
+#define HTTP_IP_MAX            16
+#define HTTP_URL_MAX           4096
 #define HOST_INCRE_NUM      1000000   
 #define PROXY_INCRE_NUM     10000
 #define URL_INCRE_NUM       1000000   
@@ -121,7 +121,8 @@ typedef struct _LTASK
     void *logger;
 
     int (*set_basedir)(struct _LTASK *, char *basedir);
-    int (*set_state)(struct _LTASK *, int state);
+    int (*set_state_running)(struct _LTASK *, int state);
+    int (*set_state_proxy)(struct _LTASK *, int state);
     int (*add_proxy)(struct _LTASK *, char *host);
     int (*get_proxy)(struct _LTASK *, LPROXY *proxy);
     int (*set_proxy_status)(struct _LTASK *, int id, char *host, short status);
