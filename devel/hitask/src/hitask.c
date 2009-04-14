@@ -81,10 +81,11 @@ int hitask_packet_reader(CONN *conn, CB_DATA *buffer)
 
 int hitask_packet_handler(CONN *conn, CB_DATA *packet)
 {
-    char *p = NULL, *end = NULL, *ip = NULL, *host = NULL, *path = NULL;
+    char *p = NULL, *end = NULL, *ip = NULL, *sip = NULL,
+         *pip = NULL, *host = NULL, *path = NULL;
     HTTP_RESPONSE http_resp = {0};
-    int taskid = 0, n = 0;
-    int c_id = 0, port = 0;
+    int taskid = 0, n = 0, c_id = 0, port = 0, pport = 0, 
+        sport = 0, is_use_proxy = 0;
     struct hostent *hp = NULL;
 
     if(conn && tasklist && (c_id = conn->c_id) >= 0 && c_id < ntask)
@@ -135,17 +136,26 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
             if(http_resp.respid == RESP_OK)
             {
                 host = http_resp.headers[HEAD_REQ_HOST];
-                ip = http_resp.headers[HEAD_RESP_SERVER];
-                port = (http_resp.headers[HEAD_REQ_REFERER])
+                sip = ip = http_resp.headers[HEAD_RESP_SERVER];
+                sport = port = (http_resp.headers[HEAD_REQ_REFERER])
                     ? atoi(http_resp.headers[HEAD_REQ_REFERER]) : 0;
+                pip = http_resp.headers[HEAD_REQ_USER_AGENT];
+                pport = (http_resp.headers[HEAD_GEN_VIA])
+                    ? atoi(http_resp.headers[HEAD_GEN_VIA]) : 0;
                 path = http_resp.headers[HEAD_RESP_LOCATION];
                 taskid = tasklist[c_id].taskid = (http_resp.headers[HEAD_REQ_FROM])
                     ? atoi(http_resp.headers[HEAD_REQ_FROM]) : 0;
                 //fprintf(stdout, "%s::%d OK host:%s ip:%s port:%d path:%s taskid:%d \n", 
                 //        __FILE__, __LINE__, host, ip, port, path, taskid);
+                if(pip && pport > 0) 
+                {
+                    ip = pip;
+                    port = pport;
+                    is_use_proxy = 1; 
+                }
                 if(host == NULL || ip == NULL || path == NULL || port == 0 || taskid < 0) 
                     goto restart_task;
-                if(strcmp(ip, "255.255.255.255") == 0)
+                if(is_use_proxy == 0 && strcmp(ip, "255.255.255.255") == 0)
                 {
                     if((hp = gethostbyname(host)))
                     {
@@ -164,13 +174,26 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
                 }
                 if((tasklist[c_id].c_conn = service->newconn(service, -1, -1, ip, port, NULL)))
                 {
-                    tasklist[c_id].nrequest = sprintf(tasklist[c_id].request, 
-                        "GET %s HTTP/1.0\r\nHost: %s\r\n"
-                        "User-Agent: %s\r\nAccept: %s\r\nAccept-Language: %s\r\n"
-                        "Accept-Encoding: %s\r\nAccept-Charset: %s\r\nConnection: close\r\n\r\n", 
-                        //"Accept-Charset: %s\r\nConnection: close\r\n\r\n", 
-                        path, host, USER_AGENT, ACCEPT_TYPE, ACCEPT_LANGUAGE, 
-                        ACCEPT_ENCODING, ACCEPT_CHARSET);
+                    if(is_use_proxy && sport != 80)
+                    {
+                        tasklist[c_id].nrequest = sprintf(tasklist[c_id].request, 
+                                "GET http://%s:%d%s HTTP/1.0\r\nHost: %s\r\n"
+                                "User-Agent: %s\r\nAccept: %s\r\nAccept-Language: %s\r\n"
+                                "Accept-Encoding: %s\r\nAccept-Charset: %s\r\n"   
+                                "Connection: close\r\n\r\n", host, sport, path, host,
+                                USER_AGENT, ACCEPT_TYPE, ACCEPT_LANGUAGE, 
+                                ACCEPT_ENCODING, ACCEPT_CHARSET);
+                    }
+                    else
+                    {
+                        tasklist[c_id].nrequest = sprintf(tasklist[c_id].request, 
+                                "GET %s HTTP/1.0\r\nHost: %s\r\n"
+                                "User-Agent: %s\r\nAccept: %s\r\nAccept-Language: %s\r\n"
+                                "Accept-Encoding: %s\r\nAccept-Charset: %s\r\n"
+                                "Connection: close\r\n\r\n", path, host, 
+                                USER_AGENT, ACCEPT_TYPE, ACCEPT_LANGUAGE, 
+                                ACCEPT_ENCODING, ACCEPT_CHARSET);
+                    }
                     tasklist[c_id].c_conn->c_id = c_id;
                     tasklist[c_id].c_conn->start_cstate(tasklist[c_id].c_conn);
                     return service->newtransaction(service, tasklist[c_id].c_conn, c_id);
