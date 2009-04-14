@@ -121,6 +121,7 @@ typedef struct _LTASK
     void *logger;
 
     int (*set_basedir)(struct _LTASK *, char *basedir);
+    int (*set_state)(struct _LTASK *, int state);
     int (*add_proxy)(struct _LTASK *, char *host);
     int (*get_proxy)(struct _LTASK *, LPROXY *proxy);
     int (*set_proxy_status)(struct _LTASK *, int id, char *host, short status);
@@ -134,6 +135,7 @@ typedef struct _LTASK
     int (*pop_url)(struct _LTASK *, char *url);
     int (*set_url_status)(struct _LTASK *, int urlid, char *url, short status);
     int (*set_url_level)(struct _LTASK *, int urlid, char *url, short level);
+    int (*get_task)(struct _LTASK *, char *buf, int *nbuf);
     int (*update_url_content)(struct _LTASK *, char *url, int date, short type, 
             char *content, int ncontent);
     void (*clean)(struct _LTASK **);

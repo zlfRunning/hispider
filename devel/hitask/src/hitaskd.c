@@ -23,7 +23,7 @@ static SBASE *sbase = NULL;
 static SERVICE *service = NULL;
 static SERVICE *adnservice = NULL;
 static dictionary *dict = NULL;
-static LTABLE *ltable = NULL;
+static LTABLE *ltask = NULL;
 static void *dnsqueue = NULL;
 static void *logger = NULL;
 //static void *undnsqueue = NULL;
@@ -47,12 +47,12 @@ int adns_packet_reader(CONN *conn, CB_DATA *buffer)
             ip = DNS_SELF_IP;
             if(hostent.naddrs > 0)
             {
+                ltask->set_host_ip(ltask, hostent.name, hostent.addrs, hostent.naddrs);
                 ip = hostent.addrs[0];
                 p = (unsigned char *)&ip;
                 DEBUG_LOGGER(logger, "Got host[%s]'s ip[%d.%d.%d.%d] from %s:%d", 
                         hostent.name, p[0], p[1], p[2], p[3], conn->remote_ip, conn->remote_port);
             }
-            ltable->set_dns(ltable, hostent.name, ip);
             left -= n;
             memset(&hostent, 0, sizeof(HOSTENT));
         }
@@ -123,7 +123,7 @@ int adns_trans_handler(CONN *conn, int tid)
         conn->set_timeout(conn, EVDNS_TIMEOUT);
         DEBUG_LOGGER(logger, "Ready for resolving dns on remote[%s:%d] local[%s:%d]", 
                 conn->remote_ip, conn->remote_port, conn->local_ip, conn->local_port);
-        if((qid = ltable->new_dnstask(ltable, (char *)hostname)) >= 0)
+        if((qid = ltask->pop_host(ltask, (char *)hostname)) >= 0)
         {
             qid %= 65536;
             n = evdns_make_query((char *)hostname, 1, 1, (unsigned short)qid, 1, buf); 
@@ -187,24 +187,25 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
     {
         p = packet->data;
         end = packet->data + packet->ndata;
+        /*
         int fd = 0;
         if((fd = open("/tmp/header.txt", O_CREAT|O_RDWR|O_TRUNC, 0644)) > 0)
         {
             write(fd, packet->data, packet->ndata);
             close(fd);
-        }
+        }*/
         if(http_request_parse(p, end, &http_req) == -1) goto err_end;
         if(http_req.reqid == HTTP_GET)
         {
             if(strncasecmp(http_req.path, "/stop", 5) == 0)
             {
-                ltable->set_state(ltable, 0);
+                ltask->set_state(ltask, 0);
             }
             else if(strncasecmp(http_req.path, "/running", 8) == 0)
             {
-                ltable->set_state(ltable, 1);
+                ltask->set_state(ltask, 1);
             }
-            if((n = ltable->get_stateinfo(ltable, buf)))
+            if((n = ltask->get_stateinfo(ltask, buf)))
             {
                 conn->push_chunk(conn, buf, n);
             }
@@ -218,7 +219,8 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
             if((p = http_req.headers[HEAD_ENT_CONTENT_LENGTH]) && (n = atol(p)) > 0)
             {
                 conn->save_cache(conn, &http_req, sizeof(HTTP_REQ));
-                conn->recv_file(conn, "/tmp/recv.txt", 0, n);
+                conn->recv_chunk(conn, n);
+                //conn->recv_file(conn, "/tmp/recv.txt", 0, n);
             }
         }
         else if(http_req.reqid == HTTP_TASK)
@@ -235,11 +237,11 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
                 }
                 else
                 {
-                    ltable->set_task_state(ltable, taskid, TASK_STATE_ERROR);
+                    ltask->set_task_state(ltask, taskid, NULL, TASK_STATE_ERROR);
                 }
             }
             /* get new task */
-            if(ltable->get_task(ltable, buf, &n) >= 0) 
+            if(ltask->get_task(ltask, buf, &n) >= 0) 
             {
                 return conn->push_chunk(conn, buf, n);
             }
@@ -264,7 +266,7 @@ err_end:
 int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
     HTTP_REQ *http_req = NULL;
-    int taskid = 0;
+    int taskid = 0, ips = NULL;
     char *host = NULL, *ip = NULL;
 
     if(conn && packet && cache && chunk)
@@ -275,12 +277,13 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
             ip = http_req->headers[HEAD_RESP_SERVER];
             if(host && ip)
             {
-                ltable->set_dns(ltable, host, inet_addr(ip));
+                ips = inet_addr(ip);
+                ltask->set_host_ip(ltask, host, &ips, 1);
                 DEBUG_LOGGER(logger, "Resolved name[%s]'s ip[%s] from client", host, ip);
             }
             taskid = atoi(http_req->path);
             DEBUG_LOGGER(logger, "taskid:%d length:%d", taskid, chunk->ndata);
-            ltable->add_document(ltable, taskid, 0, chunk->data, chunk->ndata); 
+            //ltable->add_document(ltable, taskid, 0, chunk->data, chunk->ndata); 
             DEBUG_LOGGER(logger, "over taskid:%d length:%d", taskid, chunk->ndata);
             return 0;
         }
@@ -296,7 +299,7 @@ int hitaskd_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA
 
     if(conn && conn->evstate == EVSTATE_WAIT)
     {
-        if(ltable->get_task(ltable, buf, &n) >= 0) 
+        if(ltask->get_task(ltask, buf, &n) >= 0) 
         {
             conn->over_evstate(conn);
             return conn->push_chunk(conn, buf, n);
@@ -384,13 +387,14 @@ int sbase_initialize(SBASE *sbase, char *conf)
     service->session.data_handler = &hitaskd_data_handler;
     service->session.timeout_handler = &hitaskd_timeout_handler;
     service->session.oob_handler = &hitaskd_oob_handler;
-    if((ltable = ltable_init()))
+    if((ltask = ltask_init()))
     {
         basedir = iniparser_getstr(dict, "HITASKD:basedir");
-        ltable->set_basedir(ltable, basedir);
-        ltable->resume(ltable);
-        LOGGER_INIT(logger, iniparser_getstr(dict, "HITASKD:access_log"));
-        ltable->set_logger(ltable, NULL, logger);
+        ltask->set_basedir(ltask, basedir);
+        //ltable->resume(ltable);
+        //LOGGER_INIT(logger, iniparser_getstr(dict, "HITASKD:access_log"));
+        //ltable->set_logger(ltable, NULL, logger);
+        /*
         host = iniparser_getstr(dict, "HITASKD:host");
         path = iniparser_getstr(dict, "HITASKD:path");
         whitelist = iniparser_getstr(dict, "HITASKD:whitelist");
@@ -407,6 +411,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
             if(whost){ltable->add_to_whitelist(ltable, whost); ep = whost = NULL;}
         }
         ltable->addurl(ltable, host, path);
+        */
     }
     /* dns service */
     if((adnservice = service_init()) == NULL)

@@ -278,6 +278,19 @@ int ltask_set_basedir(LTASK *task, char *dir)
     return -1;
 }
 
+/* set state */
+int ltask_set_state(LTASK *task, int state)
+{
+    if(task)
+    {
+        MUTEX_LOCK(task->mutex);
+        if(task->state) task->state->running = (short)state;
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return 0;
+}
+
+
 /* add proxy */
 int ltask_add_proxy(LTASK *task, char *host)
 {
@@ -917,6 +930,7 @@ LTASK *ltask_init()
         MUTEX_INIT(task->mutex);
         QUEUE_INIT(task->qproxy);
         task->set_basedir           = ltask_set_basedir;
+        task->set_state             = ltask_set_state;
         task->add_proxy             = ltask_add_proxy;
         task->get_proxy             = ltask_get_proxy;
         task->set_proxy_status      = ltask_set_proxy_status;
@@ -930,6 +944,7 @@ LTASK *ltask_init()
         task->set_url_status        = ltask_set_url_status;
         task->set_url_level         = ltask_set_url_level;
         task->pop_url               = ltask_pop_url;
+        task->get_task              = ltask_get_task;
         task->clean                 = ltask_clean;
     }
     return task;
