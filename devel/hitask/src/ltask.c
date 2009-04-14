@@ -108,6 +108,7 @@ int ltask_set_basedir(LTASK *task, char *dir)
     LHOST *host_node = NULL;
     struct stat st = {0};
     LPROXY *proxy = NULL;
+    LDNS *dns = NULL;
     int n = 0, i = 0;
 
     if(task && dir)
@@ -249,6 +250,32 @@ int ltask_set_basedir(LTASK *task, char *dir)
             {
                 _EXIT_("mmap domain(%d) failed, %s\n", task->domain_fd, strerror(errno));
             }
+        }
+        /* dns */
+        sprintf(path, "%s/%s", dir, L_DNS_NAME);
+        if((task->dnsio.fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
+        {
+            _MMAP_(task->dnsio, st, LDNS, DNS_INCRE_NUM);
+        }
+        else
+        {
+            _EXIT_("open %s failed, %s\n", path, strerror(errno));
+        }
+        if(task->dnsio.total > 0 && (dns = (LDNS *)(task->dnsio.map)))
+        {
+            i = 0;
+            do
+            {
+                if(dns->status != DNS_STATUS_ERR && (n = strlen((p = dns->name))) > 0)
+                {
+                    task->dnsio.current++;
+                    dp = (void *)((long)(i+1));
+                    TRIETAB_ADD(task->table, p, n, dp);
+                    dns->status = DNS_STATUS_READY;
+                }
+                else task->dnsio.left++;
+                ++dns;
+            }while(i++ < task->dnsio.total);
         }
         /* urlmap */
          if(fstat(task->key_fd, &st) == 0 && st.st_size > 0)
@@ -927,6 +954,130 @@ int ltask_get_task(LTASK *task, char *buf, int *nbuf)
     return urlid;
 }
 
+/* add dns host */
+int ltask_add_dns(LTASK *task, char *dns_ip)
+{
+    int n = 0, id = -1, i = 0;
+    void *dp = NULL;
+    struct stat st = {0};
+    LDNS *dns = NULL;
+
+    if(task && dns_ip && (n = strlen(dns_ip)) > 0)
+    {
+        MUTEX_LOCK(task->mutex);
+        TRIETAB_GET(task->table, dns_ip, n, dp);
+        if((id = ((long)dp - 1)) < 0)
+        {
+            if(task->dnsio.left <= 0)
+            {_MMAP_(task->dnsio, st, LDNS, DNS_INCRE_NUM);}
+            if((dns = (LDNS *)(task->dnsio.map)) && dns != (LDNS *)-1)
+            {
+                while(i < task->dnsio.total)
+                {
+                    if(dns[i].status <= 0)
+                    {
+                        strcpy(dns[i].name, dns_ip);
+                        dp = (void *)((long)(i + 1));
+                        id = i;
+                        TRIETAB_ADD(task->table, dns_ip, n, dp);
+                        task->dnsio.left--;
+                        task->dnsio.current++;
+                        break;
+                    }
+                    ++i;
+                }
+            }
+        }
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return id;
+}
+
+/* delete dns host */
+int ltask_del_dns(LTASK *task, int dns_id, char *dns_ip)
+{
+    int n = 0, id = -1;
+    void *dp = NULL;
+    LDNS *dns = NULL;
+
+    if(task)
+    {
+        MUTEX_LOCK(task->mutex);
+        if(dns_ip && (n = strlen(dns_ip)) > 0)
+        {
+            TRIETAB_DEL(task->table, dns_ip, n, dp);
+            id = (long)dp - 1;
+        }
+        else if((id = dns_id) >= 0 && id < task->dnsio.total 
+                && (dns = (LDNS *)(task->dnsio.map)) 
+                && dns != (LDNS *)-1 && (n = strlen(dns[id].name)) > 0)
+        {
+            TRIETAB_DEL(task->table, dns[id].name, n, dp);
+            dns[id].status = 0;
+            task->dnsio.left++;
+        }
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return id;
+}
+
+/* set dns host state */
+int ltask_set_dns_state(LTASK *task, int dns_id, char *dns_ip, int state)
+{
+    int n = 0, id = -1;
+    void *dp = NULL;
+    LDNS *dns = NULL;
+
+    if(task)
+    {
+        MUTEX_LOCK(task->mutex);
+        if(dns_ip && (n = strlen(dns_ip)) > 0)
+        {
+            TRIETAB_GET(task->table, dns_ip, n, dp);
+            id = (long)dp - 1;
+        }else id = dns_id;
+        if(id >= 0 && id < task->dnsio.total 
+                && (dns = (LDNS *)(task->dnsio.map)) 
+                && dns != (LDNS *)-1 && (n = strlen(dns[id].name)) > 0)
+        {
+            dns[id].status = state;
+        }
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return id;
+}
+
+/* pop dns */
+int ltask_pop_dns(LTASK *task, char *dns_ip)
+{
+    int id = -1, i = 0, n = 0;
+
+    if(task && dns_ip && task->dnsio.current > 0 
+            && (dns = (LDNS *)(task->dnsio.map)) && dns != (LDNS *)-1 )
+    {
+        MUTEX_LOCK(task->mutex);
+        for(i = 0; i < task->dnsio.total; i++)
+        {
+            if(dns[i].status == DNS_STATUS_READY)
+            {
+                id = i;
+                strcpy(dns_ip, dns[i].name);
+                dns[i].status = DNS_STATUS_OK;
+                task->dnsio.current--;
+                break;
+            }
+        }
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return id;
+}
+
+/* list dns  */
+int ltask_list_dns(LTASK *task, char *dns_ip)
+{
+
+}
+
 /* update url content  */
 int ltask_update_url_content(LTASK *task, int urlid, char *content, int ncontent)
 {
@@ -969,8 +1120,13 @@ void ltask_clean(LTASK **ptask)
             _MUNMAP_((*ptask)->ipio.map, (*ptask)->ipio.size);
             close((*ptask)->ipio.fd);
         }
-	free(*ptask);
-	*ptask = NULL;
+        if((*ptask)->dnsio.fd > 0)
+        {
+            _MUNMAP_((*ptask)->dnsio.map, (*ptask)->dnsio.size);
+            close((*ptask)->dnsio.fd);
+        }
+        free(*ptask);
+        *ptask = NULL;
     }
 }
 
@@ -993,6 +1149,11 @@ LTASK *ltask_init()
         task->get_proxy             = ltask_get_proxy;
         task->set_proxy_status      = ltask_set_proxy_status;
         task->pop_host              = ltask_pop_host;
+        task->add_dns               = ltask_add_dns;
+        task->del_dns               = ltask_del_dns;
+        task->set_dns_state         = ltask_set_dns_state;
+        task->pop_dns               = ltask_pop_dns;
+        task->list_dns              = ltask_list_dns;
         task->set_host_ip           = ltask_set_host_ip;
         task->get_host_ip           = ltask_get_host_ip;
         task->list_host_ip          = ltask_list_host_ip;

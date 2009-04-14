@@ -14,21 +14,19 @@
 #include "evdns.h"
 #include "queue.h"
 #include "logger.h"
-typedef struct _DNSTASK
-{
-    CONN *conn;
-    char nameserver[DNS_IP_MAX];
-}DNSTASK;
+//typedef struct _DNSTASK
+//{
+//    CONN *conn;
+//    char nameserver[DNS_IP_MAX];
+//}DNSTASK;
 static SBASE *sbase = NULL;
 static SERVICE *service = NULL;
 static SERVICE *adnservice = NULL;
 static dictionary *dict = NULL;
 static LTABLE *ltask = NULL;
-static void *dnsqueue = NULL;
 static void *logger = NULL;
-//static void *undnsqueue = NULL;
-static DNSTASK tasklist[DNS_TASK_MAX];
-//static void *waitqueue = NULL;
+//static void *dnsqueue = NULL;
+//static DNSTASK tasklist[DNS_TASK_MAX];
 
 /* dns packet reader */
 int adns_packet_reader(CONN *conn, CB_DATA *buffer)
@@ -37,14 +35,12 @@ int adns_packet_reader(CONN *conn, CB_DATA *buffer)
     unsigned char *p = NULL;
     int tid = 0, n = 0, left = 0, ip  = 0;
 
-    if(conn && (tid = conn->c_id) >= 0 && tid < DNS_TASK_MAX 
-            && tasklist[tid].conn == conn && buffer->ndata > 0 && buffer->data)
+    if(conn && (tid = conn->c_id) >= 0 && buffer->ndata > 0 && buffer->data)
     {
         p = (unsigned char *)buffer->data;
         left = buffer->ndata;
         while((n = evdns_parse_reply(p, left, &hostent)) > 0)
         {
-            ip = DNS_SELF_IP;
             if(hostent.naddrs > 0)
             {
                 ltask->set_host_ip(ltask, hostent.name, hostent.addrs, hostent.naddrs);
@@ -66,18 +62,15 @@ int adns_packet_handler(CONN *conn, CB_DATA *packet)
 {
     int tid = 0;
 
-    if(conn && (tid = conn->c_id) >= 0 && tid < DNS_TASK_MAX 
-            && tasklist[tid].conn == conn && packet->ndata > 0 && packet->data)
+    if(conn && (tid = conn->c_id) >= 0 && packet->ndata > 0 && packet->data)
     {
-        tasklist[tid].conn->c_id = tid;
-        return adnservice->newtransaction(adnservice, tasklist[tid].conn, tid);
+        return adnservice->newtransaction(adnservice, conn, tid);
     }
     else 
     {
         conn->over_cstate(conn);
         conn->over(conn);
-        tasklist[tid].conn = NULL;
-        QUEUE_PUSH(dnsqueue, int, &tid);
+        ltask->set_dns_state(ltask, tid, NULL, DNS_STATUS_ERR);
     }
     return -1;
 }
@@ -87,12 +80,11 @@ int adns_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chu
 {
     int tid = 0;
 
-    if(conn && (tid = conn->c_id) >= 0 && tid < DNS_TASK_MAX && tasklist[tid].conn == conn)
+    if(conn && (tid = conn->c_id) >= 0 )
     {
         conn->over_cstate(conn);
         conn->over(conn);
-        tasklist[tid].conn = NULL;
-        QUEUE_PUSH(dnsqueue, int, &tid);
+        ltask->set_dns_state(ltask, tid, NULL, DNS_STATUS_ERR);
     }
     return -1;
 }
@@ -102,9 +94,9 @@ int adns_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
 {
     int tid = 0;
 
-    if(conn && (tid = conn->c_id) >= 0 && tid < DNS_TASK_MAX && tasklist[tid].conn == conn)
+    if(conn && (tid = conn->c_id) >= 0)
     {
-        return adnservice->newtransaction(adnservice, tasklist[tid].conn, tid);
+        return adnservice->newtransaction(adnservice, conn, tid);
     }
     return -1;
 }
@@ -115,7 +107,8 @@ int adns_trans_handler(CONN *conn, int tid)
     unsigned char hostname[DNS_NAME_MAX], buf[HTTP_BUF_SIZE];
     int qid = 0, n = 0;
 
-    if(conn && tid >= 0 && tid < DNS_TASK_MAX && tasklist[tid].conn == conn)
+    if(conn && tid >= 0)
+        //&& tid < DNS_TASK_MAX && tasklist[tid].conn == conn)
     {
         memset(hostname, 0, DNS_NAME_MAX);
         conn->c_id = tid;
@@ -125,11 +118,11 @@ int adns_trans_handler(CONN *conn, int tid)
                 conn->remote_ip, conn->remote_port, conn->local_ip, conn->local_port);
         if((qid = ltask->pop_host(ltask, (char *)hostname)) >= 0)
         {
+            conn->s_id = qid;
             qid %= 65536;
             n = evdns_make_query((char *)hostname, 1, 1, (unsigned short)qid, 1, buf); 
             DEBUG_LOGGER(logger, "Resolving %s from nameserver[%s]", 
                     hostname, tasklist[tid].nameserver);
-            //fprintf(stdout, "%d::trans:%d taskid:[%d][%d]\n", __LINE__, tid, taskid, n);
             return conn->push_chunk(conn, buf, n);
         }
     }
@@ -139,10 +132,12 @@ int adns_trans_handler(CONN *conn, int tid)
 /* heartbeat handler */
 void adns_heartbeat_handler(void *arg)
 {
+    char dns_ip[HTTP_IP_MAX];
     int id = 0, total = 0;
 
     if(arg == (void *)adnservice)
     {
+        /*
         total = QTOTAL(dnsqueue);
         while(total-- > 0)
         {
@@ -162,6 +157,16 @@ void adns_heartbeat_handler(void *arg)
                     QUEUE_PUSH(dnsqueue, int, &id);
                 }
             }
+        }
+        */
+        while((id = task->pop_dns(task, dns_ip)) >= 0 && 
+                (conn = adnservice->newconn(adnservice, -1, 
+                SOCK_DGRAM, dns_ip, DNS_DEFAULT_PORT, NULL)))
+
+        {
+            conn->c_id = id;
+            conn->start_cstate(conn);
+            adnservice->newtransaction(adnservice, conn, id);
         }
     }
 }
@@ -436,6 +441,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
     adnservice->session.transaction_handler = &adns_trans_handler;
     interval = iniparser_getint(dict, "ADNS:heartbeat_interval", SB_HEARTBEAT_INTERVAL);
     adnservice->set_heartbeat(adnservice, interval, &adns_heartbeat_handler, adnservice);
+    /*
     p = iniparser_getstr(dict, "ADNS:nameservers");
     QUEUE_INIT(dnsqueue);
     i = 0;
@@ -451,6 +457,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
             i++;
         }
     }
+    */
     /* wait queue */
     //QUEUE_INIT(waitqueue);
     //while(i < DNS_TASK_MAX){QUEUE_PUSH(undnsqueue, int, &i++);}

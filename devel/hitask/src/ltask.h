@@ -4,33 +4,37 @@
 #define HTTP_HOST_MAX          256
 #define HTTP_IP_MAX            16
 #define HTTP_URL_MAX           4096
-#define HOST_INCRE_NUM      1000000   
-#define PROXY_INCRE_NUM     10000
-#define URL_INCRE_NUM       1000000   
-#define IP_INCRE_NUM        1000000
-#define L_BUF_SIZE          65536
-#define Q_TYPE_URL          0x01
-#define Q_TYPE_HOST         0x02
-#define L_LEVEL_UP          1
-#define L_LEVEL_DOWN        -1
-#define PROXY_STATUS_OK     1
-#define PROXY_STATUS_ERR    -1
-#define HOST_STATUS_OK 	    1
-#define HOST_STATUS_ERR     -1
-#define URL_STATUS_OK 	    1
-#define URL_STATUS_ERR      -1
-#define L_STATE_NAME        "hi.state"
-#define L_URL_NAME          "hi.url"
-#define L_PROXY_NAME        "hi.proxy"
-#define L_HOST_NAME         "hi.host"
-#define L_IP_NAME           "hi.ip"
-#define L_DOMAIN_NAME       "hi.domain"
-#define L_DOC_NAME          "hi.doc"
-#define L_TASK_NAME         "hi.task"
-#define L_LOG_NAME          "hi.log"
-#define L_KEY_NAME          "hi.key"
-#define L_META_NAME         "hi.meta"
-#define L_PATTERN_NAME      "hi.pattern"
+#define HOST_INCRE_NUM          1000000   
+#define PROXY_INCRE_NUM         10000
+#define DNS_INCRE_NUM           256
+#define URL_INCRE_NUM           1000000   
+#define IP_INCRE_NUM            1000000
+#define L_BUF_SIZE              65536
+#define Q_TYPE_URL              0x01
+#define Q_TYPE_HOST             0x02
+#define L_LEVEL_UP              1
+#define L_LEVEL_DOWN            -1
+#define PROXY_STATUS_OK         1
+#define PROXY_STATUS_ERR        -1
+#define HOST_STATUS_OK 	        1
+#define HOST_STATUS_ERR         -1
+#define URL_STATUS_OK 	        1
+#define URL_STATUS_ERR          -1
+#define DNS_STATUS_OK           1
+#define DNS_STATUS_ERR          -1
+#define DNS_STATUS_READY        2
+#define L_STATE_NAME            "hi.state"
+#define L_URL_NAME              "hi.url"
+#define L_PROXY_NAME            "hi.proxy"
+#define L_HOST_NAME             "hi.host"
+#define L_IP_NAME               "hi.ip"
+#define L_DOMAIN_NAME           "hi.domain"
+#define L_DOC_NAME              "hi.doc"
+#define L_TASK_NAME             "hi.task"
+#define L_LOG_NAME              "hi.log"
+#define L_KEY_NAME              "hi.key"
+#define L_META_NAME             "hi.meta"
+#define L_DNS_NAME              "hi.dns"
 /* host/domain */
 typedef struct _LHOST
 {
@@ -99,12 +103,19 @@ typedef struct _LNODE
     short status;
     int id;
 }LNODE;
+/* DNS */
+typedef struct _LDNS
+{
+    int  status;
+    char name[HTTP_IP_MAX];
+}LDNS;
 /* TASK */
 typedef struct _LTASK
 {
     LIO  proxyio;
     LIO  hostio;
     LIO  ipio;
+    LIO  dnsio;
     int  key_fd;
     int  url_fd;
     int  domain_fd;
@@ -126,6 +137,10 @@ typedef struct _LTASK
     int (*add_proxy)(struct _LTASK *, char *host);
     int (*get_proxy)(struct _LTASK *, LPROXY *proxy);
     int (*set_proxy_status)(struct _LTASK *, int id, char *host, short status);
+    int (*add_dns)(struct _LTASK *, char *dns_ip);
+    int (*del_dns)(struct _LTASK *, int dnsid, char *dns_ip);
+    int (*set_dns_state)(struct _LTASK *, int dnsid, char *dns_ip, int state);
+    int (*pop_dns)(struct _LTASK *, char *dns_ip);
     int (*pop_host)(struct _LTASK *, char *host);
     int (*set_host_ip)(struct _LTASK *, char *host, int *ips, int nip);
     int (*get_host_ip)(struct _LTASK *, char *host);
