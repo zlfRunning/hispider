@@ -1073,9 +1073,15 @@ int ltask_pop_dns(LTASK *task, char *dns_ip)
 }
 
 /* list dns  */
-int ltask_list_dns(LTASK *task, char *dns_ip)
+int ltask_list_dns(LTASK *task, char *block, int *nblock)
 {
+    int n = *nblock;
 
+    if(task && block)
+    {
+        
+    }
+    return 0;
 }
 
 /* update url content  */
