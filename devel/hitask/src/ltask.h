@@ -9,7 +9,7 @@
 #define DNS_INCRE_NUM           256
 #define URL_INCRE_NUM           1000000   
 #define IP_INCRE_NUM            1000000
-#define L_BUF_SIZE              65536
+#define HTTP_BUF_SIZE           65536
 #define Q_TYPE_URL              0x01
 #define Q_TYPE_HOST             0x02
 #define L_LEVEL_UP              1
@@ -23,6 +23,19 @@
 #define DNS_STATUS_OK           1
 #define DNS_STATUS_ERR          -1
 #define DNS_STATUS_READY        2
+#define TASK_WAIT_TIMEOUT       10000000
+#define TASK_WAIT_MAX           30000000
+#define DNS_TIMEOUT_MAX         4
+#define DNS_PATH_MAX            256
+#define DNS_BUF_SIZE            65536
+#define DNS_TASK_MAX            32
+#define DNS_IP_MAX              16
+#define DNS_NAME_MAX            128
+#define HTTP_DOWNLOAD_TIMEOUT   10000000
+#define HTML_MAX_SIZE           2097152
+#define TASK_STATE_INIT         0x00
+#define TASK_STATE_OK           0x02
+#define TASK_STATE_ERROR        0x04
 #define L_STATE_NAME            "hi.state"
 #define L_URL_NAME              "hi.url"
 #define L_PROXY_NAME            "hi.proxy"
@@ -35,6 +48,14 @@
 #define L_KEY_NAME              "hi.key"
 #define L_META_NAME             "hi.meta"
 #define L_DNS_NAME              "hi.dns"
+#define USER_AGENT              "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10.5; zh-CN; rv:1.9.0.1) Gecko/2008070206 Firefox/3.0.1"
+#define ACCEPT_TYPE             "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+#define ACCEPT_LANGUAGE         "zh-cn,zh;q=0.5"
+#define ACCEPT_ENCODING         "deflate,gzip"
+#define ACCEPT_CHARSET          "gb2312,utf-8;q=0.7,*;q=0.7"
+#define HTTP_RESP_OK            "HTTP/1.0 200 OK"
+#define HTTP_BAD_REQUEST        "HTTP/1.0 400 Bad Request\r\n\r\n"
+//#define HTTP_BAD_REQUEST    "HTTP/1.0 404 Not Found\r\n\r\n"
 /* host/domain */
 typedef struct _LHOST
 {

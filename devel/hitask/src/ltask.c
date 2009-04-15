@@ -1051,6 +1051,7 @@ int ltask_set_dns_state(LTASK *task, int dns_id, char *dns_ip, int state)
 int ltask_pop_dns(LTASK *task, char *dns_ip)
 {
     int id = -1, i = 0, n = 0;
+    LDNS *dns = NULL;
 
     if(task && dns_ip && task->dnsio.current > 0 
             && (dns = (LDNS *)(task->dnsio.map)) && dns != (LDNS *)-1 )

@@ -309,7 +309,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
     HTTP_RESPONSE *http_resp = NULL;
     char buf[HTTP_BUF_SIZE], charset[CHARSET_MAX], *zdata = NULL,
          *p = NULL, *ps = NULL, *outbuf = NULL, *data = NULL, *rawdata = NULL;
-    unsigned char *s = NULL, *end = NULL;
+    //unsigned char *s = NULL, *end = NULL;
     int  ret = -1, c_id = 0, n = 0, is_need_convert = 0, 
          is_need_compress = 0, is_new_zdata = 0;
     size_t ninbuf = 0, noutbuf = 0, nzdata = 0, ndata = 0, nrawdata = 0;
@@ -348,7 +348,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     }
                     else 
                     {
-                        ERROR_LOGGER(logger, "gzdecompress data from %d to %d failed, %d:%s", 
+                        ERROR_LOGGER(logger, "gzdecompress data from %ld to %ld failed, %d:%s", 
                                 nzdata, ndata, n, strerror(errno));
                         goto err_end;
                     }
@@ -360,7 +360,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                                 nzdata, (Bytef *)data, (uLong *)&ndata) == 0)
                     {
                         zdoc_total++;
-                        DEBUG_LOGGER(logger, "zdecompress data from %d to %d "
+                        DEBUG_LOGGER(logger, "zdecompress data from %u to %u "
                                 "rate:(%lld/%lld) = %f", nzdata, ndata, gzdoc_total, 
                                 doc_total, ((double)zdoc_total/(double)doc_total));
                         rawdata = data;
@@ -464,7 +464,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     p += sprintf(p, "Host: %s\r\nServer: %s\r\n", 
                             tasklist[c_id].host, tasklist[c_id].ip);
                 }
-                p += sprintf(p, "Content-Length: %d\r\n\r\n", nzdata);
+                p += sprintf(p, "Content-Length: %ld\r\n\r\n", nzdata);
                 tasklist[c_id].is_new_host = 0;
                 if((s_conn = tasklist[c_id].s_conn) && (n = p - buf) > 0)
                 {

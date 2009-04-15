@@ -23,7 +23,7 @@ static SBASE *sbase = NULL;
 static SERVICE *service = NULL;
 static SERVICE *adnservice = NULL;
 static dictionary *dict = NULL;
-static LTABLE *ltask = NULL;
+static LTASK *ltask = NULL;
 static void *logger = NULL;
 //static void *dnsqueue = NULL;
 //static DNSTASK tasklist[DNS_TASK_MAX];
@@ -133,7 +133,8 @@ int adns_trans_handler(CONN *conn, int tid)
 void adns_heartbeat_handler(void *arg)
 {
     char dns_ip[HTTP_IP_MAX];
-    int id = 0, total = 0;
+    int id = 0;
+    CONN *conn = NULL;
 
     if(arg == (void *)adnservice)
     {
@@ -159,7 +160,7 @@ void adns_heartbeat_handler(void *arg)
             }
         }
         */
-        while((id = task->pop_dns(task, dns_ip)) >= 0 && 
+        while((id = ltask->pop_dns(ltask, dns_ip)) >= 0 && 
                 (conn = adnservice->newconn(adnservice, -1, 
                 SOCK_DGRAM, dns_ip, DNS_DEFAULT_PORT, NULL)))
 
@@ -186,7 +187,7 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
 {
     char *p = NULL, *end = NULL, buf[HTTP_BUF_SIZE];
     HTTP_REQ http_req = {0};
-    int taskid = 0, n = 0;
+    int urlid = 0, n = 0;
 
     if(conn)
     {
@@ -204,12 +205,13 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
         {
             if(strncasecmp(http_req.path, "/stop", 5) == 0)
             {
-                ltask->set_state(ltask, 0);
+                ltask->set_state_running(ltask, 0);
             }
             else if(strncasecmp(http_req.path, "/running", 8) == 0)
             {
-                ltask->set_state(ltask, 1);
+                ltask->set_state_running(ltask, 1);
             }
+            /*
             if((n = ltask->get_stateinfo(ltask, buf)))
             {
                 conn->push_chunk(conn, buf, n);
@@ -217,7 +219,7 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
             else
             {
                 goto err_end;
-            }
+            }*/
         }
         else if(http_req.reqid == HTTP_POST)
         {
@@ -230,10 +232,10 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
         }
         else if(http_req.reqid == HTTP_TASK)
         {
-            taskid = atoi(http_req.path);
+            urlid = atoi(http_req.path);
             //fprintf(stdout, "%s::%d TASK: %ld path:%s\n", 
-            //__FILE__, __LINE__, taskid, http_req.path);
-            if(taskid != -1)
+            //__FILE__, __LINE__, urlid, http_req.path);
+            if(urlid != -1)
             {
                 if((p = http_req.headers[HEAD_ENT_CONTENT_LENGTH]) && (n = atol(p)) > 0)
                 {
@@ -242,7 +244,7 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
                 }
                 else
                 {
-                    ltask->set_task_state(ltask, taskid, NULL, TASK_STATE_ERROR);
+                    ltask->set_url_status(ltask, urlid, NULL, URL_STATUS_ERR);
                 }
             }
             /* get new task */
@@ -271,7 +273,7 @@ err_end:
 int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
     HTTP_REQ *http_req = NULL;
-    int taskid = 0, ips = NULL;
+    int urlid = 0, ips = NULL;
     char *host = NULL, *ip = NULL;
 
     if(conn && packet && cache && chunk)
@@ -286,10 +288,10 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                 ltask->set_host_ip(ltask, host, &ips, 1);
                 DEBUG_LOGGER(logger, "Resolved name[%s]'s ip[%s] from client", host, ip);
             }
-            taskid = atoi(http_req->path);
-            DEBUG_LOGGER(logger, "taskid:%d length:%d", taskid, chunk->ndata);
-            //ltable->add_document(ltable, taskid, 0, chunk->data, chunk->ndata); 
-            DEBUG_LOGGER(logger, "over taskid:%d length:%d", taskid, chunk->ndata);
+            urlid = atoi(http_req->path);
+            DEBUG_LOGGER(logger, "urlid:%d length:%d", urlid, chunk->ndata);
+            //ltable->add_document(ltable, urlid, 0, chunk->data, chunk->ndata); 
+            DEBUG_LOGGER(logger, "over urlid:%d length:%d", urlid, chunk->ndata);
             return 0;
         }
     }
@@ -334,9 +336,10 @@ int hitaskd_oob_handler(CONN *conn, CB_DATA *oob)
 /* Initialize from ini file */
 int sbase_initialize(SBASE *sbase, char *conf)
 {
-    char *s = NULL, *p = NULL, *ep = NULL, *whitelist = NULL, *whost = NULL, 
-         *basedir = NULL, *host = NULL, *path = NULL;
-    int i = 0, interval = 0;
+    char *s = NULL, *p = NULL, *basedir = NULL;
+         //*ep = NULL, *whitelist = NULL, *whost = NULL, 
+         //*host = NULL, *path = NULL;
+    int interval = 0;
 
     if((dict = iniparser_new(conf)) == NULL)
     {
