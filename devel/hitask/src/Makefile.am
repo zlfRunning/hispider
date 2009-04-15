@@ -10,10 +10,10 @@ utils/fqueue.h utils/kvmap.c utils/kvmap.h utils/logger.h utils/md5.c utils/md5.
 utils/mutex.h utils/queue.h utils/timer.h utils/trie.c utils/trie.h \
 utils/zstream.c utils/zstream.h iniparser.c iniparser.h
 hitaskd_CPPFLAGS= -I utils -D_FILE_OFFSET_BITS=64 -Wall
-hitaskd_LDFLAGS= -lz
+hitaskd_LDFLAGS= -lz -lsbase
 #hitask 
 hitask_SOURCES= hitask.c ltask.h utils/logger.h utils/http.h utils/http.c \
 utils/mutex.h utils/queue.h utils/timer.h utils/zstream.c utils/zstream.h \
 iniparser.c iniparser.h
 hitask_CPPFLAGS= -I utils -D_FILE_OFFSET_BITS=64 -Wall
-hitask_LDFLAGS= -lz
+hitask_LDFLAGS= -lz -lsbase
