@@ -203,7 +203,10 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
         if(http_request_parse(p, end, &http_req) == -1) goto err_end;
         if(http_req.reqid == HTTP_GET)
         {
-            if(strncasecmp(http_req.path, "/stop", 5) == 0)
+            if(strncasecmp(http_req.path, "/index", 6) == 0)
+            {
+            }
+            else if(strncasecmp(http_req.path, "/stop", 5) == 0)
             {
                 ltask->set_state_running(ltask, 0);
             }
