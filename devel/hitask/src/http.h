@@ -13,6 +13,7 @@
 #define HTTP_ARGV_LINE_MAX 4096
 #define HTTP_ARGVS_MAX     1024
 #define HTTP_BUFFER_SIZE   65536
+#define HTTP_HEADER_MAX    65536
 typedef struct _HTTP_ELEMENT
 {
 	int id;
@@ -440,7 +441,8 @@ typedef struct _HTTP_RESPONSE
 {
     int respid;
     int header_size;
-    char *headers[HTTP_HEADER_NUM];
+    char hlines[HTTP_HEADER_MAX];
+    int headers[HTTP_HEADER_NUM];
 }HTTP_RESPONSE;
 typedef struct _HTTP_ARG
 {
@@ -453,11 +455,12 @@ typedef struct _HTTP_REQ
 {
     short reqid;
     short nargvs;
-    int header_size;
+    int   header_size;
+    int   nline;
+    char hlines[HTTP_HEADER_MAX];
+    int  headers[HTTP_HEADER_NUM];
     char path[HTTP_URL_PATH_MAX];
-    char argvline[HTTP_ARGV_LINE_MAX];
-    char *eargv;
-    char *headers[HTTP_HEADER_NUM];
+    char line[HTTP_ARGV_LINE_MAX];
     HTTP_ARG argvs[HTTP_ARGVS_MAX];
 }HTTP_REQ;
 /* HTTP request HEADER parser */

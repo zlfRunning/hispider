@@ -101,11 +101,12 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
                 conn->over(conn);
                 return http_download_error(c_id);
             }
-            if(http_resp.respid == RESP_OK && http_resp.headers[HEAD_ENT_CONTENT_TYPE] 
-                    && strncasecmp(http_resp.headers[HEAD_ENT_CONTENT_TYPE], "text", 4) == 0)
+            if(http_resp.respid == RESP_OK && (n = http_resp.headers[HEAD_ENT_CONTENT_TYPE]) > 0 
+                    && strncasecmp(http_resp.hlines + n, "text", 4) == 0)
             {
                 conn->save_cache(conn, &http_resp, sizeof(HTTP_RESPONSE));
-                if((p = http_resp.headers[HEAD_ENT_CONTENT_LENGTH]) && (n = atol(p)) > 0)
+                if((n = http_resp.headers[HEAD_ENT_CONTENT_LENGTH]) > 0 
+                        && (n = atol(http_resp.hlines + n)) > 0)
                 {
                     conn->recv_chunk(conn, n);
                 }
@@ -135,16 +136,20 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
             }
             if(http_resp.respid == RESP_OK)
             {
-                host = http_resp.headers[HEAD_REQ_HOST];
-                sip = ip = http_resp.headers[HEAD_RESP_SERVER];
-                sport = port = (http_resp.headers[HEAD_REQ_REFERER])
-                    ? atoi(http_resp.headers[HEAD_REQ_REFERER]) : 0;
-                pip = http_resp.headers[HEAD_REQ_USER_AGENT];
-                pport = (http_resp.headers[HEAD_GEN_VIA])
-                    ? atoi(http_resp.headers[HEAD_GEN_VIA]) : 0;
-                path = http_resp.headers[HEAD_RESP_LOCATION];
-                taskid = tasklist[c_id].taskid = (http_resp.headers[HEAD_REQ_FROM])
-                    ? atoi(http_resp.headers[HEAD_REQ_FROM]) : 0;
+                host = ((n = http_resp.headers[HEAD_REQ_HOST]) > 0) 
+                    ? (http_resp.hlines + n): NULL; 
+                sip = ip = ((n = http_resp.headers[HEAD_RESP_SERVER]) > 0)
+                    ? (http_resp.hlines + n): NULL;
+                sport = port = ((n = http_resp.headers[HEAD_REQ_REFERER]) > 0)
+                    ? atoi(http_resp.hlines + n) : 0;
+                pip = ((n = http_resp.headers[HEAD_REQ_USER_AGENT]) > 0)
+                    ? (http_resp.hlines + n): NULL;
+                pport = ((n = http_resp.headers[HEAD_GEN_VIA]) > 0)
+                    ? atoi(http_resp.hlines + n) : 0;
+                path = ((n = http_resp.headers[HEAD_RESP_LOCATION]) > 0)
+                    ? (http_resp.hlines + n): NULL;
+                taskid = tasklist[c_id].taskid = ((n = http_resp.headers[HEAD_REQ_FROM]) > 0)
+                    ? atoi(http_resp.hlines + n) : 0;
                 //fprintf(stdout, "%s::%d OK host:%s ip:%s port:%d path:%s taskid:%d \n", 
                 //        __FILE__, __LINE__, host, ip, port, path, taskid);
                 if(pip && pport > 0) 
@@ -322,7 +327,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
             && cache && (http_resp = (HTTP_RESPONSE *)cache->data))
         {
             doc_total++;
-            if((p = http_resp->headers[HEAD_ENT_CONTENT_ENCODING]))
+            if((n = http_resp->headers[HEAD_ENT_CONTENT_ENCODING]) > 0 
+                && (p = (http_resp->hlines + n)))
             {
                 zdata = chunk->data;
                 nzdata = chunk->ndata;
@@ -455,8 +461,9 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
             {
                 p = buf;
                 p += sprintf(p, "TASK %d HTTP/1.0\r\n", tasklist[c_id].taskid);
-                if((ps = http_resp->headers[HEAD_ENT_LAST_MODIFIED]))
+                if((n = http_resp->headers[HEAD_ENT_LAST_MODIFIED]))
                 {
+                    ps = http_resp->hlines + n;
                     p += sprintf(p, "Last-Modified: %s\r\n", ps);
                 }
                 if(tasklist[c_id].is_new_host)

@@ -231,7 +231,8 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
         }
         else if(http_req.reqid == HTTP_POST)
         {
-            if((p = http_req.headers[HEAD_ENT_CONTENT_LENGTH]) && (n = atol(p)) > 0)
+            if((n = http_req.headers[HEAD_ENT_CONTENT_LENGTH]) > 0 
+                    && (n = atol(http_req.hlines + n)) > 0)
             {
                 conn->save_cache(conn, &http_req, sizeof(HTTP_REQ));
                 conn->recv_chunk(conn, n);
@@ -245,7 +246,8 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
             //__FILE__, __LINE__, urlid, http_req.path);
             if(urlid != -1)
             {
-                if((p = http_req.headers[HEAD_ENT_CONTENT_LENGTH]) && (n = atol(p)) > 0)
+                if((n = http_req.headers[HEAD_ENT_CONTENT_LENGTH]) > 0 
+                    && (n = atol(http_req.hlines + n)) > 0)
                 {
                     conn->save_cache(conn, &http_req, sizeof(HTTP_REQ));
                     conn->recv_chunk(conn, n);
@@ -288,10 +290,10 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
     {
         if((http_req = (HTTP_REQ *)cache->data))
         {
-            host = http_req->headers[HEAD_REQ_HOST];
-            ip = http_req->headers[HEAD_RESP_SERVER];
-            if(host && ip)
+            if(http_req->headers[HEAD_REQ_HOST] > 0 && http_req->headers[HEAD_RESP_SERVER] > 0)
             {
+                host = http_req->hlines + http_req->headers[HEAD_REQ_HOST];
+                ip = http_req->hlines + http_req->headers[HEAD_RESP_SERVER];
                 ips = inet_addr(ip);
                 ltask->set_host_ip(ltask, host, &ips, 1);
                 DEBUG_LOGGER(logger, "Resolved name[%s]'s ip[%s] from client", host, ip);
