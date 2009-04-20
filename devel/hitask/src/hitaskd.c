@@ -187,7 +187,7 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
 {
     char *p = NULL, *end = NULL, buf[HTTP_BUF_SIZE];
     HTTP_REQ http_req = {0};
-    int urlid = 0, n = 0;
+    int urlid = 0, n = 0, i = 0;
 
     if(conn)
     {
@@ -205,6 +205,11 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
         {
             if(strncasecmp(http_req.path, "/index", 6) == 0)
             {
+                p += sprintf(p, "%s", HTTP_RESP_OK);
+                for(i = 0; i++; i < http_req.nargvs)
+                {
+
+                }
             }
             else if(strncasecmp(http_req.path, "/stop", 5) == 0)
             {
