@@ -21,7 +21,6 @@ typedef struct _HTTP_ELEMENT
 	int  elen;
 	char *s;
 }HTTP_ELEMENT;
-#define HTTP_HEADER_NUM	47
 
 /* HTTP/1.1 RESPONSE STATUS FROM RFC2616
    Status-Code    =
@@ -226,8 +225,12 @@ static char *ymonths[]= {
    | Expires                  ; Section 14.21
    | Last-Modified            ; Section 14.29
    | extension-header
-
+    
+   Additional headers
+   | Cookies 
+   | Set-Cookie 
  */
+#define HTTP_HEADER_NUM	49
 static HTTP_ELEMENT http_headers[] = 
 {
 #define HEAD_REQ_ACCEPT 0
@@ -323,7 +326,11 @@ static HTTP_ELEMENT http_headers[] =
 #define HEAD_GEN_WARNING 45
 	{45, "Warning:", 8, NULL},
 #define HEAD_RESP_WWW_AUTHENTICATE 46 
-	{46, "WWW-Authenticate:", 17, NULL}
+	{46, "WWW-Authenticate:", 17, NULL},
+#define HEAD_REQ_COOKIE 47
+    {47, "Cookie", 6, NULL},
+#define HEAD_REQ_COOKIE 48
+    {48, "Set-Cookie", 10, NULL}
 };
 
 /* HTTP/1.1 METHODS

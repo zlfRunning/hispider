@@ -27,7 +27,7 @@ int http_argv_parse(char *p, char *end, HTTP_REQ *http_req)
                 argv->v = pp;
                 ++s;
             }
-            else if((*s == '&' || *s == 0x20 || *s == '\t' || s == (end - 1))
+            else if((*s == '&' || *s == 0x20 || *s == '\t')
                     && argv->k && argv->v)
             {
                 argv->nv = pp - argv->v;
@@ -46,6 +46,14 @@ int http_argv_parse(char *p, char *end, HTTP_REQ *http_req)
             else if(argv->k || argv->v)
             {
                 *pp++ = *s++;
+                if(s == (end - 1))
+                {
+                    argv->nv = pp - argv->v;
+                    *pp++ = '\0';
+                    http_req->nline = pp - http_req->line;
+                    http_req->nargvs++;
+                    argv++;
+                }
             }
             else ++s;
         }
@@ -164,6 +172,7 @@ int http_response_parse(char *p, char *end, HTTP_RESPONSE *http_response)
 int main(int argc, char **argv)
 {
     HTTP_REQ http_req = {0};
+    HTTP_RESPONSE http_resp = {0};
     char buf[HTTP_BUFFER_SIZE], block[HTTP_BUFFER_SIZE], *p = NULL, *end = NULL;
     int i = 0, n = 0;
     /* test request parser */
@@ -174,14 +183,22 @@ int main(int argc, char **argv)
         end = p + n;
         if(http_request_parse(p, end, &http_req) != -1)
         {
-            fprintf(stdout, "reqid:%d\npath:%s\nnargvs:%d:%d\n", http_req.reqid, 
+            fprintf(stdout, "sizeof(HTTP_REQ):%d reqid:%d\npath:%s\nnargvs:%d:%d\n", 
+                    sizeof(HTTP_REQ), http_req.reqid, 
                     http_req.path, http_req.nargvs, http_req.nline);
-            if((n = sprintf(block, "%s", "f=abd&d=daskfjds&daff=dsakfjd")) > 0)
+            if((n = sprintf(buf, "%s", "client=safari&rls=zh-cn&q=base64%E7%BC%96%E7%A0%81%E8%A7%84%E5%88%99&ie=UTF-8&oe=UTF-8")) > 0)
             {
-                end = block + n;
-                http_argv_parse(block, end, &http_req);
+                end = buf + n;
+                http_argv_parse(buf, end, &http_req);
                 fprintf(stdout, "reqid:%d\npath:%s\nnargvs:%d:%d\n", http_req.reqid, 
                         http_req.path, http_req.nargvs, http_req.nline);
+            }
+            for(i = 0; i < HTTP_HEADER_NUM; i++)
+            {
+                if((n = http_req.headers[i]) > 0)
+                {
+                    fprintf(stdout, "%s %s\n", http_headers[i].e, http_req.hlines + n);
+                }
             }
             for(i = 0; i < http_req.nargvs; i++)
             {
@@ -191,6 +208,22 @@ int main(int argc, char **argv)
             }
         }
     }
-
+    if((n = sprintf(buf, "HTTP/1.0 403 Forbidden\r\nContent-Type: text/html; charset=UTF-8\r\n"
+                    "Date: Tue, 21 Apr 2009 01:32:56 GMT\r\n"
+                    "Server: gws\r\nCache-Control: private, x-gzip-ok=\"\"\r\n"
+                    "Connection: Close\r\n\r\n")) > 0)
+    {
+        end = buf + n;
+        if(http_response_parse(buf, end, &http_resp) != -1)
+        {
+            for(i = 0; i < HTTP_HEADER_NUM; i++)
+            {
+                if((n = http_resp.headers[i]) > 0)
+                {
+                    fprintf(stdout, "%s %s\n", http_headers[i].e, http_resp.hlines + n);
+                }
+            }
+        }
+    }
 }
 #endif

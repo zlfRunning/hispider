@@ -206,7 +206,7 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
             if(strncasecmp(http_req.path, "/index", 6) == 0)
             {
                 p += sprintf(p, "%s", HTTP_RESP_OK);
-                for(i = 0; i++; i < http_req.nargvs)
+                for(i = 0; i < http_req.nargvs; i++)
                 {
 
                 }
@@ -283,25 +283,50 @@ err_end:
 int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
     HTTP_REQ *http_req = NULL;
-    int urlid = 0, ips = NULL;
-    char *host = NULL, *ip = NULL;
+    int urlid = 0, ips = 0, i = 0;
+    char buf[HTTP_BUF_SIZE], *host = NULL, *ip = NULL, *p = NULL;
 
-    if(conn && packet && cache && chunk)
+    if(conn && packet && cache && chunk && chunk->ndata > 0)
     {
         if((http_req = (HTTP_REQ *)cache->data))
         {
-            if(http_req->headers[HEAD_REQ_HOST] > 0 && http_req->headers[HEAD_RESP_SERVER] > 0)
+            if(http_req->reqid == HTTP_TASK)
             {
-                host = http_req->hlines + http_req->headers[HEAD_REQ_HOST];
-                ip = http_req->hlines + http_req->headers[HEAD_RESP_SERVER];
-                ips = inet_addr(ip);
-                ltask->set_host_ip(ltask, host, &ips, 1);
-                DEBUG_LOGGER(logger, "Resolved name[%s]'s ip[%s] from client", host, ip);
+                if(http_req->headers[HEAD_REQ_HOST] > 0 && http_req->headers[HEAD_RESP_SERVER] > 0)
+                {
+                    host = http_req->hlines + http_req->headers[HEAD_REQ_HOST];
+                    ip = http_req->hlines + http_req->headers[HEAD_RESP_SERVER];
+                    ips = inet_addr(ip);
+                    ltask->set_host_ip(ltask, host, &ips, 1);
+                    DEBUG_LOGGER(logger, "Resolved name[%s]'s ip[%s] from client", host, ip);
+                }
+                urlid = atoi(http_req->path);
+                DEBUG_LOGGER(logger, "urlid:%d length:%d", urlid, chunk->ndata);
+                DEBUG_LOGGER(logger, "over urlid:%d length:%d", urlid, chunk->ndata);
             }
-            urlid = atoi(http_req->path);
-            DEBUG_LOGGER(logger, "urlid:%d length:%d", urlid, chunk->ndata);
+            else if(http_req->reqid == HTTP_POST)
+            {
+                http_argv_parse((char *)chunk->data, (char *)(chunk->data+chunk->ndata), http_req);
+                p = buf;
+                p += sprintf(p, "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n"
+                        "Set-Cookie: abcd=abcdsd; path=/; domain=abc.com\r\n\r\n");
+                for(i = 0; i < HTTP; i++)
+                {
+                    p += sprintf(p, "%s[%d] => %s[%d]<br>\n", 
+                            http_req->argvs[i].k, http_req->argvs[i].nk, 
+                            http_req->argvs[i].v, http_req->argvs[i].nv);
+                }
+
+                for(i = 0; i < http_req->nargvs; i++)
+                {
+                    p += sprintf(p, "%s[%d] => %s[%d]<br>\n", 
+                            http_req->argvs[i].k, http_req->argvs[i].nk, 
+                            http_req->argvs[i].v, http_req->argvs[i].nv);
+                }
+                conn->push_chunk(conn, buf, p - buf);
+                conn->over(conn);
+            }
             //ltable->add_document(ltable, urlid, 0, chunk->data, chunk->ndata); 
-            DEBUG_LOGGER(logger, "over urlid:%d length:%d", urlid, chunk->ndata);
             return 0;
         }
     }
