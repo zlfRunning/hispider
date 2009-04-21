@@ -11,6 +11,7 @@
 #define _HTTP_H
 #define HTTP_URL_PATH_MAX  1024
 #define HTTP_ARGV_LINE_MAX 4096
+#define HTTP_COOKIES_MAX   32
 #define HTTP_ARGVS_MAX     1024
 #define HTTP_BUFFER_SIZE   65536
 #define HTTP_HEADER_MAX    65536
@@ -328,9 +329,9 @@ static HTTP_ELEMENT http_headers[] =
 #define HEAD_RESP_WWW_AUTHENTICATE 46 
 	{46, "WWW-Authenticate:", 17, NULL},
 #define HEAD_REQ_COOKIE 47
-    {47, "Cookie", 6, NULL},
+    {47, "Cookie:", 7, NULL},
 #define HEAD_RESP_SET_COOKIE 48
-    {48, "Set-Cookie", 10, NULL}
+    {48, "Set-Cookie:", 11, NULL}
 };
 
 /* HTTP/1.1 METHODS
@@ -444,31 +445,44 @@ static char *ftypes[] = {
 	"UNKOWN",
 	"WHT"
 };
+typedef struct _HTTP_KV
+{
+    short nk;
+    short nv;
+    int k;
+    int v;
+}HTTP_KV;
 typedef struct _HTTP_RESPONSE
 {
-    int respid;
+    short respid;
+    short ncookies;
     int header_size;
+    int nhline;
     char hlines[HTTP_HEADER_MAX];
     int headers[HTTP_HEADER_NUM];
+    HTTP_KV cookies[HTTP_COOKIES_MAX];
 }HTTP_RESPONSE;
 typedef struct _HTTP_ARG
 {
     short nk;
     short nv;
-    char *v;
-    char *k;
+    int  k;
+    int  v;
 }HTTP_ARG;
 typedef struct _HTTP_REQ
 {
     short reqid;
     short nargvs;
+    short nline;
+    short ncookies;
     int   header_size;
-    int   nline;
+    int  nhline;
     char hlines[HTTP_HEADER_MAX];
     int  headers[HTTP_HEADER_NUM];
     char path[HTTP_URL_PATH_MAX];
     char line[HTTP_ARGV_LINE_MAX];
     HTTP_ARG argvs[HTTP_ARGVS_MAX];
+    HTTP_KV cookies[HTTP_COOKIES_MAX];
 }HTTP_REQ;
 /* HTTP request HEADER parser */
 int http_request_parse(char *p, char *end, HTTP_REQ *http_req);

@@ -195,24 +195,26 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
     {
         p = packet->data;
         end = packet->data + packet->ndata;
-        /*
         int fd = 0;
         if((fd = open("/tmp/header.txt", O_CREAT|O_RDWR|O_TRUNC, 0644)) > 0)
         {
             write(fd, packet->data, packet->ndata);
             close(fd);
-        }*/
+        }
+        /*
+        */
         if(http_request_parse(p, end, &http_req) == -1) goto err_end;
         //authorized 
         if(is_need_authorization)
         {
-            if((n = http_req.headers[HEAD_REQ_COOKIE]) <= 0 
-                    || ltask->authorization(ltask, http_req.hlines + n))
+            if((n = http_req.headers[HEAD_REQ_COOKIE]) <= 0) 
+                //|| ltask->authorization(ltask, http_req.hlines + n) <= 0)
             {
                 p = buf;
                 p += sprintf(p, "HTTP/1.1 401 Unauthorized\r\n"
                         "WWW-Authenticate: Basic realm=\"%s\"\r\n\r\n", authorization_name);
                 conn->push_chunk(conn, buf, p - buf);
+                conn->over(conn);
                 return 0;   
             }
         }
