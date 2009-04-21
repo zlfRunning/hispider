@@ -483,6 +483,7 @@ typedef struct _HTTP_REQ
     char line[HTTP_ARGV_LINE_MAX];
     HTTP_ARG argvs[HTTP_ARGVS_MAX];
     HTTP_KV cookies[HTTP_COOKIES_MAX];
+    HTTP_KV auth;
 }HTTP_REQ;
 /* HTTP request HEADER parser */
 int http_request_parse(char *p, char *end, HTTP_REQ *http_req);

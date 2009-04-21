@@ -207,7 +207,6 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
         //authorized 
         if(is_need_authorization)
         {
-            if((n = http_req.headers[HEAD_REQ_COOKIE]) <= 0) 
                 //|| ltask->authorization(ltask, http_req.hlines + n) <= 0)
             {
                 p = buf;
