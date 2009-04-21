@@ -329,7 +329,7 @@ static HTTP_ELEMENT http_headers[] =
 	{46, "WWW-Authenticate:", 17, NULL},
 #define HEAD_REQ_COOKIE 47
     {47, "Cookie", 6, NULL},
-#define HEAD_REQ_COOKIE 48
+#define HEAD_RESP_SET_COOKIE 48
     {48, "Set-Cookie", 10, NULL}
 };
 

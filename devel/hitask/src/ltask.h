@@ -174,6 +174,11 @@ typedef struct _LTASK
     int (*set_url_status)(struct _LTASK *, int urlid, char *url, short status);
     int (*set_url_level)(struct _LTASK *, int urlid, char *url, short level);
     int (*get_task)(struct _LTASK *, char *buf, int *nbuf);
+    int (*add_user)(struct _LTASK *, char *username, char *passwd);
+    int (*update_user)(struct _LTASK *, int userid, char *username, char *passwd, int status);
+    int (*delete_user)(struct _LTASK *, int userid, char *username);
+    int (*authorization)(struct _LTASK *, char *username, char *passwd);
+    int (*list_user)(struct _LTASK *, char *block, int *nblock);
     int (*update_url_content)(struct _LTASK *, char *url, int date, short type, 
             char *content, int ncontent);
     void (*clean)(struct _LTASK **);

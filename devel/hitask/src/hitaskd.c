@@ -25,6 +25,8 @@ static SERVICE *adnservice = NULL;
 static dictionary *dict = NULL;
 static LTASK *ltask = NULL;
 static void *logger = NULL;
+static int is_need_authorization = 1;
+static char *authorization_name = "Hitask Administration System";
 //static void *dnsqueue = NULL;
 //static DNSTASK tasklist[DNS_TASK_MAX];
 
@@ -201,6 +203,19 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
             close(fd);
         }*/
         if(http_request_parse(p, end, &http_req) == -1) goto err_end;
+        //authorized 
+        if(is_need_authorization)
+        {
+            if((n = http_req.headers[HEAD_REQ_COOKIE]) <= 0 
+                    || ltask->authorization(ltask, http_req.hlines + n))
+            {
+                p = buf;
+                p += sprintf(p, "HTTP/1.1 401 Unauthorized\r\n"
+                        "WWW-Authenticate: Basic realm=\"%s\"\r\n\r\n", authorization_name);
+                conn->push_chunk(conn, buf, p - buf);
+                return 0;   
+            }
+        }
         if(http_req.reqid == HTTP_GET)
         {
             if(strncasecmp(http_req.path, "/index", 6) == 0)
@@ -283,7 +298,7 @@ err_end:
 int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
     HTTP_REQ *http_req = NULL;
-    int urlid = 0, ips = 0, i = 0;
+    int urlid = 0, ips = 0, i = 0, n = 0;
     char buf[HTTP_BUF_SIZE], *host = NULL, *ip = NULL, *p = NULL;
 
     if(conn && packet && cache && chunk && chunk->ndata > 0)
@@ -308,13 +323,14 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
             {
                 http_argv_parse((char *)chunk->data, (char *)(chunk->data+chunk->ndata), http_req);
                 p = buf;
-                p += sprintf(p, "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n"
-                        "Set-Cookie: abcd=abcdsd; path=/; domain=abc.com\r\n\r\n");
-                for(i = 0; i < HTTP; i++)
+                p += sprintf(p, "HTTP/1.0 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n"
+                        "Set-Cookie: abcd=abcdsd;\r\n\r\n");
+                for(i = 0; i < HTTP_HEADER_NUM; i++)
                 {
-                    p += sprintf(p, "%s[%d] => %s[%d]<br>\n", 
-                            http_req->argvs[i].k, http_req->argvs[i].nk, 
-                            http_req->argvs[i].v, http_req->argvs[i].nv);
+                    if((n = http_req->headers[i]) > 0)
+                    {
+                        p += sprintf(p, "%s %s<br>\n", http_headers[i].e, http_req->hlines + n);
+                    }
                 }
 
                 for(i = 0; i < http_req->nargvs; i++)
