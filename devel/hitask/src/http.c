@@ -50,7 +50,7 @@ int http_argv_parse(char *p, char *end, HTTP_REQ *http_req)
                 *pp++ = *s++;
             }
             else ++s;
-            if(s == end && argv->k && argv->v)
+            if(s == end && argv < eargv && argv->k && argv->v)
             {
                 argv->nv = pp - http_req->line - argv->v;
                 *pp++ = '\0';
@@ -110,7 +110,7 @@ int http_cookie_parse(char *p, char *end, HTTP_REQ *http_req)
                 *pp++ = *s++;
             }
             else ++s;
-            if((s == end || *s == '\r') && cookie->k && cookie->v)
+            if((s == end || *s == '\r') && cookie < ecookie && cookie->k && cookie->v)
             {
                 fprintf(stdout, "/%s/\n", s);
                 cookie->nv = pp - http_req->hlines - cookie->v;
