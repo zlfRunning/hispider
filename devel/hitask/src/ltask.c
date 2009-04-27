@@ -109,6 +109,7 @@ int ltask_set_basedir(LTASK *task, char *dir)
     struct stat st = {0};
     LPROXY *proxy = NULL;
     LDNS *dns = NULL;
+    LUSER *user = NULL;
     int n = 0, i = 0;
 
     if(task && dir)
@@ -276,6 +277,31 @@ int ltask_set_basedir(LTASK *task, char *dir)
                 else task->dnsio.left++;
                 ++dns;
             }while(i++ < task->dnsio.total);
+        }
+        /* user */
+        sprintf(path, "%s/%s", dir, L_USER_NAME);
+        if((task->userio.fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
+        {
+            _MMAP_(task->userio, st, LUSER, USER_INCRE_NUM);
+        }
+        else
+        {
+            _EXIT_("open %s failed, %s\n", path, strerror(errno));
+        }
+        if(task->userio.total > 0 && (user = (LUSER *)(task->userio.map)))
+        {
+            i = 0;
+            do
+            {
+                if(user->status != USER_STATUS_ERR && (n = strlen((p = user->name))) > 0)
+                {
+                    task->userio.current++;
+                    dp = (void *)((long)(i+1));
+                    TRIETAB_ADD(task->users, p, n, dp);
+                }
+                else task->userio.left++;
+                ++user;
+            }while(i++ < task->userio.total);
         }
         /* urlmap */
          if(fstat(task->key_fd, &st) == 0 && st.st_size > 0)
@@ -1021,8 +1047,8 @@ int ltask_del_dns(LTASK *task, int dns_id, char *dns_ip)
     return id;
 }
 
-/* set dns host state */
-int ltask_set_dns_state(LTASK *task, int dns_id, char *dns_ip, int state)
+/* set dns host status */
+int ltask_set_dns_status(LTASK *task, int dns_id, char *dns_ip, int status)
 {
     int n = 0, id = -1;
     void *dp = NULL;
@@ -1040,12 +1066,13 @@ int ltask_set_dns_state(LTASK *task, int dns_id, char *dns_ip, int state)
                 && (dns = (LDNS *)(task->dnsio.map)) 
                 && dns != (LDNS *)-1 && (n = strlen(dns[id].name)) > 0)
         {
-            dns[id].status = state;
+            dns[id].status = status;
         }
         MUTEX_UNLOCK(task->mutex);
     }
     return id;
 }
+
 
 /* pop dns */
 int ltask_pop_dns(LTASK *task, char *dns_ip)
@@ -1085,6 +1112,196 @@ int ltask_list_dns(LTASK *task, char *block, int *nblock)
     return 0;
 }
 
+/* add user host */
+int ltask_add_user(LTASK *task, char *name, char *passwd)
+{
+    int n = 0, id = -1, i = 0, x = 0;
+    void *dp = NULL;
+    struct stat st = {0};
+    LUSER *user = NULL;
+    unsigned char key[MD5_LEN];
+
+    if(task && name && (n = strlen(name)) > 0 && passwd && (x = strlen(passwd)) > 0)
+    {
+        MUTEX_LOCK(task->mutex);
+        TRIETAB_GET(task->users, name, n, dp);
+        if((id = ((long)dp - 1)) < 0)
+        {
+            if(task->userio.left <= 0)
+            {_MMAP_(task->userio, st, LUSER, USER_INCRE_NUM);}
+            if((user = (LUSER *)(task->userio.map)) && user != (LUSER *)-1)
+            {
+                while(i < task->userio.total)
+                {
+                    if(user[i].status <= 0)
+                    {
+                        strcpy(user[i].name, name);
+                        md5((unsigned char *)passwd, x, key);
+                        memcpy(user[i].passwd, key, MD5_LEN);
+                        dp = (void *)((long)(i + 1));
+                        id = i;
+                        TRIETAB_ADD(task->users, name, n, dp);
+                        user[i].status = USER_STATUS_OK;
+                        task->userio.left--;
+                        task->userio.current++;
+                        break;
+                    }
+                    ++i;
+                }
+            }
+        }
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return id;
+}
+
+/* delete user host */
+int ltask_del_user(LTASK *task, int userid, char *name)
+{
+    int n = 0, id = -1;
+    void *dp = NULL;
+    LUSER *user = NULL;
+
+    if(task)
+    {
+        MUTEX_LOCK(task->mutex);
+        if(name && (n = strlen(name)) > 0)
+        {
+            TRIETAB_DEL(task->users, name, n, dp);
+            id = (long)dp - 1;
+        }
+        else if((id = userid) >= 0 && id < task->userio.total 
+                && (user = (LUSER *)(task->userio.map)) 
+                && user != (LUSER *)-1 && (n = strlen(user[id].name)) > 0)
+        {
+            TRIETAB_DEL(task->users, user[id].name, n, dp);
+            user[id].status = 0;
+            task->userio.left++;
+        }
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return id;
+}
+
+/* update user password */
+int ltask_update_passwd(LTASK *task, int userid, char *name, char *passwd)
+{
+    unsigned char key[MD5_LEN];
+    int n = 0, id = -1;
+    void *dp = NULL;
+    LUSER *user = NULL;
+
+    if(task)
+    {
+        MUTEX_LOCK(task->mutex);
+        if(name && (n = strlen(name)) > 0)
+        {
+            TRIETAB_GET(task->users, name, n, dp);
+            id = (long)dp - 1;
+        }else id = userid;
+        if(id >= 0 && id < task->userio.total 
+                && (user = (LUSER *)(task->userio.map)) 
+                && user != (LUSER *)-1 && (n = strlen(user[id].name)) > 0)
+        {
+            md5((unsigned char *)name, n, key);
+            memcpy(user[id].passwd, key, MD5_LEN);
+        }
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return id;
+}
+
+/* update user permistion */
+int ltask_update_permission(LTASK *task, int userid, char *name, int permission)
+{
+    int n = 0, id = -1;
+    void *dp = NULL;
+    LUSER *user = NULL;
+
+    if(task)
+    {
+        MUTEX_LOCK(task->mutex);
+        if(name && (n = strlen(name)) > 0)
+        {
+            TRIETAB_GET(task->users, name, n, dp);
+            id = (long)dp - 1;
+        }else id = userid;
+        if(id >= 0 && id < task->userio.total 
+                && (user = (LUSER *)(task->userio.map)) 
+                && user != (LUSER *)-1 && (n = strlen(user[id].name)) > 0)
+        {
+            user[id].permissions &= permission;
+        }
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return id;
+}
+
+/* user authorization */
+int ltask_authorization(LTASK *task, int userid, char *name, char *passwd, LUSER *puser)
+{
+    unsigned char key[MD5_LEN];
+    int n = 0, id = -1, x = 0;
+    void *dp = NULL;
+    LUSER *user = NULL;
+
+    if(task && passwd && (x = strlen(passwd)) > 0)
+    {
+        MUTEX_LOCK(task->mutex);
+        if(name && (n = strlen(name)) > 0)
+        {
+            TRIETAB_GET(task->users, name, n, dp);
+            id = (long)dp - 1;
+        }else id = userid;
+        if(id >= 0 && id < task->userio.total 
+                && (user = (LUSER *)(task->userio.map)) 
+                && user != (LUSER *)-1 && (n = strlen(user[id].name)) > 0)
+        {
+            md5((unsigned char *)passwd, x, key);
+            if(memcmp(user[id].passwd, key, MD5_LEN) != 0) id = -1;
+            else memcpy(puser, &(user[id]), sizeof(LUSER));
+        }
+        else id = -1;
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return id;
+}
+
+/* set user status */
+int ltask_set_user_status(LTASK *task, int userid, char *name, int status)
+{
+    int n = 0, id = -1;
+    void *dp = NULL;
+    LUSER *user = NULL;
+
+    if(task)
+    {
+        MUTEX_LOCK(task->mutex);
+        if(name && (n = strlen(name)) > 0)
+        {
+            TRIETAB_GET(task->users, name, n, dp);
+            id = (long)dp - 1;
+        }else id = userid;
+        if(id >= 0 && id < task->userio.total 
+                && (user = (LUSER *)(task->userio.map)) 
+                && user != (LUSER *)-1 && (n = strlen(user[id].name)) > 0)
+        {
+            user[id].status = status;
+        }
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return id;
+}
+
+/* list users */
+int ltask_list_users(LTASK *task, char *block, int *nblock)
+{
+    if(task && block && nblock && *nblock > 0)
+    {
+    }
+    return 0;
+}
+
 /* update url content  */
 int ltask_update_url_content(LTASK *task, int urlid, char *content, int ncontent)
 {
@@ -1101,6 +1318,7 @@ void ltask_clean(LTASK **ptask)
         if((*ptask)->timer) {TIMER_CLEAN((*ptask)->timer);}
         if((*ptask)->urlmap) {KVMAP_CLEAN((*ptask)->urlmap);}
         if((*ptask)->table) {TRIETAB_CLEAN((*ptask)->table);}
+        if((*ptask)->users) {TRIETAB_CLEAN((*ptask)->users);}
         if((*ptask)->qtask){FQUEUE_CLEAN((*ptask)->qtask);}
         if((*ptask)->qproxy){QUEUE_CLEAN((*ptask)->qproxy);}
         if((*ptask)->key_fd > 0) close((*ptask)->key_fd);
@@ -1132,6 +1350,11 @@ void ltask_clean(LTASK **ptask)
             _MUNMAP_((*ptask)->dnsio.map, (*ptask)->dnsio.size);
             close((*ptask)->dnsio.fd);
         }
+        if((*ptask)->userio.fd > 0)
+        {
+            _MUNMAP_((*ptask)->userio.map, (*ptask)->userio.size);
+            close((*ptask)->userio.fd);
+        }
         free(*ptask);
         *ptask = NULL;
     }
@@ -1146,6 +1369,7 @@ LTASK *ltask_init()
     {
         KVMAP_INIT(task->urlmap);
         TRIETAB_INIT(task->table);
+        TRIETAB_INIT(task->users);
         TIMER_INIT(task->timer);
         MUTEX_INIT(task->mutex);
         QUEUE_INIT(task->qproxy);
@@ -1158,7 +1382,7 @@ LTASK *ltask_init()
         task->pop_host              = ltask_pop_host;
         task->add_dns               = ltask_add_dns;
         task->del_dns               = ltask_del_dns;
-        task->set_dns_state         = ltask_set_dns_state;
+        task->set_dns_status        = ltask_set_dns_status;
         task->pop_dns               = ltask_pop_dns;
         task->list_dns              = ltask_list_dns;
         task->set_host_ip           = ltask_set_host_ip;
@@ -1171,6 +1395,13 @@ LTASK *ltask_init()
         task->set_url_level         = ltask_set_url_level;
         task->pop_url               = ltask_pop_url;
         task->get_task              = ltask_get_task;
+        task->add_user              = ltask_add_user;
+        task->del_user              = ltask_del_user;
+        task->set_user_status       = ltask_set_user_status;
+        task->update_passwd         = ltask_update_passwd;
+        task->update_permission     = ltask_update_permission;
+        task->authorization         = ltask_authorization;
+        task->list_users            = ltask_list_users;
         task->clean                 = ltask_clean;
     }
     return task;
@@ -1273,13 +1504,52 @@ int main()
     LTASK *task = NULL;
     LPROXY proxy = {0};
     char *basedir = "/tmp/html", *p = NULL, buf[HTTP_BUF_MAX],
-         host[HTTP_HOST_MAX], url[HTTP_URL_MAX], ip[HTTP_IP_MAX];
+         host[HTTP_HOST_MAX], url[HTTP_URL_MAX], ip[HTTP_IP_MAX],
+         *username = "redor", *passwd ="jadskfhjksdfhdfdsf";
+    int i = 0, n = 0, urlid = -1, nbuf = 0, userid = 0;
+    LUSER user = {0};
     unsigned char *pp = NULL;
-    int i = 0, n = 0, urlid = -1, nbuf = 0;
 
     if((task = ltask_init()))
     {
         task->set_basedir(task, basedir);
+        /* user */
+        if((userid = task->add_user(task, username, passwd)) >= 0)
+        {
+            fprintf(stdout, "%d::added user[%d]\n", __LINE__, userid);
+            if(task->authorization(task, userid, NULL, passwd, &user) < 0)
+            {
+                fprintf(stderr, "%d::Authorize user[%s] failed\n", __LINE__, username);
+            }
+            fprintf(stdout, "%d::__OK__\n", __LINE__);
+            if(task->authorization(task, -1, username, passwd, &user) < 0)
+            {
+                fprintf(stderr, "%d::Authorize user[%s] failed\n", __LINE__, username);
+            }
+            fprintf(stdout, "%d::__OK__\n", __LINE__);
+            if(task->update_passwd(task, -1, username, "dksajfkldsfjls") < 0)
+            {
+                fprintf(stderr, "update user[%s] password failed\n", username);
+            }
+            fprintf(stdout, "%d::__OK__\n", __LINE__);
+            if(task->authorization(task, -1, username, passwd, &user) < 0)
+            {
+                fprintf(stderr, "%d::Authorize user[%s] failed\n", __LINE__, username);
+            }
+            userid = task->del_user(task, -1, "redor");
+            fprintf(stdout, "%d::__OK__\n", __LINE__);
+            if(task->authorization(task, -1, username, passwd, &user) < 0)
+            {
+                fprintf(stderr, "%d::Authorize user[%s] failed\n", __LINE__, username);
+            }
+            userid = task->del_user(task, userid, NULL);
+            fprintf(stdout, "%d::__OK__\n", __LINE__);
+            userid = task->add_user(task, "abcdsd", "daksfjldksf");
+            fprintf(stdout, "%d::added user[%d]\n", __LINE__, userid);
+            userid = task->add_user(task, "sddsfkhdf", "daksfdsfaslkdjfaldsfjldksf");
+            fprintf(stdout, "%d::added user[%d]\n", __LINE__, userid);
+            //_exit(-1);
+        }
         /* proxy */
         fprintf(stdout, "%d::qtotal:%d\n", __LINE__, QTOTAL(task->qproxy));
         for(i = 0; i < NPROXY; i++)
@@ -1335,5 +1605,5 @@ int main()
         task->clean(&task);
     }
 }
-//gcc -o task ltask.c utils/*.c -I utils/ -D_DEBUG_LTASK && ./task
+//gcc -o task ltask.c utils/*.c -I utils/ -D_DEBUG_LTASK -lz && ./task
 #endif
