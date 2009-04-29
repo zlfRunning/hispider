@@ -462,13 +462,6 @@ typedef struct _HTTP_RESPONSE
     int headers[HTTP_HEADER_NUM];
     HTTP_KV cookies[HTTP_COOKIES_MAX];
 }HTTP_RESPONSE;
-typedef struct _HTTP_ARG
-{
-    short nk;
-    short nv;
-    int  k;
-    int  v;
-}HTTP_ARG;
 typedef struct _HTTP_REQ
 {
     short reqid;
@@ -481,7 +474,7 @@ typedef struct _HTTP_REQ
     int  headers[HTTP_HEADER_NUM];
     char path[HTTP_URL_PATH_MAX];
     char line[HTTP_ARGV_LINE_MAX];
-    HTTP_ARG argvs[HTTP_ARGVS_MAX];
+    HTTP_KV argvs[HTTP_ARGVS_MAX];
     HTTP_KV cookies[HTTP_COOKIES_MAX];
     HTTP_KV auth;
 }HTTP_REQ;
@@ -491,4 +484,6 @@ int http_request_parse(char *p, char *end, HTTP_REQ *http_req);
 int http_argv_parse(char *p, char *end, HTTP_REQ *http_req);
 /* HTTP response HEADER parser */
 int http_response_parse(char *p, char *end, HTTP_RESPONSE *resp);
+/* return HTTP key/value */
+int http_kv(HTTP_KV *kv, char *line, int nline, char **name, char **key);
 #endif

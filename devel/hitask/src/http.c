@@ -87,7 +87,7 @@ int http_decode(char *src, int src_len, char *dst)
 int http_argv_parse(char *p, char *end, HTTP_REQ *http_req)
 {
     char *pp = NULL, *epp = NULL, *s = NULL;
-    HTTP_ARG *argv = NULL, *eargv = NULL;
+    HTTP_KV *argv = NULL, *eargv = NULL;
     int n = 0, high = 0, low = 0;
 
     if(p && end && (s = p) < end && http_req)
@@ -290,6 +290,7 @@ int http_request_parse(char *p, char *end, HTTP_REQ *http_req)
     }
     return ret;
 }
+
 /* HTTP response parser */
 int http_response_parse(char *p, char *end, HTTP_RESPONSE *http_resp)
 {
@@ -366,6 +367,28 @@ int http_response_parse(char *p, char *end, HTTP_RESPONSE *http_resp)
             ++s;
         }
         ret++;
+    }
+    return ret;
+}
+/* return HTTP key/value */
+int http_kv(HTTP_KV *kv, char *line, int nline, char **key, char **val)
+{
+    int ret = -1;
+
+    if(kv && line && key && val)
+    {
+        if(kv->k > 0 && kv->k < nline && kv->nk > 0 && kv->nk < nline)
+        {
+            *key = &(line[kv->k]);
+            line[kv->k + kv->nk] = '\0';
+            ret++;
+        }
+        if(kv->v > 0 && kv->v < nline && kv->nv > 0 && kv->nv < nline)
+        {
+            *val = &(line[kv->v]);
+            line[kv->v + kv->nv] = '\0';
+            ret++;
+        }
     }
     return ret;
 }

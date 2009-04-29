@@ -25,7 +25,7 @@ static SERVICE *adnservice = NULL;
 static dictionary *dict = NULL;
 static LTASK *ltask = NULL;
 static void *logger = NULL;
-static int is_need_authorization = 1;
+static int is_need_authorization = 0;
 static char *authorization_name = "Hitask Administration System";
 //static void *dnsqueue = NULL;
 //static DNSTASK tasklist[DNS_TASK_MAX];
@@ -72,7 +72,7 @@ int adns_packet_handler(CONN *conn, CB_DATA *packet)
     {
         conn->over_cstate(conn);
         conn->over(conn);
-        ltask->set_dns_state(ltask, tid, NULL, DNS_STATUS_ERR);
+        ltask->set_dns_status(ltask, tid, NULL, DNS_STATUS_ERR);
     }
     return -1;
 }
@@ -86,7 +86,7 @@ int adns_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chu
     {
         conn->over_cstate(conn);
         conn->over(conn);
-        ltask->set_dns_state(ltask, tid, NULL, DNS_STATUS_ERR);
+        ltask->set_dns_status(ltask, tid, NULL, DNS_STATUS_ERR);
     }
     return -1;
 }
@@ -184,6 +184,46 @@ int hitaskd_packet_reader(CONN *conn, CB_DATA *buffer)
     return -1;
 }
 
+#define TOAUTH(conn, buf, p, authorization_name)                    \
+do                                                                  \
+{                                                                   \
+    p = buf;                                                        \
+    p += sprintf(p, "HTTP/1.1 401 Unauthorized\r\n"                 \
+            "WWW-Authenticate: Basic realm=\"%s\"\r\n\r\n",         \
+            authorization_name);                                    \
+    conn->push_chunk(conn, buf, p - buf);                           \
+    conn->over(conn);                                               \
+}while(0)
+
+/* authorization */
+int hitaskd_auth(CONN *conn, HTTP_REQ *http_req)
+{
+    char *key = NULL, *val = NULL;
+    int i = 0, session_id = 0;
+    LUSER user = {0};
+
+    if(http_kv(&(http_req->auth), http_req->hlines, 
+                http_req->nhline, &key, &val) >= 0) 
+    {
+        if((session_id = ltask->authorization(ltask, -1, key, val, &user)) >= 0)
+        {
+            return session_id;
+        }
+    }
+    else if(http_req->ncookies > 0)
+    {
+        for(i = 0; i < http_req->ncookies; i++)
+        {
+            if(http_kv(&(http_req->cookies[i]), http_req->hlines,
+                        http_req->nhline, &key, &val) >= 0)
+            {
+                return session_id; 
+            }
+        }
+    }
+    return -1;
+}
+
 /* packet handler */
 int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
 {
@@ -205,17 +245,10 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
         */
         if(http_request_parse(p, end, &http_req) == -1) goto err_end;
         //authorized 
-        if(is_need_authorization)
+        if(is_need_authorization && hitaskd_auth(conn, &http_req) < 0)
         {
-                //|| ltask->authorization(ltask, http_req.hlines + n) <= 0)
-            {
-                p = buf;
-                p += sprintf(p, "HTTP/1.1 401 Unauthorized\r\n"
-                        "WWW-Authenticate: Basic realm=\"%s\"\r\n\r\n", authorization_name);
-                conn->push_chunk(conn, buf, p - buf);
-                conn->over(conn);
-                return 0;   
-            }
+            TOAUTH(conn, buf, p, authorization_name);
+            return 0;
         }
         if(http_req.reqid == HTTP_GET)
         {
@@ -252,7 +285,7 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
             {
                 conn->save_cache(conn, &http_req, sizeof(HTTP_REQ));
                 conn->recv_chunk(conn, n);
-                //conn->recv_file(conn, "/tmp/recv.txt", 0, n);
+                conn->recv_file(conn, "/tmp/recv.txt", 0, n);
             }
         }
         else if(http_req.reqid == HTTP_TASK)
@@ -336,9 +369,9 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
 
                 for(i = 0; i < http_req->nargvs; i++)
                 {
-                    p += sprintf(p, "%s[%d] => %s[%d]<br>\n", 
-                            http_req->argvs[i].k, http_req->argvs[i].nk, 
-                            http_req->argvs[i].v, http_req->argvs[i].nv);
+                    p += sprintf(p, "%.*s => %.*s<br>\n", 
+                            http_req->argvs[i].nk, http_req->line + http_req->argvs[i].k, 
+                            http_req->argvs[i].nv, http_req->line + http_req->argvs[i].v);
                 }
                 conn->push_chunk(conn, buf, p - buf);
                 conn->over(conn);
