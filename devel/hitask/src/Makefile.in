@@ -62,7 +62,8 @@ libhibase_la_OBJECTS = $(am_libhibase_la_OBJECTS)
 binPROGRAMS_INSTALL = $(INSTALL_PROGRAM)
 PROGRAMS = $(bin_PROGRAMS)
 am_hitask_OBJECTS = hitask-hitask.$(OBJEXT) hitask-http.$(OBJEXT) \
-	hitask-zstream.$(OBJEXT) hitask-iniparser.$(OBJEXT)
+	hitask-trie.$(OBJEXT) hitask-zstream.$(OBJEXT) \
+	hitask-iniparser.$(OBJEXT)
 hitask_OBJECTS = $(am_hitask_OBJECTS)
 hitask_LDADD = $(LDADD)
 hitask_LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
@@ -217,7 +218,7 @@ utils/zstream.c utils/zstream.h iniparser.c iniparser.h
 hitaskd_CPPFLAGS = -I utils -D_FILE_OFFSET_BITS=64 -Wall
 hitaskd_LDFLAGS = -lz -lsbase
 #hitask 
-hitask_SOURCES = hitask.c ltask.h http.h http.c utils/logger.h \
+hitask_SOURCES = hitask.c ltask.h http.h http.c utils/logger.h utils/trie.h utils/trie.c \
 utils/mutex.h utils/queue.h utils/timer.h utils/zstream.c utils/zstream.h \
 iniparser.c iniparser.h
 
@@ -329,6 +330,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hitask-hitask.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hitask-http.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hitask-iniparser.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hitask-trie.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hitask-zstream.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hitaskd-evdns.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hitaskd-hitaskd.Po@am__quote@
@@ -404,6 +406,20 @@ hitask-http.obj: http.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='http.c' object='hitask-http.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitask_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hitask-http.obj `if test -f 'http.c'; then $(CYGPATH_W) 'http.c'; else $(CYGPATH_W) '$(srcdir)/http.c'; fi`
+
+hitask-trie.o: utils/trie.c
+@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitask_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hitask-trie.o -MD -MP -MF $(DEPDIR)/hitask-trie.Tpo -c -o hitask-trie.o `test -f 'utils/trie.c' || echo '$(srcdir)/'`utils/trie.c
+@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/hitask-trie.Tpo $(DEPDIR)/hitask-trie.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='utils/trie.c' object='hitask-trie.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitask_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hitask-trie.o `test -f 'utils/trie.c' || echo '$(srcdir)/'`utils/trie.c
+
+hitask-trie.obj: utils/trie.c
+@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitask_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hitask-trie.obj -MD -MP -MF $(DEPDIR)/hitask-trie.Tpo -c -o hitask-trie.obj `if test -f 'utils/trie.c'; then $(CYGPATH_W) 'utils/trie.c'; else $(CYGPATH_W) '$(srcdir)/utils/trie.c'; fi`
+@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/hitask-trie.Tpo $(DEPDIR)/hitask-trie.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='utils/trie.c' object='hitask-trie.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitask_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hitask-trie.obj `if test -f 'utils/trie.c'; then $(CYGPATH_W) 'utils/trie.c'; else $(CYGPATH_W) '$(srcdir)/utils/trie.c'; fi`
 
 hitask-zstream.o: utils/zstream.c
 @am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitask_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hitask-zstream.o -MD -MP -MF $(DEPDIR)/hitask-zstream.Tpo -c -o hitask-zstream.o `test -f 'utils/zstream.c' || echo '$(srcdir)/'`utils/zstream.c

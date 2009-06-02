@@ -347,7 +347,7 @@ static HTTP_ELEMENT http_headers[] =
    | extension-method
    extension-method = token
  */
-#define HTTP_METHOD_NUM 9
+#define HTTP_METHOD_NUM 11
 static HTTP_ELEMENT http_methods[] = 
 {
 #define HTTP_OPTIONS	0
@@ -367,7 +367,11 @@ static HTTP_ELEMENT http_methods[] =
 #define HTTP_CONNECT	7
 	{7, "CONNECT", 7, NULL},
 #define HTTP_TASK   8
-    {8, "TASK", 4, NULL}
+    {8, "TASK", 4, NULL},
+#define HTTP_DOWNLOAD 9
+    {9, "DOWNLOAD", 8, NULL},
+#define HTTP_EXTRACT 10
+    {9, "EXTRACT", 7, NULL}
 };
 
 /* file ext support list */

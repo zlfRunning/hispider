@@ -241,8 +241,6 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
             write(fd, packet->data, packet->ndata);
             close(fd);
         }
-        /*
-        */
         if(http_request_parse(p, end, &http_req) == -1) goto err_end;
         //authorized 
         if(is_need_authorization && hitaskd_auth(conn, &http_req) < 0)
@@ -285,7 +283,7 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
             {
                 conn->save_cache(conn, &http_req, sizeof(HTTP_REQ));
                 conn->recv_chunk(conn, n);
-                conn->recv_file(conn, "/tmp/recv.txt", 0, n);
+                //conn->recv_file(conn, "/tmp/recv.txt", 0, n);
             }
         }
         else if(http_req.reqid == HTTP_TASK)
@@ -293,7 +291,7 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
             urlid = atoi(http_req.path);
             //fprintf(stdout, "%s::%d TASK: %ld path:%s\n", 
             //__FILE__, __LINE__, urlid, http_req.path);
-            if(urlid != -1)
+            if(urlid >= 0)
             {
                 if((n = http_req.headers[HEAD_ENT_CONTENT_LENGTH]) > 0 
                     && (n = atol(http_req.hlines + n)) > 0)

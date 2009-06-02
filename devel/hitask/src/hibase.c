@@ -139,7 +139,7 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
             hibase->templateio.left = 0;
             for(i = 0; i < hibase->templateio.total; i++)
             {
-                if(template[i].status == TEMP_STATUS_OK && template[i].nfields > 0 
+                if(template[i].status == TEMP_STATUS_OK && template[i].npatterns > 0 
                         && (n = strlen(template[i].name)) > 0)
                 {
                     dp = (void *)((long)(i + 1));
@@ -453,14 +453,19 @@ int hibase_list_template(HIBASE *hibase, FILE *fp)
     {
         for(i = 0; i < hibase->templateio.total; i++)
         {
-            if(temp[i].status == TEMP_STATUS_OK && temp[i].nfields > 0)
+            if(temp[i].status == TEMP_STATUS_OK && temp[i].npatterns > 0)
             {
-                fprintf(fp, "id[%d] template[%s] nfields[%d] regx/%s/ \n{\n", 
-                        i, temp[i].name, temp[i].nfields, temp[i].regx);
-                for(j = 0; j < temp[i].nfields; j++)
+                fprintf(fp, "id[%d] template[%s] npatterns[%d] \n{\n", 
+                        i, temp[i].name, temp[i].npatterns);
+                for(j = 0; j < temp[i].npatterns; j++)
                 {
-                    fprintf(fp, "\ttable_id[%d] field_id[%d],\n", 
-                            temp[i].map[j].table_id, temp[i].map[j].field_id);
+                    fprintf(fp, "\t/%s/",temp[i].patterns[j].text);
+                    x = 0;
+                    while(x < temp[i].patterns[j].nfields)  
+                        fprintf(fp, "table[%d] field[%d]; ", 
+                                temp[i].patterns[j].map[x].table_id, 
+                                temp[i].patterns[j].map[x].field_id);
+                    fprintf(fp, "\n");
                 }
                 fprintf(fp, "};\n");
             }

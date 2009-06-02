@@ -16,19 +16,23 @@
 #include "queue.h"
 #include "zstream.h"
 #include "logger.h"
+#include "trie.h"
 #define CHARSET_MAX 256
 typedef struct _TASK
 {
     CONN *s_conn;
     CONN *c_conn;
-    int taskid;
+    int  taskid;
     int  state;
+    int  doc_type_id;
     char request[HTTP_BUF_SIZE];
-    int nrequest;
-    int is_new_host;
+    int  nrequest;
+    int  is_new_host;
     char host[DNS_NAME_MAX];
     char ip[DNS_IP_MAX];
 }TASK;
+static void *doc_type_map = NULL;
+static int  doc_type_num = 0;
 static SBASE *sbase = NULL;
 static SERVICE *service = NULL;
 static dictionary *dict = NULL;
@@ -78,7 +82,69 @@ int hitask_packet_reader(CONN *conn, CB_DATA *buffer)
     }
     return -1;
 }
+/* doc_type_add */
+int doc_type_add(char *doc_type, int len)
+{
+    int id = -1;
+    void *dp = NULL;
 
+    if(doc_type)
+    {
+        id = doc_type_num;
+        dp = (void *)((long)++doc_type_num);
+        TRIETAB_ADD(doc_type_map, doc_type, len, dp);
+    }
+    return id;
+}
+
+/* doc_type_map init */
+int doc_type_map_init(char *p, char *end)
+{
+    int n = 0;
+    char *s = NULL;
+
+    if(doc_type_map == NULL)
+    {
+        TRIETAB_INIT(doc_type_map);
+    }
+    while(p < end)
+    {
+        while(p < end && (*p == 0x20 || *p == '\t' || *p == '\r' || *p == '\n') ) ++p;
+        s = p;
+        while(p < end && (*p != ',' && *p != ';' && *p != 0x20 && *p != '\t'))++p;
+        if((n = (p - s)) > 0)
+        {
+            doc_type_add(s, n);
+        }
+        ++p;
+    }
+    return 0;
+}
+
+/* clean doc_type_map */
+void doc_type_map_clean()
+{
+    if(doc_type_map)
+    {
+        TRIETAB_CLEAN(doc_type_map);
+    }
+}
+
+/* query doc type map */
+int doc_type_id(char *doc_type, int len)
+{
+    int id = -1;
+    void *dp = NULL;
+
+    if(doc_type)
+    {
+        TRIETAB_GET(doc_type_map, doc_type, len, dp);
+        id = (long) dp - 1;
+    }
+    return id;
+}
+
+/* download */
 int hitask_packet_handler(CONN *conn, CB_DATA *packet)
 {
     char *p = NULL, *end = NULL, *ip = NULL, *sip = NULL,
@@ -102,7 +168,7 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
                 return http_download_error(c_id);
             }
             if(http_resp.respid == RESP_OK && (n = http_resp.headers[HEAD_ENT_CONTENT_TYPE]) > 0 
-                    && strncasecmp(http_resp.hlines + n, "text", 4) == 0)
+                    && (p = http_resp.hlines + n) && doc_type_id(p, strlen(p)) >= 0)
             {
                 conn->save_cache(conn, &http_resp, sizeof(HTTP_RESPONSE));
                 if((n = http_resp.headers[HEAD_ENT_CONTENT_LENGTH]) > 0 
@@ -547,7 +613,7 @@ void cb_heartbeat_handler(void *arg)
 /* Initialize from ini file */
 int sbase_initialize(SBASE *sbase, char *conf)
 {
-    char *s = NULL, *p = NULL;
+    char *s = NULL, *p = NULL, *end = NULL;
     int i = 0, interval = 0;
     if((dict = iniparser_new(conf)) == NULL)
     {
@@ -608,6 +674,9 @@ int sbase_initialize(SBASE *sbase, char *conf)
     interval = iniparser_getint(dict, "HITASK:heartbeat_interval", SB_HEARTBEAT_INTERVAL);
     service->set_heartbeat(service, interval, &cb_heartbeat_handler, service);
     /* server */
+    p = iniparser_getstr(dict, "HITASK:document_types");
+    end = p + strlen(p);
+    doc_type_map_init(p, end);
     ntask = iniparser_getint(dict, "HITASK:ntask", 64);
     if(ntask <= 0)
     {
@@ -689,6 +758,8 @@ int main(int argc, char **argv)
     //sbase->running(sbase, 60000000);
     sbase->stop(sbase);
     sbase->clean(&sbase);
+    if(tasklist){free(tasklist); tasklist = NULL;}
+    doc_type_map_clean(doc_type_map);
     if(dict)iniparser_free(dict);
     return 0;
 }

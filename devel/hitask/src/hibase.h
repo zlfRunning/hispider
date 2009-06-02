@@ -7,7 +7,8 @@ extern "C" {
 #define FTYPE_FLOAT		        0x02
 #define FTYPE_TEXT		        0x04
 #define FTYPE_ALL 		        (FTYPE_INT|FTYPE_FLOAT|FTYPE_TEXT)	
-#define FIELD_NUM_MAX		    8
+#define FIELD_NUM_MAX		    256
+#define PATTERN_NUM_MAX         8
 #define FIELD_NAME_MAX		    32
 #define TABLE_NAME_MAX		    32
 #define TEMPLATE_NAME_MAX	    32
@@ -41,22 +42,31 @@ typedef struct _ITABLE
     char    name[TABLE_NAME_MAX];
     IFIELD  fields[FIELD_NUM_MAX];
 }ITABLE;
-/* regular expression */
 typedef struct _IREGX
 {
     short table_id;
     short field_id;
 }IREGX;
+#define RP_IS_PUBLIC 0x01
+#define RP_IS_MULTI  0x02
+#define RP_IS_HTML   0x04
+/* regular expression */
+typedef struct _IPATTERN
+{
+    int   flags;
+    short status;
+    short nfields;
+    IREGX map[FIELD_NUM_MAX];
+    char  text[REGX_SIZE_MAX];
+}IPATTERN;
 /* template */
 typedef struct _ITEMPLATE
 {
     short status;
-    short nfields;
-    IREGX map[FIELD_NAME_MAX];
-    char  regx[REGX_SIZE_MAX];
+    short npatterns;
+    IPATTERN patterns[PATTERN_NUM_MAX];
     char  name[TEMPLATE_NAME_MAX];
 }ITEMPLATE;
-
 /* hibase io/map */
 typedef struct _HIO
 {
@@ -74,11 +84,11 @@ typedef struct _HIBASE
 {
     void    *mtable;
     void    *mtemplate;
-    char    basedir[HIBASE_PATH_MAX];
     HIO     tableio;
     HIO     templateio;
     void    *logger;
     void    *mutex;
+    char    basedir[HIBASE_PATH_MAX];
 
     int 	(*set_basedir)(struct _HIBASE *, char *dir);
     int     (*table_exists)(struct _HIBASE *, char *name, int len);
