@@ -354,13 +354,13 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                 DEBUG_LOGGER(logger, "over urlid:%d length:%d", urlid, chunk->ndata);
                 if((n = http_req->headers[HEAD_ENT_LAST_MODIFIED]) > 0)
                 {
-                    date = atoi(http_req->hlines + n);
+                    date = http_req->hlines + n;
                 }
                 /* doctype */
                 if((n = http_req->headers[HEAD_ENT_CONTENT_TYPE]) > 0)
                     p = http_req->hlines + n;
                 ltask->update_content(ltask, urlid, date, p, chunk->data, chunk->ndata);
-                ltask->extract_link(ltask, urlid, chunk->data, chunk->ndata);
+                //ltask->extract_link(ltask, urlid, chunk->data, chunk->ndata);
             }
             else if(http_req->reqid == HTTP_POST)
             {

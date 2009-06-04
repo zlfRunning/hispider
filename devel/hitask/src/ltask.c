@@ -1303,18 +1303,51 @@ int ltask_list_users(LTASK *task, char *block, int *nblock)
 }
 
 /* update url content  */
-int ltask_update_content(LTASK *task, int urlid, int date, char *type, char *content, int ncontent)
+int ltask_update_content(LTASK *task, int urlid, char *date, char *type, char *content, int ncontent)
 {
-    int ret = -1;
+    char buf[HTTP_BUF_SIZE], *url = NULL, *p = NULL;
+    LDOCHEADER  *pdocheader = NULL;
+    struct stat st = {0};
+    LMETA meta = {0};
+    int ret = -1, n = 0;
 
-    if(task)
+    if(task && urlid >= 0 && content && ncontent > 0)
     {
+        MUTEX_LOCK(task->mutex);
+        fstat(task->doc_fd, &st); 
+        pdocheader = (LDOCHEADER *)buf;
+        memset(pdocheader, 0, sizeof(LDOCHEADER));
+        url = buf + sizeof(LDOCHEADER);
+        if(pread(task->meta_fd, &meta, sizeof(LMETA), (off_t)(urlid * sizeof(LMETA))) > 0 
+                && meta.url_len <= HTTP_URL_MAX && meta.status >= 0 
+                && (n = pread(task->url_fd, url, meta.url_len, meta.url_off)) > 0)
+        {
+            p = url + meta.url_len; *p++ = '\0';
+            p += sprintf(p, "%s", type);*p++ = '\0';
+            pdocheader->id    = urlid;
+            pdocheader->date  = 0;
+            pdocheader->nurl  = (short)meta.url_len;
+            pdocheader->ntype = (short)strlen(type);
+            pdocheader->ncontent = ncontent;
+            pdocheader->total = pdocheader->ntype + 1 + pdocheader->nurl + 1 + ncontent;
+            if((n = p - buf) > 0 && pwrite(task->doc_fd, buf, n, st.st_size) > 0
+                    && (meta.content_off = (st.st_size + (off_t)n))
+                    && pwrite(task->doc_fd, content, ncontent, meta.content_off) > 0)
+            {
+                pwrite(task->meta_fd, &meta, sizeof(LMETA), (off_t)(urlid * sizeof(LMETA)));
+                meta.status = 0;
+                ret = 0;
+            }
+        }
+        MUTEX_UNLOCK(task->mutex);
+        if(url && type && strncasecmp(type, "text", 4)) 
+            task->extract_link(task, urlid, url, content, ncontent);
     }
     return ret;
 }
 
 /* extract link */
-int ltask_extract_link(LTASK *task, int urlid, char *content, int ncontent)
+int ltask_extract_link(LTASK *task, int urlid, char *url, char *content, int ncontent)
 {
     int ret = -1;
 

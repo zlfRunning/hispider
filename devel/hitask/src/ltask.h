@@ -102,6 +102,16 @@ typedef struct _LMETA
     int prev;
     int next;
 }LMETA;
+/* doc header */
+typedef struct _LDOCHEADER
+{
+    int id;
+    int date;
+    short nurl;
+    short ntype;
+    int ncontent;
+    int total;
+}LDOCHEADER;
 /* state */
 typedef struct _LSTATE
 {
@@ -198,9 +208,9 @@ typedef struct _LTASK
     int (*authorization)(struct _LTASK *, int userid, char *username, char *passwd, LUSER *user);
     int (*set_user_status)(struct _LTASK *, int userid, char *username, int status);
     int (*list_users)(struct _LTASK *, char *block, int *nblock);
-    int (*update_content)(struct _LTASK *, int urlid, int date, 
+    int (*update_content)(struct _LTASK *, int urlid, char *date, 
             char *type, char *content, int ncontent);
-    int (*extract_link)(struct _LTASK *, int urlid, char *content, int ncontent);
+    int (*extract_link)(struct _LTASK *, int urlid, char *url, char *content, int ncontent);
     void (*clean)(struct _LTASK **);
 }LTASK;
 /* initialize LTASK */
