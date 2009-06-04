@@ -63,7 +63,7 @@ binPROGRAMS_INSTALL = $(INSTALL_PROGRAM)
 PROGRAMS = $(bin_PROGRAMS)
 am_hitask_OBJECTS = hitask-hitask.$(OBJEXT) hitask-http.$(OBJEXT) \
 	hitask-trie.$(OBJEXT) hitask-zstream.$(OBJEXT) \
-	hitask-iniparser.$(OBJEXT)
+	hitask-iniparser.$(OBJEXT) hitask-doctype.$(OBJEXT)
 hitask_OBJECTS = $(am_hitask_OBJECTS)
 hitask_LDADD = $(LDADD)
 hitask_LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
@@ -220,7 +220,7 @@ hitaskd_LDFLAGS = -lz -lsbase
 #hitask 
 hitask_SOURCES = hitask.c ltask.h http.h http.c utils/logger.h utils/trie.h utils/trie.c \
 utils/mutex.h utils/queue.h utils/timer.h utils/zstream.c utils/zstream.h \
-iniparser.c iniparser.h
+iniparser.c iniparser.h doctype.h doctype.c 
 
 hitask_CPPFLAGS = -I utils -D_FILE_OFFSET_BITS=64 -Wall
 hitask_LDFLAGS = -lz -lsbase -lchardet
@@ -327,6 +327,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hitask-doctype.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hitask-hitask.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hitask-http.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hitask-iniparser.Po@am__quote@
@@ -448,6 +449,20 @@ hitask-iniparser.obj: iniparser.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='iniparser.c' object='hitask-iniparser.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitask_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hitask-iniparser.obj `if test -f 'iniparser.c'; then $(CYGPATH_W) 'iniparser.c'; else $(CYGPATH_W) '$(srcdir)/iniparser.c'; fi`
+
+hitask-doctype.o: doctype.c
+@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitask_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hitask-doctype.o -MD -MP -MF $(DEPDIR)/hitask-doctype.Tpo -c -o hitask-doctype.o `test -f 'doctype.c' || echo '$(srcdir)/'`doctype.c
+@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/hitask-doctype.Tpo $(DEPDIR)/hitask-doctype.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='doctype.c' object='hitask-doctype.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitask_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hitask-doctype.o `test -f 'doctype.c' || echo '$(srcdir)/'`doctype.c
+
+hitask-doctype.obj: doctype.c
+@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitask_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hitask-doctype.obj -MD -MP -MF $(DEPDIR)/hitask-doctype.Tpo -c -o hitask-doctype.obj `if test -f 'doctype.c'; then $(CYGPATH_W) 'doctype.c'; else $(CYGPATH_W) '$(srcdir)/doctype.c'; fi`
+@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/hitask-doctype.Tpo $(DEPDIR)/hitask-doctype.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='doctype.c' object='hitask-doctype.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitask_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hitask-doctype.obj `if test -f 'doctype.c'; then $(CYGPATH_W) 'doctype.c'; else $(CYGPATH_W) '$(srcdir)/doctype.c'; fi`
 
 hitaskd-hitaskd.o: hitaskd.c
 @am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitaskd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hitaskd-hitaskd.o -MD -MP -MF $(DEPDIR)/hitaskd-hitaskd.Tpo -c -o hitaskd-hitaskd.o `test -f 'hitaskd.c' || echo '$(srcdir)/'`hitaskd.c

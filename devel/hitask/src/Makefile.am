@@ -14,6 +14,6 @@ hitaskd_LDFLAGS= -lz -lsbase
 #hitask 
 hitask_SOURCES= hitask.c ltask.h http.h http.c utils/logger.h utils/trie.h utils/trie.c \
 utils/mutex.h utils/queue.h utils/timer.h utils/zstream.c utils/zstream.h \
-iniparser.c iniparser.h
+iniparser.c iniparser.h doctype.h doctype.c 
 hitask_CPPFLAGS= -I utils -D_FILE_OFFSET_BITS=64 -Wall
 hitask_LDFLAGS= -lz -lsbase -lchardet

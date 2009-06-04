@@ -1303,10 +1303,27 @@ int ltask_list_users(LTASK *task, char *block, int *nblock)
 }
 
 /* update url content  */
-int ltask_update_url_content(LTASK *task, int urlid, char *content, int ncontent)
+int ltask_update_content(LTASK *task, int urlid, int date, char *type, char *content, int ncontent)
 {
-    
+    int ret = -1;
+
+    if(task)
+    {
+    }
+    return ret;
 }
+
+/* extract link */
+int ltask_extract_link(LTASK *task, int urlid, char *content, int ncontent)
+{
+    int ret = -1;
+
+    if(task)
+    {
+    }
+    return ret;
+}
+
 
 /* clean */
 void ltask_clean(LTASK **ptask)
@@ -1402,6 +1419,8 @@ LTASK *ltask_init()
         task->update_permission     = ltask_update_permission;
         task->authorization         = ltask_authorization;
         task->list_users            = ltask_list_users;
+        task->update_content        = ltask_update_content;
+        task->extract_link          = ltask_extract_link;
         task->clean                 = ltask_clean;
     }
     return task;

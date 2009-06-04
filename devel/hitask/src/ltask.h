@@ -198,8 +198,9 @@ typedef struct _LTASK
     int (*authorization)(struct _LTASK *, int userid, char *username, char *passwd, LUSER *user);
     int (*set_user_status)(struct _LTASK *, int userid, char *username, int status);
     int (*list_users)(struct _LTASK *, char *block, int *nblock);
-    int (*update_url_content)(struct _LTASK *, char *url, int date, short type, 
-            char *content, int ncontent);
+    int (*update_content)(struct _LTASK *, int urlid, int date, 
+            char *type, char *content, int ncontent);
+    int (*extract_link)(struct _LTASK *, int urlid, char *content, int ncontent);
     void (*clean)(struct _LTASK **);
 }LTASK;
 /* initialize LTASK */

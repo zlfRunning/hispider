@@ -235,12 +235,14 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
     {
         p = packet->data;
         end = packet->data + packet->ndata;
+        /*
         int fd = 0;
         if((fd = open("/tmp/header.txt", O_CREAT|O_RDWR|O_TRUNC, 0644)) > 0)
         {
             write(fd, packet->data, packet->ndata);
             close(fd);
         }
+        */
         if(http_request_parse(p, end, &http_req) == -1) goto err_end;
         //authorized 
         if(is_need_authorization && hitaskd_auth(conn, &http_req) < 0)
@@ -329,9 +331,9 @@ err_end:
 /*  data handler */
 int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
-    HTTP_REQ *http_req = NULL;
-    int urlid = 0, ips = 0, i = 0, n = 0;
+    int urlid = 0, ips = 0, i = 0, n = 0, date = 0;
     char buf[HTTP_BUF_SIZE], *host = NULL, *ip = NULL, *p = NULL;
+    HTTP_REQ *http_req = NULL;
 
     if(conn && packet && cache && chunk && chunk->ndata > 0)
     {
@@ -350,6 +352,15 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                 urlid = atoi(http_req->path);
                 DEBUG_LOGGER(logger, "urlid:%d length:%d", urlid, chunk->ndata);
                 DEBUG_LOGGER(logger, "over urlid:%d length:%d", urlid, chunk->ndata);
+                if((n = http_req->headers[HEAD_ENT_LAST_MODIFIED]) > 0)
+                {
+                    date = atoi(http_req->hlines + n);
+                }
+                /* doctype */
+                if((n = http_req->headers[HEAD_ENT_CONTENT_TYPE]) > 0)
+                    p = http_req->hlines + n;
+                ltask->update_content(ltask, urlid, date, p, chunk->data, chunk->ndata);
+                ltask->extract_link(ltask, urlid, chunk->data, chunk->ndata);
             }
             else if(http_req->reqid == HTTP_POST)
             {

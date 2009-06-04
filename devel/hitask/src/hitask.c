@@ -16,7 +16,7 @@
 #include "queue.h"
 #include "zstream.h"
 #include "logger.h"
-#include "trie.h"
+#include "doctype.h"
 #define CHARSET_MAX 256
 typedef struct _TASK
 {
@@ -24,15 +24,14 @@ typedef struct _TASK
     CONN *c_conn;
     int  taskid;
     int  state;
-    int  doc_type_id;
     char request[HTTP_BUF_SIZE];
     int  nrequest;
     int  is_new_host;
     char host[DNS_NAME_MAX];
     char ip[DNS_IP_MAX];
 }TASK;
-static void *doc_type_map = NULL;
-static int  doc_type_num = 0;
+static DOCTYPE_MAP doctype_map = {0};
+static int http_download_limit = 67108864;
 static SBASE *sbase = NULL;
 static SERVICE *service = NULL;
 static dictionary *dict = NULL;
@@ -82,67 +81,6 @@ int hitask_packet_reader(CONN *conn, CB_DATA *buffer)
     }
     return -1;
 }
-/* doc_type_add */
-int doc_type_add(char *doc_type, int len)
-{
-    int id = -1;
-    void *dp = NULL;
-
-    if(doc_type)
-    {
-        id = doc_type_num;
-        dp = (void *)((long)++doc_type_num);
-        TRIETAB_ADD(doc_type_map, doc_type, len, dp);
-    }
-    return id;
-}
-
-/* doc_type_map init */
-int doc_type_map_init(char *p, char *end)
-{
-    int n = 0;
-    char *s = NULL;
-
-    if(doc_type_map == NULL)
-    {
-        TRIETAB_INIT(doc_type_map);
-    }
-    while(p < end)
-    {
-        while(p < end && (*p == 0x20 || *p == '\t' || *p == '\r' || *p == '\n') ) ++p;
-        s = p;
-        while(p < end && (*p != ',' && *p != ';' && *p != 0x20 && *p != '\t'))++p;
-        if((n = (p - s)) > 0)
-        {
-            doc_type_add(s, n);
-        }
-        ++p;
-    }
-    return 0;
-}
-
-/* clean doc_type_map */
-void doc_type_map_clean()
-{
-    if(doc_type_map)
-    {
-        TRIETAB_CLEAN(doc_type_map);
-    }
-}
-
-/* query doc type map */
-int doc_type_id(char *doc_type, int len)
-{
-    int id = -1;
-    void *dp = NULL;
-
-    if(doc_type)
-    {
-        TRIETAB_GET(doc_type_map, doc_type, len, dp);
-        id = (long) dp - 1;
-    }
-    return id;
-}
 
 /* download */
 int hitask_packet_handler(CONN *conn, CB_DATA *packet)
@@ -151,7 +89,7 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
          *pip = NULL, *host = NULL, *path = NULL;
     HTTP_RESPONSE http_resp = {0};
     int taskid = 0, n = 0, c_id = 0, port = 0, pport = 0, 
-        sport = 0, is_use_proxy = 0;
+        sport = 0, is_use_proxy = 0, doctype = -1;
     struct hostent *hp = NULL;
 
     if(conn && tasklist && (c_id = conn->c_id) >= 0 && c_id < ntask)
@@ -167,12 +105,21 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
                 conn->over(conn);
                 return http_download_error(c_id);
             }
-            if(http_resp.respid == RESP_OK && (n = http_resp.headers[HEAD_ENT_CONTENT_TYPE]) > 0 
-                    && (p = http_resp.hlines + n) && doc_type_id(p, strlen(p)) >= 0)
+            //check content-type
+            if((n = http_resp.headers[HEAD_ENT_CONTENT_TYPE]) > 0 && (p = http_resp.hlines + n))
+                doctype = doctype_id(&doctype_map, p, strlen(p));
+            if(http_resp.respid != RESP_OK || (doctype_map.num > 0 && doctype == -1))
+            {
+                conn->over_cstate(conn);
+                conn->close(conn);
+                return http_download_error(c_id);
+            }
+            else
             {
                 conn->save_cache(conn, &http_resp, sizeof(HTTP_RESPONSE));
                 if((n = http_resp.headers[HEAD_ENT_CONTENT_LENGTH]) > 0 
-                        && (n = atol(http_resp.hlines + n)) > 0)
+                        && (n = atol(http_resp.hlines + n)) > 0 
+                        && n < http_download_limit)
                 {
                     conn->recv_chunk(conn, n);
                 }
@@ -181,12 +128,6 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
                     conn->set_timeout(conn, HTTP_DOWNLOAD_TIMEOUT);
                     conn->recv_chunk(conn, HTML_MAX_SIZE);
                 }
-            }
-            else
-            {
-                conn->over_cstate(conn);
-                conn->close(conn);
-                return http_download_error(c_id);
             }
         }
         /* task handler */
@@ -378,11 +319,10 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
 {
     CONN *s_conn = NULL;
     HTTP_RESPONSE *http_resp = NULL;
-    char buf[HTTP_BUF_SIZE], charset[CHARSET_MAX], *zdata = NULL,
+    char buf[HTTP_BUF_SIZE], charset[CHARSET_MAX], *zdata = NULL, *s = NULL,
          *p = NULL, *ps = NULL, *outbuf = NULL, *data = NULL, *rawdata = NULL;
-    //unsigned char *s = NULL, *end = NULL;
-    int  ret = -1, c_id = 0, n = 0, is_need_convert = 0, 
-         is_need_compress = 0, is_new_zdata = 0;
+    int  ret = -1, c_id = 0, n = 0, i = 0, is_need_convert = 0, 
+         is_need_compress = 0, is_new_zdata = 0, is_text = 0;
     size_t ninbuf = 0, noutbuf = 0, nzdata = 0, ndata = 0, nrawdata = 0;
     chardet_t pdet = NULL;
     iconv_t cd = NULL;
@@ -393,19 +333,18 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
             && cache && (http_resp = (HTTP_RESPONSE *)cache->data))
         {
             doc_total++;
+            //check content is text 
+            if((n = http_resp->headers[HEAD_ENT_CONTENT_TYPE]) > 0
+                && (p = (http_resp->hlines + n))  && strncasecmp(p, "text", 4) == 0)
+                is_text = 1;
+            //check content encoding 
             if((n = http_resp->headers[HEAD_ENT_CONTENT_ENCODING]) > 0 
-                && (p = (http_resp->hlines + n)))
+                && (p = (http_resp->hlines + n)) )
             {
                 zdata = chunk->data;
                 nzdata = chunk->ndata;
                 if(strncasecmp(p, "gzip", 4) == 0) 
                 {
-                    /*
-                       s = (unsigned char *)zdata ;
-                       end = s + nzdata;
-                       while(s < end && *s != 0x1F && *(s+1) != 0x8B)s++;
-                       nzdata -= ((char *)s - zdata); 
-                       */
                     ndata =  nzdata * 8 + Z_HEADER_SIZE;
                     if((data = calloc(1, ndata)) && (n = httpgzdecompress((Bytef *)zdata, 
                                     nzdata, (Bytef *)data, (uLong *)&ndata)) == 0)
@@ -450,49 +389,54 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
             {
                 rawdata = chunk->data;
                 nrawdata = chunk->ndata;
-                is_need_compress = 1;
+                if(is_text) is_need_compress = 1;
             }
-            DEBUG_LOGGER(logger, "is_need_convert:%d data:%08x ndata:%d", 
-                    is_need_convert, rawdata, nrawdata);
-            if(rawdata && nrawdata > 0 && chardet_create(&pdet) == 0)
+            //check text/plain/html/xml...  charset 
+            if(is_text)
             {
-                if(chardet_handle_data(pdet, rawdata, nrawdata) == 0 
-                        && chardet_data_end(pdet) == 0 )
+                DEBUG_LOGGER(logger, "is_need_convert:%d data:%08x ndata:%d", 
+                        is_need_convert, rawdata, nrawdata);
+                if(rawdata && nrawdata > 0 && chardet_create(&pdet) == 0)
                 {
-                    chardet_get_charset(pdet, charset, CHARSET_MAX);
-                    if(memcmp(charset, "UTF-8", 5) != 0) is_need_convert = 1;
+                    if(chardet_handle_data(pdet, rawdata, nrawdata) == 0 
+                            && chardet_data_end(pdet) == 0 )
+                    {
+                        chardet_get_charset(pdet, charset, CHARSET_MAX);
+                        if(memcmp(charset, "UTF-8", 5) != 0) is_need_convert = 1;
+                    }
+                    chardet_destroy(pdet);
                 }
-                chardet_destroy(pdet);
-            }
-            DEBUG_LOGGER(logger, "is_need_convert:%d data:%08x ndata:%d", 
-                    is_need_convert, rawdata, nrawdata);
-            //convert charset 
-            if(is_need_convert && (cd = iconv_open("UTF-8", charset)) != (iconv_t)-1)
-            {
-                p = rawdata;
-                ninbuf = nrawdata;
-                n = noutbuf = ninbuf * 8;
-                if((ps = outbuf = calloc(1, noutbuf)))
+                DEBUG_LOGGER(logger, "is_need_convert:%d data:%08x ndata:%d", 
+                        is_need_convert, rawdata, nrawdata);
+                //convert charset 
+                if(is_need_convert && (cd = iconv_open("UTF-8", charset)) != (iconv_t)-1)
                 {
-                    if(iconv(cd, &p, &ninbuf, &ps, (size_t *)&n) == -1)
+                    p = rawdata;
+                    ninbuf = nrawdata;
+                    n = noutbuf = ninbuf * 8;
+                    if((ps = outbuf = calloc(1, noutbuf)))
                     {
-                        free(outbuf);
-                        outbuf = NULL;
+                        if(iconv(cd, &p, &ninbuf, &ps, (size_t *)&n) == -1)
+                        {
+                            free(outbuf);
+                            outbuf = NULL;
+                        }
+                        else
+                        {
+                            noutbuf -= n;
+                            DEBUG_LOGGER(logger, "convert %s len:%d to UTF-8 len:%d", 
+                                    charset, nrawdata, noutbuf);
+                            rawdata = outbuf;
+                            nrawdata = noutbuf;
+                        }
                     }
-                    else
-                    {
-                        noutbuf -= n;
-                        DEBUG_LOGGER(logger, "convert %s len:%d to UTF-8 len:%d", 
-                                charset, nrawdata, noutbuf);
-                        rawdata = outbuf;
-                        nrawdata = noutbuf;
-                    }
+                    iconv_close(cd);
+                    if(is_need_compress == 0) is_need_compress = 1;
                 }
-                iconv_close(cd);
-                if(is_need_compress == 0) is_need_compress = 1;
             }
             zdata = NULL;
             nzdata = 0;
+            //compress with zlib::inflate()
             DEBUG_LOGGER(logger, "is_need_compess:%d data:%08x ndata:%d", 
                     is_need_compress, rawdata, nrawdata);
             if(is_need_compress && rawdata && nrawdata  > 0)
@@ -500,10 +444,6 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 nzdata = nrawdata + Z_HEADER_SIZE;
                 p = rawdata;
                 n = nrawdata;
-                /*
-                   DEBUG_LOGGER(logger, "iconv [%s][%d] to [UTF-8]:%d", 
-                   charset, chunk->ndata, noutbuf);
-                   */
                 if((zdata = (char *)calloc(1, nzdata)))
                 {
                     if(zcompress((Bytef *)p, n, (Bytef *)zdata, (uLong * )&(nzdata)) != 0)
@@ -512,10 +452,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                         zdata = NULL;
                         nzdata = 0;
                     }
-                    else 
-                    {
-                        is_new_zdata = 1;
-                    }
+                    else  is_new_zdata = 1;
                 }
                 DEBUG_LOGGER(logger, "compressed data %d to %d", n, nzdata);
             }
@@ -537,7 +474,23 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     p += sprintf(p, "Host: %s\r\nServer: %s\r\n", 
                             tasklist[c_id].host, tasklist[c_id].ip);
                 }
-                p += sprintf(p, "Content-Length: %ld\r\n\r\n", nzdata);
+                if(http_resp->ncookies > 0)
+                {
+                    p += sprintf(p, "%s", "Cookie: ");
+                    i = 0;
+                    do
+                    {
+                        p += sprintf(p, "%.*s=%.*s; ", http_resp->cookies[i].nk, 
+                                http_resp->hlines + http_resp->cookies[i].k,
+                                http_resp->cookies[i].nv, http_resp->hlines 
+                                + http_resp->cookies[i].v);
+                    }while(++i < http_resp->ncookies);
+                    p += sprintf(p, "%s", "\r\n");
+                }
+                p += sprintf(p, "Content-Type: %s\r\n", http_resp->hlines 
+                        + http_resp->headers[HEAD_ENT_CONTENT_TYPE]);
+                p += sprintf(p, "Content-Length: %ld\r\n", nzdata);
+                p += sprintf(p, "%s", "\r\n");
                 tasklist[c_id].is_new_host = 0;
                 if((s_conn = tasklist[c_id].s_conn) && (n = p - buf) > 0)
                 {
@@ -676,7 +629,9 @@ int sbase_initialize(SBASE *sbase, char *conf)
     /* server */
     p = iniparser_getstr(dict, "HITASK:document_types");
     end = p + strlen(p);
-    doc_type_map_init(p, end);
+    if(doctype_map_init(&doctype_map) == 0)
+        doctype_add_line(&doctype_map, p, end);
+    http_download_limit = iniparser_getint(dict, "HITASK:http_download_limit", 67108864);
     ntask = iniparser_getint(dict, "HITASK:ntask", 64);
     if(ntask <= 0)
     {
@@ -758,8 +713,8 @@ int main(int argc, char **argv)
     //sbase->running(sbase, 60000000);
     sbase->stop(sbase);
     sbase->clean(&sbase);
+    doctype_map_clean(&doctype_map);
     if(tasklist){free(tasklist); tasklist = NULL;}
-    doc_type_map_clean(doc_type_map);
     if(dict)iniparser_free(dict);
     return 0;
 }
