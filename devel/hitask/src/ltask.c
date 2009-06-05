@@ -6,6 +6,8 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <arpa/inet.h>
+#include <zlib.h>
 #include "trie.h"
 #include "timer.h"
 #include "kvmap.h"
@@ -392,7 +394,7 @@ int ltask_add_proxy(LTASK *task, char *host)
                         QUEUE_PUSH(task->qproxy, int, &i);
                         proxy->status = (short)PROXY_STATUS_OK;
                         *e = '\0';
-                        proxy->ip = inet_addr(ip);
+                        proxy->ip = (int)inet_addr(ip);
                         proxy->port = (unsigned short)atoi(pp);
                         /*
                         unsigned char *s = (unsigned char *)&(proxy->ip);
@@ -416,7 +418,7 @@ int ltask_add_proxy(LTASK *task, char *host)
 /* get random proxy */
 int ltask_get_proxy(LTASK *task, LPROXY *proxy)
 {
-    int rand = 0, id = 0, ret = -1;
+    int id = 0, ret = -1;
     LPROXY *node = NULL;
 
     if(task && proxy)
@@ -884,7 +886,6 @@ int ltask_set_url_status(LTASK *task, int urlid, char *url, short status)
             pwrite(task->meta_fd, &status, sizeof(short), id * sizeof(LMETA));        
             ret = 0;
         }
-end:
         MUTEX_UNLOCK(task->mutex);
     }
     return ret;
@@ -928,7 +929,6 @@ int ltask_set_url_level(LTASK *task, int urlid, char *url, short level)
             FQUEUE_PUSH(task->qtask, LNODE, &node);
             ret = 0;
         }
-end:
         MUTEX_UNLOCK(task->mutex);
     }
     return ret;
@@ -939,7 +939,7 @@ int ltask_get_task(LTASK *task, char *buf, int *nbuf)
 {
     char url[HTTP_URL_MAX], ch = 0, *p = NULL, *ps = NULL, *path = NULL;
     unsigned char *sip = NULL, *pip = NULL;
-    int urlid = -1, n = 0, ip = 0, port = 0;
+    int urlid = -1, ip = 0, port = 0;
     LPROXY proxy = {0};
 
     if(task && buf && nbuf && (urlid = ltask_pop_url(task, url)) >= 0)
@@ -961,17 +961,17 @@ int ltask_get_task(LTASK *task, char *buf, int *nbuf)
         if(task->state->is_use_proxy && ltask_get_proxy(task, &proxy) >= 0)
         {
             pip = (unsigned char *)&(proxy.ip);
-            *nbuf = sprintf(buf, "HTTP/1.0 200 OK\r\nFrom: %d\r\nLocation: /%s\r\n"
+            *nbuf = sprintf(buf, "HTTP/1.0 200 OK\r\nFrom: %ld\r\nLocation: /%s\r\n"
                     "Host: %s\r\nServer: %d.%d.%d.%d\r\nReferer:%d\r\n"
-                    "User-Agent: %s\r\nVia: %d\r\n\r\n", urlid, path, ps,
+                    "User-Agent: %d.%d.%d.%d\r\nVia: %d\r\n\r\n", (long)urlid, path, ps,
                     sip[0], sip[1], sip[2], sip[3], port,
                     pip[0], pip[1], pip[2], pip[3], proxy.port);
         }
         else
         {
-            *nbuf = sprintf(buf, "HTTP/1.0 200 OK\r\nFrom: %d\r\nLocation: /%s\r\n"
+            *nbuf = sprintf(buf, "HTTP/1.0 200 OK\r\nFrom: %ld\r\nLocation: /%s\r\n"
                     "Host: %s\r\nServer: %d.%d.%d.%d\r\nReferer:%d\r\n\r\n",
-                    urlid, path, ps, sip[0], sip[1], sip[2], sip[3], port);
+                    (long)urlid, path, ps, sip[0], sip[1], sip[2], sip[3], port);
         }
         DEBUG_LOGGER(ltask->logger, "New TASK[%d] ip[%d.%d.%d.%d:%d] "
                 "http://%s/%s", urlid, sip[0], sip[1], sip[2], sip[3],
@@ -1077,7 +1077,7 @@ int ltask_set_dns_status(LTASK *task, int dns_id, char *dns_ip, int status)
 /* pop dns */
 int ltask_pop_dns(LTASK *task, char *dns_ip)
 {
-    int id = -1, i = 0, n = 0;
+    int id = -1, i = 0;
     LDNS *dns = NULL;
 
     if(task && dns_ip && task->dnsio.current > 0 
@@ -1107,7 +1107,7 @@ int ltask_list_dns(LTASK *task, char *block, int *nblock)
 
     if(task && block)
     {
-        
+       return n; 
     }
     return 0;
 }
@@ -1305,11 +1305,11 @@ int ltask_list_users(LTASK *task, char *block, int *nblock)
 /* update url content  */
 int ltask_update_content(LTASK *task, int urlid, char *date, char *type, char *content, int ncontent)
 {
-    char buf[HTTP_BUF_SIZE], *url = NULL, *p = NULL;
+    char buf[HTTP_BUF_SIZE], *url = NULL, *p = NULL, *data = NULL;
+    int ret = -1, n = 0, ndata = 0;
     LDOCHEADER  *pdocheader = NULL;
     struct stat st = {0};
     LMETA meta = {0};
-    int ret = -1, n = 0;
 
     if(task && urlid >= 0 && content && ncontent > 0)
     {
@@ -1340,19 +1340,151 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type, char *c
             }
         }
         MUTEX_UNLOCK(task->mutex);
+        /* uncompress text/html */
         if(url && type && strncasecmp(type, "text", 4)) 
-            task->extract_link(task, urlid, url, content, ncontent);
+        {
+            ndata = ncontent * 20;
+            if((data = (char *)calloc(1, ndata)))
+            {
+                if(uncompress((Bytef *)data, (uLongf *)&ndata, 
+                            (const Bytef *)content, (uLong)ncontent) == 0)
+                {
+                    task->extract_link(task, urlid, url, data, ndata);
+                }
+                free(data);
+            }
+        }
     }
     return ret;
 }
-
+#define URLTOEND(up, eup, flag, dpp)                                    \
+do                                                                      \
+{                                                                       \
+    while(up < eup)                                                     \
+    {                                                                   \
+        if(flag && (*up == '"' || *up == '\'')){++up;break;}            \
+        else if(flag == 0 && (*up == 0x20 || *up == '\t'                \
+                    || *up != '\n' || *up != '\r'))                     \
+        {                                                               \
+            ++up; break;                                                \
+        }                                                               \
+        else                                                            \
+        {                                                               \
+            if(*((unsigned char *)up) > 127 || *up == 0x20)             \
+            {                                                           \
+                dpp += sprintf(dpp, "%%%02x", *up++);                   \
+            }                                                           \
+            else *dpp++ = *up++;                                        \
+        }                                                               \
+    }                                                                   \
+}while(0)
 /* extract link */
 int ltask_extract_link(LTASK *task, int urlid, char *url, char *content, int ncontent)
 {
-    int ret = -1;
+    char buf[HTTP_BUF_SIZE], *path = NULL, *last = NULL, *p = NULL, 
+         *end = NULL, *pp = NULL, *ps = NULL;
+    int ret = -1, pref = 0, n = 0;
 
-    if(task)
+    if(task && url && (p = content) && ncontent > 0)
     {
+        //parse url prefix
+        ps = url;
+        while(*ps != '\0')
+        {
+            if(*ps == ':' && *(ps+1) == '/' && *(ps+2) == '/')
+            {
+                ps += 3;
+                while(*ps != '\0' && *ps != '/') ++ps;
+                last = path = ps++;
+            }
+            else if(*ps == '/') last = ps++;
+            else ++ps;
+        }
+        //parse link(s)
+        end = p + ncontent;
+        while(p < end)
+        {
+            pref = 0;
+            if(*p == '<' && (*(p+1) == 'a' || *(p+1) == 'A'))
+            {
+                p += 2;
+                while(p < end  && (*p == 0x20 || *p == '\t' || *p == '\n' || *p == '\r'))++p;
+                if(strncasecmp(p, "href", 4) != 0) continue;
+                while(p < end  && (*p == 0x20 || *p == '\t' || *p == '\n' || *p == '\r'))++p;
+                if(*p != '=') continue;
+                while(p < end  && (*p == 0x20 || *p == '\t' || *p == '\n' || *p == '\r'))++p;
+                if(*p == '\'' || *p == '"') {++p; pref = 1;}
+                if(*p == '#' || strncasecmp(p, "javascript", 10) == 0 
+                        || strncasecmp(p, "mailto", 6) == 0)
+                {
+                    goto next;
+                }
+                if(*p == '/')
+                {
+                    pp = buf;
+                    if((n = path - url) > 0)
+                    {
+                        strncpy(pp, url, n);
+                        pp += n;
+                        URLTOEND(p, end, pref, pp);
+                    }
+                }
+                else if(*p == '.')
+                {
+                    if(*(p+1) == '/') p += 2;
+                    ps = last;
+                    while(*p == '.' && *(p+1) == '.' && *(p+2) == '/')
+                    {
+                        p += 3;
+                        while(*p == '/')++p;
+                        if(*ps != '/') goto next;
+                        --ps;
+                        while(ps >= path && *ps != '/')--ps;
+                        if(ps < path) goto next;
+                    }
+                    pp = buf;
+                    if((n = ps - url) > 0)
+                    {
+                        strncpy(pp, url, n);
+                        pp += n;
+                        *pp++ = '/';
+                        URLTOEND(p, end, pref, pp);
+                    }
+                }
+                else if(strncasecmp(p, "http://", 7) == 0)
+                {
+                    pp = buf;
+                    pp += sprintf(pp, "%s", "http://");
+                    URLTOEND(p, end, pref, pp);
+                }
+                else
+                {
+                    ps = p;
+                    while(p < end && ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z')))
+                        p++;
+                    if(*p == ':' && *(p+1) == '/' && *(p+2) == '/') goto next;
+                    pp = buf;
+                    if(last && (n = last - url) > 0)
+                    {
+                        strncpy(pp, url, n);
+                        pp += n;
+                        *pp++ = '/';
+                        URLTOEND(p, end, pref, pp);
+                    }
+                }
+                if((pp - buf) > 0)
+                {
+                    *pp = '\0';
+                    task->add_url(task, buf);
+                }
+                /* to href last > */
+next:
+                while(p < end && *p != '>')++p;
+                ++p;
+                continue;
+            }else ++p;
+        }
+        ret = 0;
     }
     return ret;
 }
