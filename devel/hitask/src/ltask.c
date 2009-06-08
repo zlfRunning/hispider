@@ -973,7 +973,7 @@ int ltask_get_task(LTASK *task, char *buf, int *nbuf)
                     "Host: %s\r\nServer: %d.%d.%d.%d\r\nReferer:%d\r\n\r\n",
                     (long)urlid, path, ps, sip[0], sip[1], sip[2], sip[3], port);
         }
-        DEBUG_LOGGER(ltask->logger, "New TASK[%d] ip[%d.%d.%d.%d:%d] "
+        DEBUG_LOGGER(task->logger, "New TASK[%d] ip[%d.%d.%d.%d:%d] "
                 "http://%s/%s", urlid, sip[0], sip[1], sip[2], sip[3],
                 port, ps, path);
     }
@@ -1313,6 +1313,8 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type, char *c
 
     if(task && urlid >= 0 && content && ncontent > 0)
     {
+        DEBUG_LOGGER(task->logger, "Ready for update_content:(%d, %s,%s, %d)", 
+                urlid, date, type, ncontent);
         MUTEX_LOCK(task->mutex);
         fstat(task->doc_fd, &st); 
         pdocheader = (LDOCHEADER *)buf;
@@ -1341,7 +1343,7 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type, char *c
         }
         MUTEX_UNLOCK(task->mutex);
         /* uncompress text/html */
-        if(url && type && strncasecmp(type, "text", 4)) 
+        if(url && type && strncasecmp(type, "text", 4) == 0) 
         {
             ndata = ncontent * 20;
             if((data = (char *)calloc(1, ndata)))
@@ -1349,6 +1351,7 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type, char *c
                 if(uncompress((Bytef *)data, (uLongf *)&ndata, 
                             (const Bytef *)content, (uLong)ncontent) == 0)
                 {
+                    DEBUG_LOGGER(task->logger, "url:%s ndata:%d", url, ndata);
                     task->extract_link(task, urlid, url, data, ndata);
                 }
                 free(data);
@@ -1370,7 +1373,8 @@ do                                                                      \
         }                                                               \
         else                                                            \
         {                                                               \
-            if(*((unsigned char *)up) > 127 || *up == 0x20)             \
+            if(*up == '#'){up++;break;}                                 \
+            else if(*((unsigned char *)up) > 127 || *up == 0x20)        \
             {                                                           \
                 dpp += sprintf(dpp, "%%%02x", *up++);                   \
             }                                                           \
@@ -1400,25 +1404,32 @@ int ltask_extract_link(LTASK *task, int urlid, char *url, char *content, int nco
             else if(*ps == '/') last = ps++;
             else ++ps;
         }
-        //parse link(s)
         end = p + ncontent;
+        DEBUG_LOGGER(task->logger, "path:%s last:%s url:%s p:%08x end:%08x", path, last, url, p, end);
+        //parse link(s)
         while(p < end)
         {
             pref = 0;
-            if(*p == '<' && (*(p+1) == 'a' || *(p+1) == 'A'))
+            if(*p == '<' && (*(p+1) == 'a' || *(p+1) == 'A') && (*(p+2) == 0x20 || *(p+2) == '\t'))
             {
+        DEBUG_LOGGER(task->logger, "path:%s last:%s url:%s", path, last, url);
                 p += 2;
                 while(p < end  && (*p == 0x20 || *p == '\t' || *p == '\n' || *p == '\r'))++p;
                 if(strncasecmp(p, "href", 4) != 0) continue;
+                p += 4;
                 while(p < end  && (*p == 0x20 || *p == '\t' || *p == '\n' || *p == '\r'))++p;
+        DEBUG_LOGGER(task->logger, "path:%s last:%s url:%s", path, last, url);
                 if(*p != '=') continue;
+                ++p;
                 while(p < end  && (*p == 0x20 || *p == '\t' || *p == '\n' || *p == '\r'))++p;
                 if(*p == '\'' || *p == '"') {++p; pref = 1;}
+        DEBUG_LOGGER(task->logger, "path:%s last:%s url:%s", path, last, url);
                 if(*p == '#' || strncasecmp(p, "javascript", 10) == 0 
                         || strncasecmp(p, "mailto", 6) == 0)
                 {
                     goto next;
                 }
+        DEBUG_LOGGER(task->logger, "path:%s last:%s url:%s", path, last, url);
                 if(*p == '/')
                 {
                     pp = buf;
@@ -1476,6 +1487,7 @@ int ltask_extract_link(LTASK *task, int urlid, char *url, char *content, int nco
                 {
                     *pp = '\0';
                     task->add_url(task, buf);
+                    DEBUG_LOGGER(task->logger, "add url:%s from %s\n", buf, url);
                 }
                 /* to href last > */
 next:
@@ -1683,7 +1695,7 @@ static char *urllist[] =
 };
 #define NURL 36
 #define HTTP_BUF_MAX    65536
-int main()
+int main(int argc, char **argv)
 {
     LTASK *task = NULL;
     LPROXY proxy = {0};
@@ -1777,17 +1789,55 @@ int main()
         task->list_host_ip(task, stdout);
         task->set_host_status(task, -1, "news.sina.com.cn", HOST_STATUS_OK);
         task->set_url_status(task, -1, 
-	        "http://news.sina.com.cn/w/2009-01-28/171417118397.shtml", 
+                "http://news.sina.com.cn/w/2009-01-28/171417118397.shtml", 
                 URL_STATUS_ERR);
         task->set_url_level(task, -1, 
-	"http://news.sina.com.cn/w/2009-01-28/101215088878S.shtml", 
+                "http://news.sina.com.cn/w/2009-01-28/101215088878S.shtml", 
                 L_LEVEL_UP);
         while((urlid = task->get_task(task, buf, &nbuf)) >= 0)
         {
             fprintf(stdout, "%d::block[%s]\n", urlid, buf);
         }
+        //content/link
+        char *file = NULL, *type = NULL, *url = NULL, *data = NULL, 
+             *zdata = NULL, *content = NULL;
+        int fd = 0, ncontent = 0, nzdata = 0;
+        struct stat st = {0};
+        if(argc > 3 && (type = argv[1]) && (url = argv[2]) && (file = argv[3]))
+        {
+            fprintf(stdout, "__%d__::type:%s url:%s file:%s\n", __LINE__, type, url, file);
+            if((fd = open(file, O_RDONLY)) > 0)
+            {
+                if(fstat(fd, &st) == 0 && st.st_size > 0 
+                && (data = (char *)calloc(1, st.st_size + 1)))
+                {
+                    if((read(fd, data, st.st_size)) > 0)
+                    {
+                        content = data;
+                        ncontent = st.st_size;
+                        if(strncasecmp(type, "text", 4) == 0)
+                        {
+                            nzdata = compressBound(st.st_size);
+                            if((zdata = (char *)calloc(1, nzdata))&& compress((Bytef *)zdata, 
+                                        (uLongf *)&nzdata, (const Bytef *)data, st.st_size) == 0)  
+                            {
+                                content = zdata;
+                                ncontent = nzdata;
+                            }
+                        }
+                        task->update_content(task, 0, "Mon, 08 Jun 2009 02:22:52 GMT", 
+                                "text/html", content, ncontent);
+                    }
+                    if(zdata) free(zdata);
+                    zdata = NULL;
+                    free(data);
+                    data = NULL;
+                }
+                close(fd);
+            }
+        }
         task->clean(&task);
     }
 }
-//gcc -o task ltask.c utils/*.c -I utils/ -D_DEBUG_LTASK -lz && ./task
+//gcc -o task ltask.c utils/*.c -I utils/ -D_DEBUG_LTASK -lz && ./task (type url file)
 #endif
