@@ -94,6 +94,7 @@ typedef struct _LMETA
     short level;
     short depth;
     int date;
+    int parent;
     int url_off;
     int url_len;
     int host_id;
@@ -106,6 +107,7 @@ typedef struct _LMETA
 typedef struct _LDOCHEADER
 {
     int id;
+    int parent;
     int date;
     short nurl;
     short ntype;
@@ -196,7 +198,7 @@ typedef struct _LTASK
     void(*list_host_ip)(struct _LTASK *, FILE *fp);
     int (*set_host_status)(struct _LTASK *, int hostid, char *host, short status);
     int (*set_host_level)(struct _LTASK *, int hostid, char *host, short level);
-    int (*add_url)(struct _LTASK *, char *url);
+    int (*add_url)(struct _LTASK *, int parentid, int parent_depth, char *url);
     int (*pop_url)(struct _LTASK *, char *url);
     int (*set_url_status)(struct _LTASK *, int urlid, char *url, short status);
     int (*set_url_level)(struct _LTASK *, int urlid, char *url, short level);
@@ -210,7 +212,8 @@ typedef struct _LTASK
     int (*list_users)(struct _LTASK *, char *block, int *nblock);
     int (*update_content)(struct _LTASK *, int urlid, char *date, 
             char *type, char *content, int ncontent);
-    int (*extract_link)(struct _LTASK *, int urlid, char *url, char *content, int ncontent);
+    int (*extract_link)(struct _LTASK *, int urlid, int depth, 
+            char *url, char *content, int ncontent);
     void (*clean)(struct _LTASK **);
 }LTASK;
 /* initialize LTASK */

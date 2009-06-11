@@ -674,7 +674,7 @@ int ltask_set_host_level(LTASK *task, int hostid, char *host, short level)
 }
 
 /* add url */
-int ltask_add_url(LTASK *task, char *url)
+int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
 {
     char newurl[HTTP_URL_MAX], *p = NULL, *pp = NULL, *e = NULL, *host = NULL;
     void *dp = NULL, *olddp = NULL;
@@ -682,7 +682,7 @@ int ltask_add_url(LTASK *task, char *url)
     LHOST *host_node = NULL;
     unsigned char key[MD5_LEN];
     struct stat st = {0};
-    LMETA meta = {0};
+    LMETA meta = {0}, *pmeta = NULL;
 
     if(task && url)
     {
@@ -756,6 +756,8 @@ int ltask_add_url(LTASK *task, char *url)
                     &&  write(task->url_fd, newurl, n) > 0 
                     && write(task->key_fd, key, MD5_LEN) > 0)
             {
+                meta.depth   = parent_depth + 1;
+                meta.parent  = parentid;
                 meta.url_off = st.st_size;
                 meta.url_len = n - 1;
                 meta.host_id = host_id;
@@ -1303,7 +1305,8 @@ int ltask_list_users(LTASK *task, char *block, int *nblock)
 }
 
 /* update url content  */
-int ltask_update_content(LTASK *task, int urlid, char *date, char *type, char *content, int ncontent)
+int ltask_update_content(LTASK *task, int urlid, char *date, char *type, 
+        char *content, int ncontent)
 {
     char buf[HTTP_BUF_SIZE], *url = NULL, *p = NULL, *data = NULL;
     int ret = -1, n = 0, ndata = 0;
@@ -1326,10 +1329,11 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type, char *c
         {
             p = url + meta.url_len; *p++ = '\0';
             p += sprintf(p, "%s", type);*p++ = '\0';
-            pdocheader->id    = urlid;
-            pdocheader->date  = 0;
-            pdocheader->nurl  = (short)meta.url_len;
-            pdocheader->ntype = (short)strlen(type);
+            pdocheader->id      = urlid;
+            pdocheader->parent  = meta.parent;
+            pdocheader->date    = 0;
+            pdocheader->nurl    = (short)meta.url_len;
+            pdocheader->ntype   = (short)strlen(type);
             pdocheader->ncontent = ncontent;
             pdocheader->total = pdocheader->ntype + 1 + pdocheader->nurl + 1 + ncontent;
             if((n = p - buf) > 0 && pwrite(task->doc_fd, buf, n, st.st_size) > 0
@@ -1352,7 +1356,7 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type, char *c
                             (const Bytef *)content, (uLong)ncontent) == 0)
                 {
                     DEBUG_LOGGER(task->logger, "url:%s ndata:%d", url, ndata);
-                    task->extract_link(task, urlid, url, data, ndata);
+                    task->extract_link(task, urlid, meta.depth, url, data, ndata);
                 }
                 free(data);
             }
@@ -1382,8 +1386,67 @@ do                                                                      \
         }                                                               \
     }                                                                   \
 }while(0)
+#define READURL(task, p, end, pp, buf, ps, path, url, last, n, pref)    \
+do                                                                      \
+{                                                                       \
+    if(*p == '/')                                                       \
+    {                                                                   \
+        pp = buf;                                                       \
+        if((n = path - url) > 0)                                        \
+        {                                                               \
+            strncpy(pp, url, n);                                        \
+            pp += n;                                                    \
+            URLTOEND(p, end, pref, pp);                                 \
+        }                                                               \
+    }                                                                   \
+    else if(*p == '.')                                                  \
+    {                                                                   \
+        if(*(p+1) == '/') p += 2;                                       \
+        ps = last;                                                      \
+        while(*p == '.' && *(p+1) == '.' && *(p+2) == '/')              \
+        {                                                               \
+            p += 3;                                                     \
+            while(*p == '/')++p;                                        \
+            if(*ps != '/') goto next;                                   \
+            --ps;                                                       \
+            while(ps >= path && *ps != '/')--ps;                        \
+            if(ps < path) goto next;                                    \
+        }                                                               \
+        pp = buf;                                                       \
+        if((n = ps - url) > 0)                                          \
+        {                                                               \
+            strncpy(pp, url, n);                                        \
+            pp += n;                                                    \
+            *pp++ = '/';                                                \
+            URLTOEND(p, end, pref, pp);                                 \
+        }                                                               \
+    }                                                                   \
+    else if(strncasecmp(p, "http://", 7) == 0)                          \
+    {                                                                   \
+        p += 7;                                                         \
+        pp = buf;                                                       \
+        pp += sprintf(pp, "%s", "http://");                             \
+        URLTOEND(p, end, pref, pp);                                     \
+    }                                                                   \
+    else                                                                \
+    {                                                                   \
+        ps = p;                                                         \
+        while(p < end && ((*p >= 'a' && *p <= 'z')                      \
+                    || (*p >= 'A' && *p <= 'Z')))                       \
+            p++;                                                        \
+        if(*p == ':' && *(p+1) == '/' && *(p+2) == '/') goto next;      \
+        pp = buf;                                                       \
+        if(last && (n = last - url) > 0)                                \
+        {                                                               \
+            strncpy(pp, url, n);                                        \
+            pp += n;                                                    \
+            *pp++ = '/';                                                \
+            URLTOEND(p, end, pref, pp);                                 \
+        }                                                               \
+    }                                                                   \
+}while(0)
 /* extract link */
-int ltask_extract_link(LTASK *task, int urlid, char *url, char *content, int ncontent)
+int ltask_extract_link(LTASK *task, int urlid, int depth, char *url, char *content, int ncontent)
 {
     char buf[HTTP_BUF_SIZE], *path = NULL, *last = NULL, *p = NULL, 
          *end = NULL, *pp = NULL, *ps = NULL;
@@ -1405,96 +1468,67 @@ int ltask_extract_link(LTASK *task, int urlid, char *url, char *content, int nco
             else ++ps;
         }
         end = p + ncontent;
-        DEBUG_LOGGER(task->logger, "path:%s last:%s url:%s p:%08x end:%08x", path, last, url, p, end);
+        DEBUG_LOGGER(task->logger, "path:%s last:%s url:%s p:%08x end:%08x",path,last,url,p,end);
         //parse link(s)
         while(p < end)
         {
             pref = 0;
             if(*p == '<' && (*(p+1) == 'a' || *(p+1) == 'A') && (*(p+2) == 0x20 || *(p+2) == '\t'))
             {
-        DEBUG_LOGGER(task->logger, "path:%s last:%s url:%s", path, last, url);
+                memset(buf, 0, HTTP_BUF_SIZE);
                 p += 2;
                 while(p < end  && (*p == 0x20 || *p == '\t' || *p == '\n' || *p == '\r'))++p;
                 if(strncasecmp(p, "href", 4) != 0) continue;
                 p += 4;
                 while(p < end  && (*p == 0x20 || *p == '\t' || *p == '\n' || *p == '\r'))++p;
-        DEBUG_LOGGER(task->logger, "path:%s last:%s url:%s", path, last, url);
                 if(*p != '=') continue;
                 ++p;
                 while(p < end  && (*p == 0x20 || *p == '\t' || *p == '\n' || *p == '\r'))++p;
                 if(*p == '\'' || *p == '"') {++p; pref = 1;}
-        DEBUG_LOGGER(task->logger, "path:%s last:%s url:%s", path, last, url);
                 if(*p == '#' || strncasecmp(p, "javascript", 10) == 0 
                         || strncasecmp(p, "mailto", 6) == 0)
                 {
                     goto next;
                 }
-        DEBUG_LOGGER(task->logger, "path:%s last:%s url:%s", path, last, url);
-                if(*p == '/')
+            }
+            else if(*p == '<' && (*(p+1) == 'i' || *(p+1) == 'I') 
+                    && (*(p+2) == 'm' || *(p+2) == 'M') && (*(p+3) == 'g' || *(p+3) == 'G'))
+            {
+                p += 4;
+                if(*p != 0x20 && *p != '\t') goto next;
+                while(p < end && *p != '>')
                 {
-                    pp = buf;
-                    if((n = path - url) > 0)
-                    {
-                        strncpy(pp, url, n);
-                        pp += n;
-                        URLTOEND(p, end, pref, pp);
-                    }
-                }
-                else if(*p == '.')
-                {
-                    if(*(p+1) == '/') p += 2;
-                    ps = last;
-                    while(*p == '.' && *(p+1) == '.' && *(p+2) == '/')
+                    if((*p == 's' || *p == 'S') && (*(p+1) == 'r' || *(p+1) == 'R')
+                            && (*(p+2) == 'c' || *(p+2) == 'C'))
                     {
                         p += 3;
-                        while(*p == '/')++p;
-                        if(*ps != '/') goto next;
-                        --ps;
-                        while(ps >= path && *ps != '/')--ps;
-                        if(ps < path) goto next;
+                        while(p < end  && (*p == 0x20 || *p == '\t' || *p == '\n' || *p == '\r'))++p;
+                        if(*p != '=') goto next;
+                        ++p;
+                        while(p < end  && (*p == 0x20 || *p == '\t' || *p == '\n' || *p == '\r'))++p;
+                        if(*p == '\'' || *p == '"') {++p; pref = 1;}
+                        break;
                     }
-                    pp = buf;
-                    if((n = ps - url) > 0)
-                    {
-                        strncpy(pp, url, n);
-                        pp += n;
-                        *pp++ = '/';
-                        URLTOEND(p, end, pref, pp);
-                    }
+                    else ++p;
                 }
-                else if(strncasecmp(p, "http://", 7) == 0)
-                {
-                    pp = buf;
-                    pp += sprintf(pp, "%s", "http://");
-                    URLTOEND(p, end, pref, pp);
-                }
-                else
-                {
-                    ps = p;
-                    while(p < end && ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z')))
-                        p++;
-                    if(*p == ':' && *(p+1) == '/' && *(p+2) == '/') goto next;
-                    pp = buf;
-                    if(last && (n = last - url) > 0)
-                    {
-                        strncpy(pp, url, n);
-                        pp += n;
-                        *pp++ = '/';
-                        URLTOEND(p, end, pref, pp);
-                    }
-                }
-                if((pp - buf) > 0)
-                {
-                    *pp = '\0';
-                    task->add_url(task, buf);
-                    DEBUG_LOGGER(task->logger, "add url:%s from %s\n", buf, url);
-                }
-                /* to href last > */
-next:
-                while(p < end && *p != '>')++p;
+            }
+            else 
+            {
                 ++p;
                 continue;
-            }else ++p;
+            }
+            READURL(task, p, end, pp, buf, ps, path, url, last, n, pref);
+            //DEBUG_LOGGER(task->logger, "path:%s last:%s url:%s ", path, last, url);
+            if((pp - buf) > 0)
+            {
+                *pp = '\0';
+                task->add_url(task, urlid, depth, buf);
+                DEBUG_LOGGER(task->logger, "add url:%s from %s\n", buf, url);
+            }
+            /* to href last > */
+next:
+            while(p < end && *p != '>')++p;
+            ++p;
         }
         ret = 0;
     }
@@ -1656,6 +1690,7 @@ static char *proxylist[] =
 #define NPROXY 45
 static char *urllist[] = 
 {
+    "http://www.sina.com.cn",
 	"http://news.sina.com.cn/", 
 	"http://mil.news.sina.com.cn/", 
 	"http://news.sina.com.cn/society/", 
@@ -1691,9 +1726,9 @@ static char *urllist[] =
 	"http://news.sina.com.cn/w/2009-01-28/032417117117.shtml", 
 	"http://news.sina.com.cn/w/2009-01-28/103015088902s.shtml", 
 	"http://news.sina.com.cn/c/2009-01-28/050617117332.shtml", 
-	"http://news.sina.com.cn/w/2009-01-28/101215088878s.shtml" 
+	"http://news.sina.com.cn/w/2009-01-28/101215088878s.shtml"
 };
-#define NURL 36
+#define NURL 37
 #define HTTP_BUF_MAX    65536
 int main(int argc, char **argv)
 {
@@ -1768,7 +1803,7 @@ int main(int argc, char **argv)
         for(i = 0; i < NURL; i++)
         {
             p = urllist[i];
-            task->add_url(task, p);
+            task->add_url(task, 0, 0, p);
         }
         i = 0;
         while(task->pop_host(task, host) >= 0)
@@ -1809,7 +1844,7 @@ int main(int argc, char **argv)
             if((fd = open(file, O_RDONLY)) > 0)
             {
                 if(fstat(fd, &st) == 0 && st.st_size > 0 
-                && (data = (char *)calloc(1, st.st_size + 1)))
+                        && (data = (char *)calloc(1, st.st_size + 1)))
                 {
                     if((read(fd, data, st.st_size)) > 0)
                     {
@@ -1825,7 +1860,7 @@ int main(int argc, char **argv)
                                 ncontent = nzdata;
                             }
                         }
-                        task->update_content(task, 0, "Mon, 08 Jun 2009 02:22:52 GMT", 
+                        task->update_content(task, 35, "Mon, 08 Jun 2009 02:22:52 GMT", 
                                 "text/html", content, ncontent);
                     }
                     if(zdata) free(zdata);
