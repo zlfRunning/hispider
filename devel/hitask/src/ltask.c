@@ -1520,7 +1520,7 @@ int ltask_extract_link(LTASK *task, int urlid, int depth, char *url, char *conte
                     goto next;
                 }
             }
-            else if(ltask->state->is_extract_image && *p == '<' && (*(p+1) == 'i' || *(p+1) == 'I') 
+            else if(task->state->is_extract_image && *p == '<' && (*(p+1) == 'i' || *(p+1) == 'I') 
                     && (*(p+2) == 'm' || *(p+2) == 'M') && (*(p+3) == 'g' || *(p+3) == 'G'))
             {
                 p += 4;
