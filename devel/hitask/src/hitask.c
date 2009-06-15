@@ -18,6 +18,12 @@
 #include "logger.h"
 #include "doctype.h"
 #define CHARSET_MAX 256
+#ifndef UI
+#define UI(_xp_) ((unsigned int)_xp_)
+#endif
+#ifndef LI(n)
+#define LI(_x_) ((long int)(_x_))
+#endif
 typedef struct _TASK
 {
     CONN *s_conn;
@@ -87,7 +93,7 @@ int hitask_packet_reader(CONN *conn, CB_DATA *buffer)
 int hitask_packet_handler(CONN *conn, CB_DATA *packet)
 {
     char *p = NULL, *end = NULL, *ip = NULL, *sip = NULL, *pip = NULL, 
-         *host = NULL, *path = NULL, *cookie = NULL, *refer = NULL;
+         *host = NULL, *path = NULL;// *cookie = NULL, *refer = NULL;
     HTTP_RESPONSE http_resp = {0};
     int taskid = 0, n = 0, c_id = 0, port = 0, pport = 0, 
         sport = 0, is_use_proxy = 0, doctype = -1;
@@ -203,6 +209,9 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
                         p += sprintf(p, "Cookie: %s\r\n", http_resp.hlines + n);
                     if((n = http_resp.headers[HEAD_REQ_REFERER]) > 0)
                         p += sprintf(p, "Referer: %s\r\n", http_resp.hlines + n);
+                    if((n = http_resp.headers[HEAD_ENT_LAST_MODIFIED]) > 0)
+                        p += sprintf(p, "If-Modified-Since: %s\r\n", http_resp.hlines + n);
+
                     //end
                     p += sprintf(p, "%s", "\r\n");
                     tasklist[c_id].nrequest = p - tasklist[c_id].request;
@@ -318,12 +327,12 @@ int hitask_trans_handler(CONN *conn, int tid)
 int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
     CONN *s_conn = NULL;
-    HTTP_RESPONSE *http_resp = NULL;
-    char buf[HTTP_BUF_SIZE], charset[CHARSET_MAX], *zdata = NULL, *s = NULL,
-         *p = NULL, *ps = NULL, *outbuf = NULL, *data = NULL, *rawdata = NULL;
+    char buf[HTTP_BUF_SIZE], charset[CHARSET_MAX], *zdata = NULL, *p = NULL, 
+         *ps = NULL, *outbuf = NULL, *data = NULL, *rawdata = NULL;
     int  ret = -1, c_id = 0, n = 0, i = 0, is_need_convert = 0, 
          is_need_compress = 0, is_new_zdata = 0, is_text = 0;
     size_t ninbuf = 0, noutbuf = 0, nzdata = 0, ndata = 0, nrawdata = 0;
+    HTTP_RESPONSE *http_resp = NULL;
     chardet_t pdet = NULL;
     iconv_t cd = NULL;
 
@@ -350,8 +359,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                                     nzdata, (Bytef *)data, (uLong *)&ndata)) == 0)
                     {
                         gzdoc_total++;
-                        DEBUG_LOGGER(logger, "gzdecompress data from %d to %d "
-                                " rate:(%lld/%lld) = %f", nzdata, ndata, gzdoc_total, 
+                        DEBUG_LOGGER(logger, "gzdecompress data from %ld to %ld "
+                                " rate:(%lld/%lld) = %f", LI(nzdata), LI(ndata), gzdoc_total, 
                                 doc_total, ((double)gzdoc_total/(double)doc_total));
                         rawdata = data;
                         nrawdata = ndata;
@@ -360,7 +369,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     else 
                     {
                         ERROR_LOGGER(logger, "gzdecompress data from %ld to %ld failed, %d:%s", 
-                                nzdata, ndata, n, strerror(errno));
+                                LI(nzdata), LI(ndata), n, strerror(errno));
                         goto err_end;
                     }
                 }
@@ -371,8 +380,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                                 nzdata, (Bytef *)data, (uLong *)&ndata) == 0)
                     {
                         zdoc_total++;
-                        DEBUG_LOGGER(logger, "zdecompress data from %u to %u "
-                                "rate:(%lld/%lld) = %f", nzdata, ndata, gzdoc_total, 
+                        DEBUG_LOGGER(logger, "zdecompress data from %ld to %ld "
+                                "rate:(%lld/%lld) = %f", LI(nzdata), LI(ndata), gzdoc_total, 
                                 doc_total, ((double)zdoc_total/(double)doc_total));
                         rawdata = data;
                         nrawdata = ndata;
@@ -394,8 +403,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
             //check text/plain/html/xml...  charset 
             if(is_text)
             {
-                DEBUG_LOGGER(logger, "is_need_convert:%d data:%08x ndata:%d", 
-                        is_need_convert, rawdata, nrawdata);
+                DEBUG_LOGGER(logger, "is_need_convert:%d data:%08x ndata:%ld", 
+                        is_need_convert, UI(rawdata), LI(nrawdata));
                 if(rawdata && nrawdata > 0 && chardet_create(&pdet) == 0)
                 {
                     if(chardet_handle_data(pdet, rawdata, nrawdata) == 0 
@@ -406,8 +415,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     }
                     chardet_destroy(pdet);
                 }
-                DEBUG_LOGGER(logger, "is_need_convert:%d data:%08x ndata:%d", 
-                        is_need_convert, rawdata, nrawdata);
+                DEBUG_LOGGER(logger, "is_need_convert:%d data:%08x ndata:%ld", 
+                        is_need_convert, UI(rawdata), LI(nrawdata));
                 //convert charset 
                 if(is_need_convert && (cd = iconv_open("UTF-8", charset)) != (iconv_t)-1)
                 {
@@ -424,8 +433,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                         else
                         {
                             noutbuf -= n;
-                            DEBUG_LOGGER(logger, "convert %s len:%d to UTF-8 len:%d", 
-                                    charset, nrawdata, noutbuf);
+                            DEBUG_LOGGER(logger, "convert %s len:%ld to UTF-8 len:%ld", 
+                                    charset, LI(nrawdata), LI(noutbuf));
                             rawdata = outbuf;
                             nrawdata = noutbuf;
                         }
@@ -437,8 +446,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
             zdata = NULL;
             nzdata = 0;
             //compress with zlib::inflate()
-            DEBUG_LOGGER(logger, "is_need_compess:%d data:%08x ndata:%d", 
-                    is_need_compress, rawdata, nrawdata);
+            DEBUG_LOGGER(logger, "is_need_compess:%d data:%08x ndata:%ld", 
+                    is_need_compress, UI(rawdata), LI(nrawdata));
             if(is_need_compress && rawdata && nrawdata  > 0)
             {
                 nzdata = nrawdata + Z_HEADER_SIZE;
@@ -454,11 +463,11 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     }
                     else  is_new_zdata = 1;
                 }
-                DEBUG_LOGGER(logger, "compressed data %d to %d", n, nzdata);
+                DEBUG_LOGGER(logger, "compressed data %d to %ld", n, LI(nzdata));
             }
-            DEBUG_LOGGER(logger, "reset data %08x", data);
+            DEBUG_LOGGER(logger, "reset data %08x", UI(data));
             if(data){free(data); data = NULL;}
-            DEBUG_LOGGER(logger, "reset outbuf %08x", outbuf);
+            DEBUG_LOGGER(logger, "reset outbuf %08x", UI(outbuf));
             if(outbuf){free(outbuf); outbuf = NULL;}
             if(zdata && nzdata > 0 && http_resp)
             {
@@ -494,13 +503,13 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 tasklist[c_id].is_new_host = 0;
                 if((s_conn = tasklist[c_id].s_conn) && (n = p - buf) > 0)
                 {
-                    DEBUG_LOGGER(logger, "send data:%08x size:%d", zdata, nzdata);
+                    DEBUG_LOGGER(logger, "send data:%08x size:%ld", UI(zdata), LI(nzdata));
                     //fprintf(stdout, "Over task[%ld]\n", tasklist[c_id].taskid);
                     s_conn->push_chunk(s_conn, buf, n);
                     s_conn->push_chunk(s_conn, zdata, nzdata);
                     if(is_new_zdata)
                     {
-                        DEBUG_LOGGER(logger, "reset zdata %08x", zdata);
+                        DEBUG_LOGGER(logger, "reset zdata %08x", UI(zdata));
                         free(zdata);
                         zdata = NULL;
                     }
@@ -627,10 +636,12 @@ int sbase_initialize(SBASE *sbase, char *conf)
     interval = iniparser_getint(dict, "HITASK:heartbeat_interval", SB_HEARTBEAT_INTERVAL);
     service->set_heartbeat(service, interval, &cb_heartbeat_handler, service);
     /* server */
-    p = iniparser_getstr(dict, "HITASK:document_types");
-    end = p + strlen(p);
-    if(doctype_map_init(&doctype_map) == 0)
-        doctype_add_line(&doctype_map, p, end);
+    if((p = iniparser_getstr(dict, "HITASK:document_types")))
+    {
+        end = p + strlen(p);
+        if(doctype_map_init(&doctype_map) == 0)
+            doctype_add_line(&doctype_map, p, end);
+    }
     http_download_limit = iniparser_getint(dict, "HITASK:http_download_limit", 67108864);
     ntask = iniparser_getint(dict, "HITASK:ntask", 64);
     if(ntask <= 0)

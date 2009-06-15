@@ -711,6 +711,7 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
                 *pp++ = *p++;
             }
         }
+        if(e == NULL){e = pp++; *e = '/';}
         if(host == NULL || e == NULL) goto err;
         *pp = '\0';
         /* check/add host */
@@ -790,7 +791,7 @@ err:
 }
 
 /* pop url */
-int ltask_pop_url(LTASK *task, char *url, int *time, char *refer, char *cookie)
+int ltask_pop_url(LTASK *task, char *url, int *itime, char *refer, char *cookie)
 {
     int urlid = -1, n = -1, x = 0;
     LHOST *host_node = NULL;
@@ -843,7 +844,7 @@ int ltask_pop_url(LTASK *task, char *url, int *time, char *refer, char *cookie)
                 && meta.status >= 0 
                 && (n = pread(task->url_fd, url, meta.url_len, meta.url_off)) > 0)
         {
-            if(time) *time = meta.date;
+            if(itime) *itime = meta.date;
             if(host_node == NULL) 
                 host_node = (LHOST *)(task->hostio.map + meta.host_id * sizeof(LHOST));
             url[n] = '\0';
@@ -955,10 +956,10 @@ int ltask_get_task(LTASK *task, char *buf, int *nbuf)
     char url[HTTP_URL_MAX], date[64], refer[HTTP_URL_MAX], cookie[HTTP_COOKIE_MAX], 
          ch = 0, *p = NULL, *ps = NULL, *path = NULL;
     unsigned char *sip = NULL, *pip = NULL;
-    int urlid = -1, ip = 0, port = 0, time = 0;
+    int urlid = -1, ip = 0, port = 0, itime = 0;
     LPROXY proxy = {0};
 
-    if(task && buf && nbuf && (urlid = ltask_pop_url(task, url, &time, refer, cookie)) >= 0)
+    if(task && buf && nbuf && (urlid = ltask_pop_url(task, url, &itime, refer, cookie)) >= 0)
     {
         p = ps = url + strlen("http://");
         while(*p != '\0' && *p != ':' && *p != '/')++p;
@@ -975,10 +976,19 @@ int ltask_get_task(LTASK *task, char *buf, int *nbuf)
         else if(ch == '/') path = (p+1);
         sip = (unsigned char *)&ip;
         p = buf;
-        p += sprintf(p, "HTTP/1.0 200 OK\r\nFrom: %ld\r\nLocation: /%s\r\n"
+        if(path == NULL || *path == '\0')
+        {
+            p += sprintf(p, "HTTP/1.0 200 OK\r\nFrom: %ld\r\nLocation: /\r\n"
                         "Host: %s\r\nServer: %d.%d.%d.%d\r\nTE:%d\r\n", 
+                    (long)urlid, ps, sip[0], sip[1], sip[2], sip[3], port);
+        }
+        else
+        {
+            p += sprintf(p, "HTTP/1.0 200 OK\r\nFrom: %ld\r\nLocation: /%s\r\n"
+                    "Host: %s\r\nServer: %d.%d.%d.%d\r\nTE:%d\r\n", 
                     (long)urlid, path, ps, sip[0], sip[1], sip[2], sip[3], port);
-        if(time != 0 && GMTstrdate(time, date) == 0)
+        }
+        if(itime != 0 && GMTstrdate(itime, date) == 0)
             p += sprintf(p, "Last-Modified: %s\r\n", date);
         if(refer[0] != '\0') p += sprintf(p, "Referer: %s\r\n", refer);
         if(cookie[0] != '\0') p += sprintf(p, "Cookie: %s\r\n", cookie);
@@ -1019,6 +1029,7 @@ int ltask_add_dns(LTASK *task, char *dns_ip)
                 {
                     if(dns[i].status <= 0)
                     {
+                        dns[i].status = DNS_STATUS_READY;
                         strcpy(dns[i].name, dns_ip);
                         dp = (void *)((long)(i + 1));
                         id = i;
@@ -1331,15 +1342,18 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
 
     if(task && urlid >= 0 && content && ncontent > 0)
     {
-        DEBUG_LOGGER(task->logger, "Ready for update_content:(%d, %s,%s, %d)", 
-                urlid, date, type, ncontent);
+        if(date)
+        {
+            DEBUG_LOGGER(task->logger, "Ready for update_content:(%d, %s,%s, %d)", 
+                    urlid, date, type, ncontent);
+        }
         MUTEX_LOCK(task->mutex);
         fstat(task->doc_fd, &st); 
         pdocheader = (LDOCHEADER *)buf;
         memset(pdocheader, 0, sizeof(LDOCHEADER));
         url = buf + sizeof(LDOCHEADER);
         if(pread(task->meta_fd, &meta, sizeof(LMETA), (off_t)(urlid * sizeof(LMETA))) > 0 
-                && meta.url_len <= HTTP_URL_MAX && meta.status >= 0 
+                && meta.url_len > 0 && meta.url_len <= HTTP_URL_MAX && meta.status >= 0 
                 && (n = pread(task->url_fd, url, meta.url_len, meta.url_off)) > 0)
         {
             p = url + meta.url_len; *p++ = '\0';
@@ -1408,7 +1422,7 @@ do                                                                      \
     if(*p == '/')                                                       \
     {                                                                   \
         pp = buf;                                                       \
-        if((n = path - url) > 0)                                        \
+        if((n = (path - url)) > 0)                                      \
         {                                                               \
             strncpy(pp, url, n);                                        \
             pp += n;                                                    \
@@ -1429,7 +1443,7 @@ do                                                                      \
             if(ps < path) goto next;                                    \
         }                                                               \
         pp = buf;                                                       \
-        if((n = ps - url) > 0)                                          \
+        if((n = (ps - url)) > 0)                                        \
         {                                                               \
             strncpy(pp, url, n);                                        \
             pp += n;                                                    \
@@ -1452,7 +1466,7 @@ do                                                                      \
             p++;                                                        \
         if(*p == ':' && *(p+1) == '/' && *(p+2) == '/') goto next;      \
         pp = buf;                                                       \
-        if(last && (n = last - url) > 0)                                \
+        if(last && (n = (last - url)) > 0)                              \
         {                                                               \
             strncpy(pp, url, n);                                        \
             pp += n;                                                    \
@@ -1484,7 +1498,6 @@ int ltask_extract_link(LTASK *task, int urlid, int depth, char *url, char *conte
             else ++ps;
         }
         end = p + ncontent;
-        DEBUG_LOGGER(task->logger, "path:%s last:%s url:%s p:%08x end:%08x",path,last,url,p,end);
         //parse link(s)
         while(p < end)
         {
@@ -1507,7 +1520,7 @@ int ltask_extract_link(LTASK *task, int urlid, int depth, char *url, char *conte
                     goto next;
                 }
             }
-            else if(*p == '<' && (*(p+1) == 'i' || *(p+1) == 'I') 
+            else if(ltask->state->is_extract_image && *p == '<' && (*(p+1) == 'i' || *(p+1) == 'I') 
                     && (*(p+2) == 'm' || *(p+2) == 'M') && (*(p+3) == 'g' || *(p+3) == 'G'))
             {
                 p += 4;

@@ -128,6 +128,7 @@ typedef struct _LSTATE
 {
     short running;
     short is_use_proxy;
+    int   is_extract_image;
     int   url_total;
     int   host_current;
     int   host_total;

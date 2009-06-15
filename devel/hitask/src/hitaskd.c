@@ -14,11 +14,6 @@
 #include "evdns.h"
 #include "queue.h"
 #include "logger.h"
-//typedef struct _DNSTASK
-//{
-//    CONN *conn;
-//    char nameserver[DNS_IP_MAX];
-//}DNSTASK;
 static SBASE *sbase = NULL;
 static SERVICE *service = NULL;
 static SERVICE *adnservice = NULL;
@@ -27,8 +22,6 @@ static LTASK *ltask = NULL;
 static void *logger = NULL;
 static int is_need_authorization = 0;
 static char *authorization_name = "Hitask Administration System";
-//static void *dnsqueue = NULL;
-//static DNSTASK tasklist[DNS_TASK_MAX];
 
 /* dns packet reader */
 int adns_packet_reader(CONN *conn, CB_DATA *buffer)
@@ -124,7 +117,7 @@ int adns_trans_handler(CONN *conn, int tid)
             qid %= 65536;
             n = evdns_make_query((char *)hostname, 1, 1, (unsigned short)qid, 1, buf); 
             DEBUG_LOGGER(logger, "Resolving %s from nameserver[%s]", 
-                    hostname, tasklist[tid].nameserver);
+                    hostname, conn->remote_ip);
             return conn->push_chunk(conn, buf, n);
         }
     }
@@ -331,8 +324,8 @@ err_end:
 /*  data handler */
 int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
-    int urlid = 0, ips = 0, i = 0, n = 0, date = 0;
-    char buf[HTTP_BUF_SIZE], *host = NULL, *ip = NULL, *p = NULL;
+    int urlid = 0, ips = 0, i = 0, n = 0;
+    char buf[HTTP_BUF_SIZE], *host = NULL, *date = NULL, *ip = NULL, *p = NULL;
     HTTP_REQ *http_req = NULL;
 
     if(conn && packet && cache && chunk && chunk->ndata > 0)
@@ -354,7 +347,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                 DEBUG_LOGGER(logger, "over urlid:%d length:%d", urlid, chunk->ndata);
                 if((n = http_req->headers[HEAD_ENT_LAST_MODIFIED]) > 0)
                 {
-                    date = http_req->hlines + n;
+                    date = (http_req->hlines + n);
                 }
                 /* doctype */
                 if((n = http_req->headers[HEAD_ENT_CONTENT_TYPE]) > 0)
@@ -430,7 +423,7 @@ int hitaskd_oob_handler(CONN *conn, CB_DATA *oob)
 /* Initialize from ini file */
 int sbase_initialize(SBASE *sbase, char *conf)
 {
-    char *s = NULL, *p = NULL, *basedir = NULL;
+    char *s = NULL, *p = NULL, *basedir = NULL, *start = NULL;
          //*ep = NULL, *whitelist = NULL, *whost = NULL, 
          //*host = NULL, *path = NULL;
     int interval = 0;
@@ -456,7 +449,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
     service->family = iniparser_getint(dict, "HITASKD:inet_family", AF_INET);
     service->sock_type = iniparser_getint(dict, "HITASKD:socket_type", SOCK_STREAM);
     service->ip = iniparser_getstr(dict, "HITASKD:service_ip");
-    service->port = iniparser_getint(dict, "HITASKD:service_port", 3721);
+    service->port = iniparser_getint(dict, "HITASKD:service_port", 2816);
     service->working_mode = iniparser_getint(dict, "HITASKD:working_mode", WORKING_PROC);
     service->service_type = iniparser_getint(dict, "HITASKD:service_type", S_SERVICE);
     service->service_name = iniparser_getstr(dict, "HITASKD:service_name");
@@ -492,7 +485,9 @@ int sbase_initialize(SBASE *sbase, char *conf)
     if((ltask = ltask_init()))
     {
         basedir = iniparser_getstr(dict, "HITASKD:basedir");
+        start = iniparser_getstr(dict, "HITASKD:start");
         ltask->set_basedir(ltask, basedir);
+        ltask->add_url(ltask, -1, 0, start);
         //ltable->resume(ltable);
         //LOGGER_INIT(logger, iniparser_getstr(dict, "HITASKD:access_log"));
         //ltable->set_logger(ltable, NULL, logger);
@@ -538,26 +533,19 @@ int sbase_initialize(SBASE *sbase, char *conf)
     adnservice->session.transaction_handler = &adns_trans_handler;
     interval = iniparser_getint(dict, "ADNS:heartbeat_interval", SB_HEARTBEAT_INTERVAL);
     adnservice->set_heartbeat(adnservice, interval, &adns_heartbeat_handler, adnservice);
-    /*
     p = iniparser_getstr(dict, "ADNS:nameservers");
-    QUEUE_INIT(dnsqueue);
-    i = 0;
-    while(*p != '\0' && i < DNS_TASK_MAX)
+    while(*p != '\0')
     {
-        memset(&(tasklist[i]), 0, sizeof(DNSTASK));
         while(*p != '\0' && (*p < '0' || *p > '9'))++p;
-        s = tasklist[i].nameserver;
-        while(*p != '\0' && ((*p >= '0' && *p <= '9') || *p == '.')) *s++ = *p++;
-        if(s > tasklist[i].nameserver)
+        s = p;
+        while(*p != '\0' && ((*p >= '0' && *p <= '9') || *p == '.')) ++p;
+        if((p - s) > 0) 
         {
-            QUEUE_PUSH(dnsqueue, int, &i);
-            i++;
+            *p = '\0';
+            ltask->add_dns(ltask, s);
+            ++p;
         }
     }
-    */
-    /* wait queue */
-    //QUEUE_INIT(waitqueue);
-    //while(i < DNS_TASK_MAX){QUEUE_PUSH(undnsqueue, int, &i++);}
     return (sbase->add_service(sbase, service) | sbase->add_service(sbase, adnservice));
 }
 

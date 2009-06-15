@@ -5,7 +5,6 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
-#include <time.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -77,7 +76,7 @@ do{                                                                             
     if(ptr)                                                                         \
     {                                                                               \
     MUTEX_LOCK(PL(ptr)->mutex);                                                     \
-    gettimeofday(&(PLTV(ptr)), NULL); time(&PLTP(ptr));                             \
+    gettimeofday(&(PLTV(ptr)), NULL); time(&(PLTP(ptr)));                           \
     PLP(ptr) = localtime(&PLTP(ptr));                                               \
     PLPS(ptr) = PLB(ptr);                                                           \
     PLPS(ptr) += sprintf(PLPS(ptr), "[%02d/%s/%04d:%02d:%02d:%02d +%06u] "          \
