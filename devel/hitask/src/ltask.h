@@ -1,9 +1,10 @@
 #ifndef _LTASK_H
 #define _LTASK_H
-#define HTTP_PATH_MAX          256
-#define HTTP_HOST_MAX          256
-#define HTTP_IP_MAX            16
-#define HTTP_URL_MAX           4096
+#define HTTP_PATH_MAX           256
+#define HTTP_HOST_MAX           256
+#define HTTP_IP_MAX             16
+#define HTTP_URL_MAX            4096
+#define HTTP_COOKIE_MAX         4096
 #define HOST_INCRE_NUM          1000000   
 #define PROXY_INCRE_NUM         10000
 #define DNS_INCRE_NUM           256
@@ -212,7 +213,7 @@ typedef struct _LTASK
     int (*set_host_status)(struct _LTASK *, int hostid, char *host, short status);
     int (*set_host_level)(struct _LTASK *, int hostid, char *host, short level);
     int (*add_url)(struct _LTASK *, int parentid, int parent_depth, char *url);
-    int (*pop_url)(struct _LTASK *, char *url);
+    int (*pop_url)(struct _LTASK *, char *url, int *time, char *refer, char *cookie);
     int (*set_url_status)(struct _LTASK *, int urlid, char *url, short status);
     int (*set_url_level)(struct _LTASK *, int urlid, char *url, short level);
     int (*get_task)(struct _LTASK *, char *buf, int *nbuf);

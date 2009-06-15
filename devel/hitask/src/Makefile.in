@@ -73,7 +73,7 @@ am_hitaskd_OBJECTS = hitaskd-hitaskd.$(OBJEXT) hitaskd-evdns.$(OBJEXT) \
 	hitaskd-http.$(OBJEXT) hitaskd-ltask.$(OBJEXT) \
 	hitaskd-kvmap.$(OBJEXT) hitaskd-md5.$(OBJEXT) \
 	hitaskd-trie.$(OBJEXT) hitaskd-zstream.$(OBJEXT) \
-	hitaskd-iniparser.$(OBJEXT)
+	hitaskd-iniparser.$(OBJEXT) hitaskd-tm.$(OBJEXT)
 hitaskd_OBJECTS = $(am_hitaskd_OBJECTS)
 hitaskd_LDADD = $(LDADD)
 hitaskd_LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
@@ -213,14 +213,14 @@ include_HEADERS = hibase.h
 hitaskd_SOURCES = hitaskd.c evdns.c evdns.h http.c http.h ltask.c ltask.h \
 utils/fqueue.h utils/kvmap.c utils/kvmap.h utils/logger.h utils/md5.c utils/md5.h \
 utils/mutex.h utils/queue.h utils/timer.h utils/trie.c utils/trie.h \
-utils/zstream.c utils/zstream.h iniparser.c iniparser.h
+utils/zstream.c utils/zstream.h iniparser.c iniparser.h utils/tm.c utils/tm.h
 
 hitaskd_CPPFLAGS = -I utils -D_FILE_OFFSET_BITS=64 -Wall
 hitaskd_LDFLAGS = -lz -lsbase
 #hitask 
 hitask_SOURCES = hitask.c ltask.h http.h http.c utils/logger.h utils/trie.h utils/trie.c \
 utils/mutex.h utils/queue.h utils/timer.h utils/zstream.c utils/zstream.h \
-iniparser.c iniparser.h doctype.h doctype.c 
+iniparser.c iniparser.h doctype.h doctype.c  
 
 hitask_CPPFLAGS = -I utils -D_FILE_OFFSET_BITS=64 -Wall
 hitask_LDFLAGS = -lz -lsbase -lchardet
@@ -340,6 +340,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hitaskd-kvmap.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hitaskd-ltask.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hitaskd-md5.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hitaskd-tm.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hitaskd-trie.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hitaskd-zstream.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libhibase_la-hibase.Plo@am__quote@
@@ -589,6 +590,20 @@ hitaskd-iniparser.obj: iniparser.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='iniparser.c' object='hitaskd-iniparser.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitaskd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hitaskd-iniparser.obj `if test -f 'iniparser.c'; then $(CYGPATH_W) 'iniparser.c'; else $(CYGPATH_W) '$(srcdir)/iniparser.c'; fi`
+
+hitaskd-tm.o: utils/tm.c
+@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitaskd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hitaskd-tm.o -MD -MP -MF $(DEPDIR)/hitaskd-tm.Tpo -c -o hitaskd-tm.o `test -f 'utils/tm.c' || echo '$(srcdir)/'`utils/tm.c
+@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/hitaskd-tm.Tpo $(DEPDIR)/hitaskd-tm.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='utils/tm.c' object='hitaskd-tm.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitaskd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hitaskd-tm.o `test -f 'utils/tm.c' || echo '$(srcdir)/'`utils/tm.c
+
+hitaskd-tm.obj: utils/tm.c
+@am__fastdepCC_TRUE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitaskd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hitaskd-tm.obj -MD -MP -MF $(DEPDIR)/hitaskd-tm.Tpo -c -o hitaskd-tm.obj `if test -f 'utils/tm.c'; then $(CYGPATH_W) 'utils/tm.c'; else $(CYGPATH_W) '$(srcdir)/utils/tm.c'; fi`
+@am__fastdepCC_TRUE@	mv -f $(DEPDIR)/hitaskd-tm.Tpo $(DEPDIR)/hitaskd-tm.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='utils/tm.c' object='hitaskd-tm.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitaskd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hitaskd-tm.obj `if test -f 'utils/tm.c'; then $(CYGPATH_W) 'utils/tm.c'; else $(CYGPATH_W) '$(srcdir)/utils/tm.c'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo

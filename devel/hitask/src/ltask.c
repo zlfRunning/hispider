@@ -16,6 +16,7 @@
 #include "queue.h"
 #include "fqueue.h"
 #include "logger.h"
+#include "tm.h"
 #define _EXIT_(format...)                                                               \
 do                                                                                      \
 {                                                                                       \
@@ -789,7 +790,7 @@ err:
 }
 
 /* pop url */
-int ltask_pop_url(LTASK *task, char *url)
+int ltask_pop_url(LTASK *task, char *url, int *time, char *refer, char *cookie)
 {
     int urlid = -1, n = -1, x = 0;
     LHOST *host_node = NULL;
@@ -842,11 +843,23 @@ int ltask_pop_url(LTASK *task, char *url)
                 && meta.status >= 0 
                 && (n = pread(task->url_fd, url, meta.url_len, meta.url_off)) > 0)
         {
+            if(time) *time = meta.date;
             if(host_node == NULL) 
                 host_node = (LHOST *)(task->hostio.map + meta.host_id * sizeof(LHOST));
             url[n] = '\0';
             host_node->url_current_id = meta.next;
             host_node->url_left--;
+            //refer
+            refer[0] = '\0';
+            if((n = meta.parent) >= 0 && pread(task->meta_fd, &meta, sizeof(LMETA),
+                (off_t)(n*sizeof(LMETA))) > 0 && meta.url_len <= HTTP_URL_MAX 
+                    && meta.status >= 0)
+            {
+                pread(task->url_fd, refer, meta.url_len, meta.url_off);
+                refer[meta.url_len] = '\0';
+            }
+            //cookie
+            cookie[0] = '\0';
         }
 end:
         MUTEX_UNLOCK(task->mutex);
@@ -939,12 +952,13 @@ int ltask_set_url_level(LTASK *task, int urlid, char *url, short level)
 /* NEW TASK */
 int ltask_get_task(LTASK *task, char *buf, int *nbuf)
 {
-    char url[HTTP_URL_MAX], ch = 0, *p = NULL, *ps = NULL, *path = NULL;
+    char url[HTTP_URL_MAX], date[64], refer[HTTP_URL_MAX], cookie[HTTP_COOKIE_MAX], 
+         ch = 0, *p = NULL, *ps = NULL, *path = NULL;
     unsigned char *sip = NULL, *pip = NULL;
-    int urlid = -1, ip = 0, port = 0;
+    int urlid = -1, ip = 0, port = 0, time = 0;
     LPROXY proxy = {0};
 
-    if(task && buf && nbuf && (urlid = ltask_pop_url(task, url)) >= 0)
+    if(task && buf && nbuf && (urlid = ltask_pop_url(task, url, &time, refer, cookie)) >= 0)
     {
         p = ps = url + strlen("http://");
         while(*p != '\0' && *p != ':' && *p != '/')++p;
@@ -960,21 +974,22 @@ int ltask_get_task(LTASK *task, char *buf, int *nbuf)
         }
         else if(ch == '/') path = (p+1);
         sip = (unsigned char *)&ip;
+        p = buf;
+        p += sprintf(p, "HTTP/1.0 200 OK\r\nFrom: %ld\r\nLocation: /%s\r\n"
+                        "Host: %s\r\nServer: %d.%d.%d.%d\r\nTE:%d\r\n", 
+                    (long)urlid, path, ps, sip[0], sip[1], sip[2], sip[3], port);
+        if(time != 0 && GMTstrdate(time, date) == 0)
+            p += sprintf(p, "Last-Modified: %s\r\n", date);
+        if(refer[0] != '\0') p += sprintf(p, "Referer: %s\r\n", refer);
+        if(cookie[0] != '\0') p += sprintf(p, "Cookie: %s\r\n", cookie);
         if(task->state->is_use_proxy && ltask_get_proxy(task, &proxy) >= 0)
         {
             pip = (unsigned char *)&(proxy.ip);
-            *nbuf = sprintf(buf, "HTTP/1.0 200 OK\r\nFrom: %ld\r\nLocation: /%s\r\n"
-                    "Host: %s\r\nServer: %d.%d.%d.%d\r\nReferer:%d\r\n"
-                    "User-Agent: %d.%d.%d.%d\r\nVia: %d\r\n\r\n", (long)urlid, path, ps,
-                    sip[0], sip[1], sip[2], sip[3], port,
+            p += sprintf(p, "User-Agent: %d.%d.%d.%d\r\nVia: %d\r\n", 
                     pip[0], pip[1], pip[2], pip[3], proxy.port);
         }
-        else
-        {
-            *nbuf = sprintf(buf, "HTTP/1.0 200 OK\r\nFrom: %ld\r\nLocation: /%s\r\n"
-                    "Host: %s\r\nServer: %d.%d.%d.%d\r\nReferer:%d\r\n\r\n",
-                    (long)urlid, path, ps, sip[0], sip[1], sip[2], sip[3], port);
-        }
+        p += sprintf(p, "%s", "\r\n");
+        *nbuf = p - buf;
         DEBUG_LOGGER(task->logger, "New TASK[%d] ip[%d.%d.%d.%d:%d] "
                 "http://%s/%s", urlid, sip[0], sip[1], sip[2], sip[3],
                 port, ps, path);
@@ -1331,7 +1346,8 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
             p += sprintf(p, "%s", type);*p++ = '\0';
             pdocheader->id      = urlid;
             pdocheader->parent  = meta.parent;
-            pdocheader->date    = 0;
+            if(date){meta.date = pdocheader->date = str2time(date);}
+            else pdocheader->date    = time(NULL);
             pdocheader->nurl    = (short)meta.url_len;
             pdocheader->ntype   = (short)strlen(type);
             pdocheader->ncontent = ncontent;

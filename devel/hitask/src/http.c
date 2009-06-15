@@ -53,7 +53,7 @@ int http_encode(char *src, int src_len, char *dst)
     return j;
 }
 
-int http_decode(char *src, int src_len, char *dst)
+int http_decode(unsigned char *src, int src_len, unsigned char *dst)
 {
     int i = 0, j = 0;
     char base64_decode_map[256] = {
@@ -81,12 +81,12 @@ int http_decode(char *src, int src_len, char *dst)
         255, 255, 255, 255, 255, 255};
     for (; i < src_len; i += 4) 
     {
-        dst[j++] = base64_decode_map[src[i]] << 2 |
-            base64_decode_map[src[i + 1]] >> 4;
-        dst[j++] = base64_decode_map[src[i + 1]] << 4 |
-            base64_decode_map[src[i + 2]] >> 2;
-        dst[j++] = base64_decode_map[src[i + 2]] << 6 |
-            base64_decode_map[src[i + 3]];
+        dst[j++] = (base64_decode_map[src[i]] << 2) 
+            | (base64_decode_map[src[i + 1]] >> 4);
+        dst[j++] = (base64_decode_map[src[i + 1]] << 4) 
+            | (base64_decode_map[src[i + 2]] >> 2);
+        dst[j++] = (base64_decode_map[src[i + 2]] << 6) 
+            | (base64_decode_map[src[i + 3]]);
     }
     dst[j] = '\0';
     return j;
@@ -241,7 +241,7 @@ int http_request_parse(char *p, char *end, HTTP_REQ *http_req)
         ps = http_req->path;
         while(s < end && *s != 0x20 && *s != '\r' && *s != '?')*ps++ = *s++;
         *ps = '\0';
-        if(*s == '?') s += http_argv_parse(++s, end, http_req);
+        if(*s == '?') s += http_argv_parse(s+1, end, http_req);
         while(s < end && *s != '\n')s++;
         s++;
         pp = http_req->hlines + 1;
@@ -275,7 +275,7 @@ int http_request_parse(char *p, char *end, HTTP_REQ *http_req)
                 sp = s;
                 while(s < end && *s != '\r' && *s != 0x20) ++s;
                 http_req->auth.k = pp - http_req->hlines;
-                pp += http_decode(sp, (s - sp), pp);
+                pp += http_decode((unsigned char *)sp, (s - sp), (unsigned char *)pp);
                 sp = http_req->hlines + http_req->auth.k;
                 while(sp < pp && *sp != ':') sp++;
                 if(*sp == ':')

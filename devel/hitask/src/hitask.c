@@ -86,8 +86,8 @@ int hitask_packet_reader(CONN *conn, CB_DATA *buffer)
 /* download */
 int hitask_packet_handler(CONN *conn, CB_DATA *packet)
 {
-    char *p = NULL, *end = NULL, *ip = NULL, *sip = NULL,
-         *pip = NULL, *host = NULL, *path = NULL;
+    char *p = NULL, *end = NULL, *ip = NULL, *sip = NULL, *pip = NULL, 
+         *host = NULL, *path = NULL, *cookie = NULL, *refer = NULL;
     HTTP_RESPONSE http_resp = {0};
     int taskid = 0, n = 0, c_id = 0, port = 0, pport = 0, 
         sport = 0, is_use_proxy = 0, doctype = -1;
@@ -148,7 +148,7 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
                     ? (http_resp.hlines + n): NULL; 
                 sip = ip = ((n = http_resp.headers[HEAD_RESP_SERVER]) > 0)
                     ? (http_resp.hlines + n): NULL;
-                sport = port = ((n = http_resp.headers[HEAD_REQ_REFERER]) > 0)
+                sport = port = ((n = http_resp.headers[HEAD_REQ_TE]) > 0)
                     ? atoi(http_resp.hlines + n) : 0;
                 pip = ((n = http_resp.headers[HEAD_REQ_USER_AGENT]) > 0)
                     ? (http_resp.hlines + n): NULL;
@@ -187,26 +187,25 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
                 }
                 if((tasklist[c_id].c_conn = service->newconn(service, -1, -1, ip, port, NULL)))
                 {
-                    if(is_use_proxy && sport != 80)
-                    {
-                        tasklist[c_id].nrequest = sprintf(tasklist[c_id].request, 
-                                "GET http://%s:%d%s HTTP/1.0\r\nHost: %s\r\n"
-                                "User-Agent: %s\r\nAccept: %s\r\nAccept-Language: %s\r\n"
-                                "Accept-Encoding: %s\r\nAccept-Charset: %s\r\n"   
-                                "Connection: close\r\n\r\n", host, sport, path, host,
-                                USER_AGENT, ACCEPT_TYPE, ACCEPT_LANGUAGE, 
-                                ACCEPT_ENCODING, ACCEPT_CHARSET);
-                    }
-                    else
-                    {
-                        tasklist[c_id].nrequest = sprintf(tasklist[c_id].request, 
-                                "GET %s HTTP/1.0\r\nHost: %s\r\n"
-                                "User-Agent: %s\r\nAccept: %s\r\nAccept-Language: %s\r\n"
-                                "Accept-Encoding: %s\r\nAccept-Charset: %s\r\n"
-                                "Connection: close\r\n\r\n", path, host, 
-                                USER_AGENT, ACCEPT_TYPE, ACCEPT_LANGUAGE, 
-                                ACCEPT_ENCODING, ACCEPT_CHARSET);
-                    }
+                    p = tasklist[c_id].request;
+                    //GET/POST path
+                    if(is_use_proxy || sport != 80)
+                        p += sprintf(p, "GET http://%s:%d%s HTTP/1.0\r\n", host, sport, path);
+                    else 
+                        p += sprintf(p, "GET %s HTTP/1.0\r\n", path);
+                    //general
+                    p += sprintf(p, "Host: %s\r\nUser-Agent: %s\r\nAccept: %s\r\n"
+                            "Accept-Language: %s\r\nAccept-Encoding: %s\r\n"
+                            "Accept-Charset: %s\r\nConnection: close\r\n", host, 
+                            USER_AGENT, ACCEPT_TYPE, ACCEPT_LANGUAGE, 
+                            ACCEPT_ENCODING, ACCEPT_CHARSET);
+                    if((n = http_resp.headers[HEAD_REQ_COOKIE]) > 0)
+                        p += sprintf(p, "Cookie: %s\r\n", http_resp.hlines + n);
+                    if((n = http_resp.headers[HEAD_REQ_REFERER]) > 0)
+                        p += sprintf(p, "Referer: %s\r\n", http_resp.hlines + n);
+                    //end
+                    p += sprintf(p, "%s", "\r\n");
+                    tasklist[c_id].nrequest = p - tasklist[c_id].request;
                     tasklist[c_id].c_conn->c_id = c_id;
                     tasklist[c_id].c_conn->start_cstate(tasklist[c_id].c_conn);
                     return service->newtransaction(service, tasklist[c_id].c_conn, c_id);
