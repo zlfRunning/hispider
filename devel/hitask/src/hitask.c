@@ -51,22 +51,23 @@ int hitask_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA 
 int hitask_trans_handler(CONN *conn, int tid);
 
 /* http download error */
-int http_download_error(int c_id)
+int http_download_error(int c_id, int err)
 {
-    char buf[HTTP_BUF_SIZE];
+    char *p = NULL, buf[HTTP_BUF_SIZE];
     int n = 0;
 
     if(c_id >= 0 && c_id < ntask && tasklist[c_id].s_conn)
     {
+        p = buf;
+        p += sprintf(p, "TASK %d HTTP/1.0\r\n", tasklist[c_id].taskid);
         if(tasklist[c_id].is_new_host)
         {
-            n = sprintf(buf, "TASK %d HTTP/1.0\r\nHost: %s\r\n Server:%s\r\n\r\n", 
-                    tasklist[c_id].taskid, tasklist[c_id].host, tasklist[c_id].ip);
+            p += sprintf(p, "Host: %s\r\n Server:%s\r\n\r\n", 
+                    tasklist[c_id].host, tasklist[c_id].ip);
         }
-        else
-        {
-            n = sprintf(buf, "TASK %d HTTP/1.0\r\n\r\n", tasklist[c_id].taskid);
-        }
+        if(err > 0) p += sprintf(p, "Warning: %d\r\n", err);
+        p += sprintf(p, "%s", "\r\n");
+        n = p - buf;
         tasklist[c_id].is_new_host = 0;
         return tasklist[c_id].s_conn->push_chunk(tasklist[c_id].s_conn, buf, n);
     }
@@ -103,7 +104,7 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
             {
                 conn->over_cstate(conn);
                 conn->over(conn);
-                return http_download_error(c_id);
+                return http_download_error(c_id, ERR_PROGRAM);
             }
             //check content-type
             if((n = http_resp.headers[HEAD_ENT_CONTENT_TYPE]) > 0 && (p = http_resp.hlines + n))
@@ -112,7 +113,7 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
             {
                 conn->over_cstate(conn);
                 conn->close(conn);
-                return http_download_error(c_id);
+                return http_download_error(c_id, ERR_CONTENT_TYPE);
             }
             else
             {
@@ -217,7 +218,7 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
                 }
             }
             restart_task:
-                return http_download_error(c_id);
+                return http_download_error(c_id, ERR_HOST_IP);
         }
         return -1;
     }
@@ -243,7 +244,7 @@ int hitask_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                 tasklist[c_id].c_conn = NULL;
                 conn->over_cstate(conn);
                 conn->over(conn);
-                return http_download_error(c_id);
+                return http_download_error(c_id, ERR_TASK_CONN);
             }
         }
         else if(conn == tasklist[c_id].s_conn)
@@ -277,7 +278,7 @@ int hitask_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA 
                 tasklist[c_id].c_conn = NULL;
                 conn->over_cstate(conn);
                 conn->over(conn);
-                return http_download_error(c_id);
+                return http_download_error(c_id, ERR_TASK_TIMEOUT);
             }
         }
         else
@@ -513,7 +514,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
             else goto err_end;
         }
 err_end:
-        http_download_error(c_id);
+        http_download_error(c_id, ERR_DATA);
 end:    
         conn->over_cstate(conn);
         conn->close(conn);

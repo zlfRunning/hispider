@@ -155,15 +155,6 @@ static HTTP_ELEMENT response_status[] =
 #define RESP_HTTPVERNOTSUPPORT	39
 	{39, "505", 3, "HTTP Version not supported"}
 };
-static char *wdays[]={"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
-#ifndef _STATIS_YMON
-#define _STATIS_YMON
-static char *ymonths[]= {
-	"Jan", "Feb", "Mar",
-	"Apr", "May", "Jun",
-	"Jul", "Aug", "Sep",
-	"Oct", "Nov", "Dec"};
-#endif
 
 /* HTTP/1.1 REQUEST HEADERS FROM RFC2616 
    request-header = 

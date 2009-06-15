@@ -13,6 +13,14 @@
 #define HTTP_BUF_SIZE           65536
 #define Q_TYPE_URL              0x01
 #define Q_TYPE_HOST             0x02
+#define ERR_PROXY               0x01
+#define ERR_HTTP_RESP           0x02
+#define ERR_PROGRAM             0x04
+#define ERR_CONTENT_TYPE        0x08
+#define ERR_HOST_IP             0x10
+#define ERR_TASK_CONN           0x20
+#define ERR_TASK_TIMEOUT        0x40
+#define ERR_DATA                0x80
 #define L_LEVEL_UP              1
 #define L_LEVEL_DOWN            -1
 #define PROXY_STATUS_OK         1
@@ -66,13 +74,13 @@
 /* host/domain */
 typedef struct _LHOST
 {
-    int host_off;
-    int host_len;
-    int ip_off;
     short ip_count;
     short status;
     short level;
     short depth;
+    int host_off;
+    int host_len;
+    int ip_off;
     int url_first_id;
     int url_current_id;
     int url_total;
@@ -149,6 +157,11 @@ typedef struct _LDNS
     int  status;
     char name[HTTP_IP_MAX];
 }LDNS;
+/* COOKIE */
+typedef struct _LCOOKIE
+{
+
+}LCOOKIE;
 /* USER */
 typedef struct _LUSER
 {

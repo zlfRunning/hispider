@@ -1,4 +1,13 @@
 #include "http.h"
+static char *wdays[]={"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
+#ifndef _STATIS_YMON
+#define _STATIS_YMON
+static char *ymonths[]= {
+        "Jan", "Feb", "Mar",
+            "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep",
+                    "Oct", "Nov", "Dec"};
+#endif
 #define HEX2CH(c, x) ( ((x = (c - '0')) >= 0 && x < 10) \
         || ((x = (c - 'a')) >= 0 && (x += 10) < 16) \
         || ((x = (c - 'A')) >= 0 && (x += 10) < 16) )

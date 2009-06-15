@@ -682,7 +682,7 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
     LHOST *host_node = NULL;
     unsigned char key[MD5_LEN];
     struct stat st = {0};
-    LMETA meta = {0}, *pmeta = NULL;
+    LMETA meta = {0};
 
     if(task && url)
     {
