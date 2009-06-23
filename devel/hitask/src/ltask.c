@@ -1335,7 +1335,8 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
         char *content, int ncontent)
 {
     char buf[HTTP_BUF_SIZE], *url = NULL, *p = NULL, *data = NULL;
-    int ret = -1, n = 0, ndata = 0;
+    int ret = -1, n = 0;
+    size_t  ndata = 0;
     LDOCHEADER  *pdocheader = NULL;
     struct stat st = {0};
     LMETA meta = {0};
