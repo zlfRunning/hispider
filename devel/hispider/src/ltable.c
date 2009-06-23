@@ -135,24 +135,13 @@ int ltable_parselink(LTABLE *ltable, char *host, char *path, char *content, char
                 p += 2;
                 pref = 0;
                 while(p < end && (*p == 0x20 || *p == 0x09)) ++p;
-                //DEBUG_LOGGER(ltable->logger, "%d %c\n", __LINE__, *p);
                 if(p >= (end - 4) && strncasecmp(p, "href", 4) != 0) continue;
-                //fprintf(stdout, "%s\n", p);
-                //DEBUG_LOGGER(ltable->logger, "%d %c\n", __LINE__, *p);
                 p += 4;
-                //DEBUG_LOGGER(ltable->logger, "%d %c\n", __LINE__, *p);
                 while(p < end && (*p == 0x20 || *p == 0x09)) ++p;
-                //DEBUG_LOGGER(ltable->logger, "%d %c\n", __LINE__, *p);
                 if(*p != '=') continue;
                 ++p;
                 while(p < end && (*p == 0x20 || *p == 0x09)) ++p;
-                //DEBUG_LOGGER(ltable->logger, "%d %c\n", __LINE__, *p);
                 if(*p == '"' || *p == '\''){++p; pref = 1;}
-                //DEBUG_LOGGER(ltable->logger, "%d %c\n", __LINE__, *p);
-                //if(*p == '/' || (*p >= '0' && *p <= '9') 
-                //        || (*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z'))
-                //{
-                //DEBUG_LOGGER(ltable->logger, "%d %c\n", __LINE__, *p);
                 link = p;
                 ps = url;
                 if(pref && *link != '#' && strncasecmp("javascript", link, 10) != 0
@@ -166,10 +155,8 @@ int ltable_parselink(LTABLE *ltable, char *host, char *path, char *content, char
                     url[n] = '\0';
                     ltable->addlink(ltable, (unsigned char *)host, (unsigned char *)path, 
                             (unsigned char *)url, (unsigned char *)ps);
-                    //DEBUG_LOGGER(ltable->logger, "NEWURL[%s] from http://%s%s", url, host, path);
                     count++;
                 }
-                //}
             }
             ++p;
         }	
