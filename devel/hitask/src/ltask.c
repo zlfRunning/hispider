@@ -17,6 +17,10 @@
 #include "fqueue.h"
 #include "logger.h"
 #include "tm.h"
+#ifndef LI
+#define LI(_x_) ((long int)_x_)
+#endif
+#define HTTP_PREF  "http://"
 #define _EXIT_(format...)                                                               \
 do                                                                                      \
 {                                                                                       \
@@ -677,7 +681,8 @@ int ltask_set_host_level(LTASK *task, int hostid, char *host, short level)
 /* add url */
 int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
 {
-    char newurl[HTTP_URL_MAX], *p = NULL, *pp = NULL, *e = NULL, *host = NULL;
+    char newurl[HTTP_URL_MAX], URL[HTTP_URL_MAX], *p = NULL, 
+         *pp = NULL, *e = NULL, *host = NULL;
     void *dp = NULL, *olddp = NULL;
     int ret = -1, n = 0, nurl = 0, id = 0, host_id = 0;
     LHOST *host_node = NULL;
@@ -711,8 +716,13 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
                 *pp++ = *p++;
             }
         }
-        if(e == NULL){e = pp++; *e = '/';}
-        if(host == NULL || e == NULL) goto err;
+        if(e == NULL)
+        {
+            e = pp++; *e = '/'; 
+            sprintf(URL, "%s/", url);
+            url = URL;
+        }
+        if(host == NULL) goto err;
         *pp = '\0';
         /* check/add host */
         if((nurl = (p - url)) <= 0 || (n = (e - host)) <= 0) goto err;
@@ -961,7 +971,7 @@ int ltask_get_task(LTASK *task, char *buf, int *nbuf)
 
     if(task && buf && nbuf && (urlid = ltask_pop_url(task, url, &itime, refer, cookie)) >= 0)
     {
-        p = ps = url + strlen("http://");
+        p = ps = url + strlen(HTTP_PREF);
         while(*p != '\0' && *p != ':' && *p != '/')++p;
         ch = *p;
         *p = '\0';
@@ -1357,17 +1367,19 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
                 && meta.url_len > 0 && meta.url_len <= HTTP_URL_MAX && meta.status >= 0 
                 && (n = pread(task->url_fd, url, meta.url_len, meta.url_off)) > 0)
         {
+            DEBUG_LOGGER(task->logger, "url:%s nurl:%d status:%d url_off:%lld", 
+                    url, meta.url_len, meta.status, meta.url_off);
             p = url + meta.url_len; *p++ = '\0';
             p += sprintf(p, "%s", type);*p++ = '\0';
             pdocheader->id      = urlid;
             pdocheader->parent  = meta.parent;
-            if(date){meta.date = pdocheader->date = str2time(date);}
+            if(date){meta.date  = pdocheader->date = str2time(date);}
             else pdocheader->date    = time(NULL);
             pdocheader->nurl    = (short)meta.url_len;
             pdocheader->ntype   = (short)strlen(type);
             pdocheader->ncontent = ncontent;
             pdocheader->total = pdocheader->ntype + 1 + pdocheader->nurl + 1 + ncontent;
-            if((n = p - buf) > 0 && pwrite(task->doc_fd, buf, n, st.st_size) > 0
+            if((n = (p - buf)) > 0 && pwrite(task->doc_fd, buf, n, st.st_size) > 0
                     && (meta.content_off = (st.st_size + (off_t)n))
                     && pwrite(task->doc_fd, content, ncontent, meta.content_off) > 0)
             {
@@ -1386,7 +1398,8 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
                 if(uncompress((Bytef *)data, (uLongf *)&ndata, 
                             (const Bytef *)content, (uLong)ncontent) == 0)
                 {
-                    DEBUG_LOGGER(task->logger, "url:%s ndata:%d", url, ndata);
+                    DEBUG_LOGGER(task->logger, "url:%s nurl:%d ndata:%ld", 
+                            url, meta.url_len, LI(ndata));
                     task->extract_link(task, urlid, meta.depth, url, data, ndata);
                 }
                 free(data);
@@ -1425,7 +1438,8 @@ do                                                                      \
         pp = buf;                                                       \
         if((n = (path - url)) > 0)                                      \
         {                                                               \
-            strncpy(pp, url, n);                                        \
+            DEBUG_LOGGER(task->logger, "copy nurl:%d url:%s", n, url);  \
+            memcpy(pp, url, n);                                         \
             pp += n;                                                    \
             URLTOEND(p, end, pref, pp);                                 \
         }                                                               \
@@ -1452,11 +1466,11 @@ do                                                                      \
             URLTOEND(p, end, pref, pp);                                 \
         }                                                               \
     }                                                                   \
-    else if(strncasecmp(p, "http://", 7) == 0)                          \
+    else if(strncasecmp(p, HTTP_PREF, 7) == 0)                          \
     {                                                                   \
         p += 7;                                                         \
         pp = buf;                                                       \
-        pp += sprintf(pp, "%s", "http://");                             \
+        pp += sprintf(pp, "%s", HTTP_PREF);                             \
         URLTOEND(p, end, pref, pp);                                     \
     }                                                                   \
     else                                                                \
@@ -1499,6 +1513,7 @@ int ltask_extract_link(LTASK *task, int urlid, int depth, char *url, char *conte
             else ++ps;
         }
         end = p + ncontent;
+        DEBUG_LOGGER(task->logger, "path:%s last:%s url:%s ", path, last, url);
         //parse link(s)
         while(p < end)
         {
@@ -1547,8 +1562,65 @@ int ltask_extract_link(LTASK *task, int urlid, int depth, char *url, char *conte
                 ++p;
                 continue;
             }
-            READURL(task, p, end, pp, buf, ps, path, url, last, n, pref);
             //DEBUG_LOGGER(task->logger, "path:%s last:%s url:%s ", path, last, url);
+            //READURL(task, p, end, pp, buf, ps, path, url, last, n, pref);
+            //read url
+            if(*p == '/')                                                       
+            {                                                                   
+                pp = buf;                                                       
+                if((n = (path - url)) > 0)                                      
+                {                                                               
+                    //DEBUG_LOGGER(task->logger, "copy nurl:%d url:%s", n, url);  
+                    memcpy(pp, url, n);                                         
+                    pp += n;                                                    
+                    URLTOEND(p, end, pref, pp);                                 
+                }                                                               
+            }                                                                   
+            else if(*p == '.')                                                  
+            {                                                                   
+                if(*(p+1) == '/') p += 2;                                       
+                ps = last;                                                      
+                while(*p == '.' && *(p+1) == '.' && *(p+2) == '/')              
+                {                                                               
+                    p += 3;                                                     
+                    while(*p == '/')++p;                                        
+                    if(*ps != '/') goto next;                                   
+                    --ps;                                                       
+                    while(ps >= path && *ps != '/')--ps;                        
+                    if(ps < path) goto next;                                    
+                }                                                               
+                pp = buf;                                                       
+                if((n = (ps - url)) > 0)                                        
+                {                                                               
+                    strncpy(pp, url, n);                                        
+                    pp += n;                                                    
+                    *pp++ = '/';                                                
+                    URLTOEND(p, end, pref, pp);                                 
+                }                                                               
+            }                                                                   
+            else if(strncasecmp(p, HTTP_PREF, 7) == 0)                          
+            {                                                                   
+                p += 7;                                                         
+                pp = buf;                                                       
+                pp += sprintf(pp, "%s", HTTP_PREF);                             
+                URLTOEND(p, end, pref, pp);                                     
+            }                                                                   
+            else                                                                
+            {                                                                   
+                ps = p;                                                         
+                while(p < end && ((*p >= 'a' && *p <= 'z')                      
+                            || (*p >= 'A' && *p <= 'Z')))                       
+                    p++;                                                        
+                if(*p == ':' && *(p+1) == '/' && *(p+2) == '/') goto next;      
+                pp = buf;                                                       
+                if(last && (n = (last - url)) > 0)                              
+                {                                                               
+                    strncpy(pp, url, n);                                        
+                    pp += n;                                                    
+                    *pp++ = '/';                                                
+                    URLTOEND(p, end, pref, pp);                                 
+                }                                                               
+            } 
             if((pp - buf) > 0)
             {
                 *pp = '\0';

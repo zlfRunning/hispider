@@ -104,7 +104,7 @@ typedef struct _LMETA
     short depth;
     int date;
     int parent;
-    int url_off;
+    off_t url_off;
     int url_len;
     int host_id;
     off_t content_off;
