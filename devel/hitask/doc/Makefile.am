@@ -10,7 +10,7 @@ install-ini:
 	@echo install hitask.ini hitaskd to $(sysconftodir)
 	@test -d $(sysconftodir)      || mkdir -p $(sysconftodir)
 	@test -f $(sysconftodir)/hitask.ini \
-		|| cp -p $(top_srcdir)/doc/rc.hitask.ini $(sysconftodir)/hitask.ini
+		|| cp -p $(top_srcdir)/doc/hitask.ini $(sysconftodir)/hitask.ini
 	@test -f $(sysconftodir)/hitaskd.ini \
-		|| cp -p $(top_srcdir)/doc/rc.hitaskd.ini $(sysconftodir)/hitaskd.ini
+		|| cp -p $(top_srcdir)/doc/hitaskd.ini $(sysconftodir)/hitaskd.ini
 
