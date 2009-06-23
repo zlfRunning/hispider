@@ -718,7 +718,8 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
         }
         if(e == NULL)
         {
-            e = pp++; *e = '/'; 
+            e = pp++; 
+            *e = '/'; 
             sprintf(URL, "%s/", url);
             url = URL;
         }
@@ -1363,13 +1364,15 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
         pdocheader = (LDOCHEADER *)buf;
         memset(pdocheader, 0, sizeof(LDOCHEADER));
         url = buf + sizeof(LDOCHEADER);
-        if(pread(task->meta_fd, &meta, sizeof(LMETA), (off_t)(urlid * sizeof(LMETA))) > 0 
-                && meta.url_len > 0 && meta.url_len <= HTTP_URL_MAX && meta.status >= 0 
-                && (n = pread(task->url_fd, url, meta.url_len, meta.url_off)) > 0)
+        if(pread(task->meta_fd, &meta, sizeof(LMETA), (off_t)(urlid * sizeof(LMETA))) > 0 )
         {
             DEBUG_LOGGER(task->logger, "url:%s nurl:%d status:%d url_off:%lld", 
                     url, meta.url_len, meta.status, meta.url_off);
-            p = url + meta.url_len; *p++ = '\0';
+        }else goto end;
+        if(meta.url_len > 0 && meta.url_len <= HTTP_URL_MAX && meta.status >= 0 
+                && (n = pread(task->url_fd, url, meta.url_len, meta.url_off)) > 0)
+        {
+                        p = url + meta.url_len; *p++ = '\0';
             p += sprintf(p, "%s", type);*p++ = '\0';
             pdocheader->id      = urlid;
             pdocheader->parent  = meta.parent;
@@ -1388,9 +1391,10 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
                 ret = 0;
             }
         }
+end:
         MUTEX_UNLOCK(task->mutex);
         /* uncompress text/html */
-        if(url && type && strncasecmp(type, "text", 4) == 0) 
+        if(url && strlen(url)  > 0 && type && strncasecmp(type, "text", 4) == 0) 
         {
             ndata = ncontent * 20;
             if((data = (char *)calloc(1, ndata)))
