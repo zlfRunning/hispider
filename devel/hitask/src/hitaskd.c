@@ -488,8 +488,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
         start = iniparser_getstr(dict, "HITASKD:start");
         ltask->set_basedir(ltask, basedir);
         ltask->add_url(ltask, -1, 0, start);
-        //ltable->resume(ltable);
-        //LOGGER_INIT(logger, iniparser_getstr(dict, "HITASKD:access_log"));
+        LOGGER_INIT(logger, iniparser_getstr(dict, "HITASKD:access_log"));
         //ltable->set_logger(ltable, NULL, logger);
         /*
         host = iniparser_getstr(dict, "HITASKD:host");
@@ -614,5 +613,6 @@ int main(int argc, char **argv)
     sbase->stop(sbase);
     sbase->clean(&sbase);
     if(dict)iniparser_free(dict);
+    if(logger)LOGGER_CLEAN(logger);
     return 0;
 }
