@@ -833,11 +833,16 @@ int ltask_pop_url(LTASK *task, char *url, int *itime, char *refer, char *cookie)
             {
                 urlid = node.id;
             }
-            else goto end;
+            else 
+	    {
+		DEBUG_LOGGER(task->logger, "Unknown task type:%d", node.type);
+		goto end;
+	    }
         }
         else
         {
             x = task->state->host_current;
+	    DEBUG_LOGGER(task->logger, "QURL host:%d", x);
             do
             {
                 host_node = (LHOST *)(task->hostio.map 
@@ -856,6 +861,7 @@ int ltask_pop_url(LTASK *task, char *url, int *itime, char *refer, char *cookie)
             }while(host_node == NULL);
         }
         /* read url */
+	DEBUG_LOGGER(task->logger, "READURL urlid:%d", urlid);
         if(urlid >= 0 && pread(task->meta_fd, &meta, sizeof(LMETA), 
                     (off_t)(urlid * sizeof(LMETA))) > 0 && meta.url_len <= HTTP_URL_MAX
                 && meta.status >= 0 
@@ -879,6 +885,7 @@ int ltask_pop_url(LTASK *task, char *url, int *itime, char *refer, char *cookie)
             //cookie
             cookie[0] = '\0';
         }
+	DEBUG_LOGGER(task->logger, "Unknown urlid:%d", urlid);
 end:
         MUTEX_UNLOCK(task->mutex);
     }
