@@ -305,7 +305,7 @@ int http_response_parse(char *p, char *end, HTTP_RESPONSE *http_resp)
 {
     int i  = 0, ret = -1, high = 0, low = 0;
     HTTP_KV *cookie = NULL, *ecookie = NULL;
-    char *s = p, *pp = NULL;
+    char *s = p, *pp = NULL, *epp = NULL;
 
     if(p && end)
     {
@@ -321,6 +321,7 @@ int http_response_parse(char *p, char *end, HTTP_RESPONSE *http_resp)
             }
         }
         pp = http_resp->hlines + 1;
+        epp = http_resp->hlines + HTTP_HEADER_MAX;
         cookie = &(http_resp->cookies[http_resp->ncookies]);
         ecookie = &(http_resp->cookies[HTTP_COOKIES_MAX + 1]);
         while(s < end)
@@ -343,7 +344,7 @@ int http_response_parse(char *p, char *end, HTTP_RESPONSE *http_resp)
             if(i == HEAD_RESP_SET_COOKIE && cookie < ecookie)
             {
                 cookie->k = pp - http_resp->hlines;
-                while(s < end && *s != '\r' && *s != '=') 
+                while(s < end && *s != '\r' && *s != '=' && pp < epp) 
                 {
                     URLDECODE(s, end, high, low, pp);
                 }
@@ -352,7 +353,7 @@ int http_response_parse(char *p, char *end, HTTP_RESPONSE *http_resp)
                     cookie->nk = pp - http_resp->hlines - cookie->k;
                     *pp++ = *s++;
                     cookie->v = pp - http_resp->hlines;
-                    while(s < end && *s != ';' && *s != 0x20 && *s != '\r') 
+                    while(s < end && *s != ';' && *s != 0x20 && *s != '\r' && pp < epp) 
                     {
                         URLDECODE(s, end, high, low, pp);
                     }
@@ -360,14 +361,14 @@ int http_response_parse(char *p, char *end, HTTP_RESPONSE *http_resp)
                     cookie++;
                     http_resp->ncookies++;
                 }
-                while(s < end && *s != '\r') 
+                while(s < end && *s != '\r' && pp < epp) 
                 {
                     URLDECODE(s, end, high, low, pp);
                 }
             }
             else
             {
-                while(s < end && *s != '\r')*pp++ = *s++;
+                while(s < end && *s != '\r' && pp < epp)*pp++ = *s++;
             }
             *pp++ = '\0';
             http_resp->nhline = pp - http_resp->hlines;
