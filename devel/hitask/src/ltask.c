@@ -695,6 +695,8 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
         MUTEX_LOCK(task->mutex);
         p = url;
         pp = newurl;
+        memset(newurl, 0, HTTP_URL_MAX);
+        memset(URL, 0, HTTP_URL_MAX);
         while(*p != '\0')
         {
             if(host == NULL && *p == ':' && *(p+1) == '/' && *(p+2) == '/')
@@ -716,17 +718,19 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
                 *pp++ = *p++;
             }
         }
+        if(host == NULL) goto err;
+        nurl = (p - url);
         if(e == NULL)
         {
-            e = pp++; 
+            e = pp; 
             *e = '/'; 
             sprintf(URL, "%s/", url);
             url = URL;
+            nurl++;
         }
-        if(host == NULL) goto err;
-        *pp = '\0';
         /* check/add host */
-        if((nurl = (p - url)) <= 0 || (n = (e - host)) <= 0) goto err;
+        DEBUG_LOGGER(task->logger, "Ready for adding url:%s host:%s e:%s", url, host, e);
+        if((n = (e - host)) <= 0) goto err;
         TRIETAB_RGET(task->table, host, n, dp);
         if(dp == NULL)
         {
