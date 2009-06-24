@@ -682,7 +682,7 @@ int ltask_set_host_level(LTASK *task, int hostid, char *host, short level)
 int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
 {
     char newurl[HTTP_URL_MAX], URL[HTTP_URL_MAX], *p = NULL, 
-         *pp = NULL, *e = NULL, *host = NULL;
+         *pp = NULL, *e = NULL, *host = NULL, *purl = NULL;
     void *dp = NULL, *olddp = NULL;
     int ret = -1, n = 0, nurl = 0, id = 0, host_id = 0;
     LHOST *host_node = NULL;
@@ -693,7 +693,7 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
     if(task && url)
     {
         MUTEX_LOCK(task->mutex);
-        p = url;
+        purl = p = url;
         pp = newurl;
         memset(newurl, 0, HTTP_URL_MAX);
         memset(URL, 0, HTTP_URL_MAX);
@@ -725,11 +725,13 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
             e = pp; 
             *e = '/'; 
             sprintf(URL, "%s/", url);
-            url = URL;
+            purl = URL;
             nurl++;
         }
         /* check/add host */
-        DEBUG_LOGGER(task->logger, "Ready for adding url:%s host:%s e:%s", url, host, e);
+        DEBUG_LOGGER(task->logger, "Ready for adding url:%s", purl);
+        DEBUG_LOGGER(task->logger, "Ready for adding e:%s", e);
+        DEBUG_LOGGER(task->logger, "Ready for adding url:%s host:%s e:%s", purl, host, e);
         if((n = (e - host)) <= 0) goto err;
         TRIETAB_RGET(task->table, host, n, dp);
         if(dp == NULL)
@@ -739,7 +741,7 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
             host_id = task->hostio.end/(off_t)sizeof(LHOST);
             host_node = (LHOST *)(task->hostio.map + task->hostio.end);
 	        DEBUG_LOGGER(task->logger, "%d:url[%d:%s] URL[%d:%s] path[%s]", 
-                    host_id, n, newurl, nurl, url, e);
+                    host_id, n, newurl, nurl, purl, e);
             if(fstat(task->domain_fd, &st) != 0) goto err;
             host_node->host_off = st.st_size;
             host_node->host_len = n;
@@ -756,10 +758,10 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
             host_id = (long)dp - 1;
             host_node = (LHOST *)(task->hostio.map + (host_id * sizeof(LHOST)));
 	        DEBUG_LOGGER(task->logger, "%d:url[%d:%s] URL[%d:%s] path[%s] left:%d total:%d", 
-                    host_id, n, newurl, nurl, url, e, host_node->url_left, host_node->url_total);
+                    host_id, n, newurl, nurl, purl, e, host_node->url_left, host_node->url_total);
         }
         /* check/add url */
-        if((n = pp - newurl) <= 0) goto err;
+        if((n = (pp - newurl)) <= 0) goto err;
         memset(key, 0, MD5_LEN);
         md5((unsigned char *)newurl, n, key);
         if(fstat(task->meta_fd, &st) != 0) goto err;
@@ -769,7 +771,7 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
         if(olddp == NULL)
         {
             if(fstat(task->url_fd, &st) != 0) goto err;
-            if((n = sprintf(newurl, "%s\n", url)) > 0 
+            if((n = sprintf(newurl, "%s\n", purl)) > 0 
                     &&  write(task->url_fd, newurl, n) > 0 
                     && write(task->key_fd, key, MD5_LEN) > 0)
             {
@@ -1396,11 +1398,17 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
                 ret = 0;
             }
         }
+        if(date)
+        {
+            DEBUG_LOGGER(task->logger, "Over for update_content:(%d, %s,%s, %d)", 
+                    urlid, date, type, ncontent);
+        }
 end:
         MUTEX_UNLOCK(task->mutex);
         /* uncompress text/html */
         if(ret == 0 && url && type && strncasecmp(type, "text", 4) == 0) 
         {
+            DEBUG_LOGGER(task->logger, "Ready for extract_link(%d:%s)", urlid, url);
             ndata = ncontent * 20;
             if((data = (char *)calloc(1, ndata)))
             {
@@ -1413,6 +1421,7 @@ end:
                 }
                 free(data);
             }
+            DEBUG_LOGGER(task->logger, "Over for extract_link(%d:%s)", urlid, url);
         }
     }
     return ret;
@@ -1580,8 +1589,8 @@ int ltask_extract_link(LTASK *task, int urlid, int depth, char *url, char *conte
             if((pp - buf) > 0)
             {
                 *pp = '\0';
-                task->add_url(task, urlid, depth, buf);
                 DEBUG_LOGGER(task->logger, "add url:%s from %s\n", buf, url);
+                task->add_url(task, urlid, depth, buf);
             }
             /* to href last > */
 next:
