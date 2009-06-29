@@ -355,16 +355,26 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 if(strncasecmp(p, "gzip", 4) == 0) 
                 {
                     ndata =  nzdata * 8 + Z_HEADER_SIZE;
-                    if((data = calloc(1, ndata)) && (n = httpgzdecompress((Bytef *)zdata, 
-                                    nzdata, (Bytef *)data, (uLong *)&ndata)) == 0)
+                    if((data = calloc(1, ndata)))
                     {
-                        gzdoc_total++;
-                        DEBUG_LOGGER(logger, "gzdecompress data from %ld to %ld "
-                                " rate:(%lld/%lld) = %f", LI(nzdata), LI(ndata), gzdoc_total, 
-                                doc_total, ((double)gzdoc_total/(double)doc_total));
-                        rawdata = data;
-                        nrawdata = ndata;
-                        is_need_compress = 1;
+                        if((n = httpgzdecompress((Bytef *)zdata, 
+                                        nzdata, (Bytef *)data, (uLong *)&ndata)) == 0)
+                        {
+                            gzdoc_total++;
+                            DEBUG_LOGGER(logger, "gzdecompress data from %ld to %ld "
+                                    " rate:(%lld/%lld) = %f", LI(nzdata), LI(ndata), 
+                                    gzdoc_total, doc_total, 
+                                    ((double)gzdoc_total/(double)doc_total));
+                            rawdata = data;
+                            nrawdata = ndata;
+                            is_need_compress = 1;
+                        }
+                        else 
+                        {
+                            free(data);
+                            data = NULL;
+                            goto err_end;
+                        }
                     }
                     else 
                     {
@@ -376,15 +386,25 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 else if(strncasecmp(p, "deflate", 7) == 0)
                 {
                     ndata =  nzdata * 8 + Z_HEADER_SIZE;
-                    if( (data = calloc(1, ndata)) && zdecompress((Bytef *)zdata, 
-                                nzdata, (Bytef *)data, (uLong *)&ndata) == 0)
+                    if( (data = calloc(1, ndata)))
                     {
-                        zdoc_total++;
-                        DEBUG_LOGGER(logger, "zdecompress data from %ld to %ld "
-                                "rate:(%lld/%lld) = %f", LI(nzdata), LI(ndata), gzdoc_total, 
-                                doc_total, ((double)zdoc_total/(double)doc_total));
-                        rawdata = data;
-                        nrawdata = ndata;
+
+                        if(zdecompress((Bytef *)zdata, nzdata, (Bytef *)data, 
+                                    (uLong *)&ndata) == 0)
+                        {
+                            zdoc_total++;
+                            DEBUG_LOGGER(logger, "zdecompress data from %ld to %ld "
+                                    "rate:(%lld/%lld) = %f", LI(nzdata), LI(ndata), gzdoc_total, 
+                                    doc_total, ((double)zdoc_total/(double)doc_total));
+                            rawdata = data;
+                            nrawdata = ndata;
+                        }
+                        else 
+                        {
+                            free(data);
+                            data = NULL;
+                            goto err_end;
+                        }
                     }
                     else goto err_end;
                 }
@@ -507,19 +527,18 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     //fprintf(stdout, "Over task[%ld]\n", tasklist[c_id].taskid);
                     s_conn->push_chunk(s_conn, buf, n);
                     s_conn->push_chunk(s_conn, zdata, nzdata);
-                    if(is_new_zdata)
-                    {
-                        DEBUG_LOGGER(logger, "reset zdata %08x", UI(zdata));
-                        free(zdata);
-                        zdata = NULL;
-                    }
-                    tasklist[c_id].taskid = -1;
+                                        tasklist[c_id].taskid = -1;
                     tasklist[c_id].c_conn = NULL;
                 }
                 ret = 0;
+                if(zdata){free(zdata);zdata = NULL;}
                 goto end;
             }
-            else goto err_end;
+            else 
+            {
+                if(zdata){free(zdata);zdata = NULL;}
+                goto err_end;
+            }
         }
 err_end:
         http_download_error(c_id, ERR_DATA);
@@ -585,7 +604,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
     /* SBASE */
     sbase->nchilds = iniparser_getint(dict, "SBASE:nchilds", 0);
     sbase->connections_limit = iniparser_getint(dict, "SBASE:connections_limit", SB_CONN_MAX);
-    setrlimiter("RLIMIT_NOFILE", RLIMIT_NOFILE, sbase->connections_limit);
+    //setrlimiter("RLIMIT_NOFILE", RLIMIT_NOFILE, sbase->connections_limit);
     sbase->usec_sleep = iniparser_getint(dict, "SBASE:usec_sleep", SB_USEC_SLEEP);
     sbase->set_log(sbase, iniparser_getstr(dict, "SBASE:logfile"));
     sbase->set_evlog(sbase, iniparser_getstr(dict, "SBASE:evlogfile"));
@@ -691,20 +710,22 @@ int main(int argc, char **argv)
     signal(SIGINT,  &hitask_stop);
     signal(SIGHUP,  &hitask_stop);
     signal(SIGPIPE, SIG_IGN);
+    /*
     pid = fork();
     switch (pid) {
         case -1:
             perror("fork()");
             exit(EXIT_FAILURE);
             break;
-        case 0: /* child process */
+        case 0: // child process 
             if(setsid() == -1)
                 exit(EXIT_FAILURE);
             break;
-        default:/* parent */
+        default:// parent 
             _exit(EXIT_SUCCESS);
             break;
     }
+    */
     /*setrlimiter("RLIMIT_NOFILE", RLIMIT_NOFILE, 65536)*/
     if((sbase = sbase_init()) == NULL)
     {
@@ -719,13 +740,15 @@ int main(int argc, char **argv)
         return -1;
     }
     fprintf(stdout, "Initialized successed\n");
-    sbase->running(sbase, 0);
+    //sbase->running(sbase, 0);
     //sbase->running(sbase, 3600);
-    //sbase->running(sbase, 60000000);
+    sbase->running(sbase, 60000000);
     sbase->stop(sbase);
     sbase->clean(&sbase);
     doctype_map_clean(&doctype_map);
     if(tasklist){free(tasklist); tasklist = NULL;}
     if(dict)iniparser_free(dict);
+    if(taskqueue){QUEUE_CLEAN(taskqueue);}
+    if(logger){LOGGER_CLEAN(logger);}
     return 0;
 }
