@@ -21,7 +21,7 @@
 #ifndef UI
 #define UI(_xp_) ((unsigned int)_xp_)
 #endif
-#ifndef LI(n)
+#ifndef LI
 #define LI(_x_) ((long int)(_x_))
 #endif
 typedef struct _TASK
