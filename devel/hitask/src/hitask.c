@@ -604,11 +604,11 @@ int sbase_initialize(SBASE *sbase, char *conf)
     /* SBASE */
     sbase->nchilds = iniparser_getint(dict, "SBASE:nchilds", 0);
     sbase->connections_limit = iniparser_getint(dict, "SBASE:connections_limit", SB_CONN_MAX);
-    //setrlimiter("RLIMIT_NOFILE", RLIMIT_NOFILE, sbase->connections_limit);
+    setrlimiter("RLIMIT_NOFILE", RLIMIT_NOFILE, sbase->connections_limit);
     sbase->usec_sleep = iniparser_getint(dict, "SBASE:usec_sleep", SB_USEC_SLEEP);
     sbase->set_log(sbase, iniparser_getstr(dict, "SBASE:logfile"));
     sbase->set_evlog(sbase, iniparser_getstr(dict, "SBASE:evlogfile"));
-    /*  */
+    /* initialize service */
     if((service = service_init()) == NULL)
     {
         fprintf(stderr, "Initialize service failed, %s", strerror(errno));
@@ -710,7 +710,6 @@ int main(int argc, char **argv)
     signal(SIGINT,  &hitask_stop);
     signal(SIGHUP,  &hitask_stop);
     signal(SIGPIPE, SIG_IGN);
-    /*
     pid = fork();
     switch (pid) {
         case -1:
@@ -725,6 +724,7 @@ int main(int argc, char **argv)
             _exit(EXIT_SUCCESS);
             break;
     }
+    /*
     */
     /*setrlimiter("RLIMIT_NOFILE", RLIMIT_NOFILE, 65536)*/
     if((sbase = sbase_init()) == NULL)
@@ -740,9 +740,9 @@ int main(int argc, char **argv)
         return -1;
     }
     fprintf(stdout, "Initialized successed\n");
-    //sbase->running(sbase, 0);
+    sbase->running(sbase, 0);
     //sbase->running(sbase, 3600);
-    sbase->running(sbase, 60000000);
+    //sbase->running(sbase, 60000000);
     sbase->stop(sbase);
     sbase->clean(&sbase);
     doctype_map_clean(&doctype_map);
