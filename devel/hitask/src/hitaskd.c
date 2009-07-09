@@ -227,6 +227,7 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
     {
         p = packet->data;
         end = packet->data + packet->ndata;
+        *end = '\0';
         /*
         int fd = 0;
         if((fd = open("/tmp/header.txt", O_CREAT|O_RDWR|O_TRUNC, 0644)) > 0)
@@ -380,6 +381,7 @@ int histore_packet_handler(CONN *conn, CB_DATA *packet)
     {
         p = packet->data;
         end = packet->data + packet->ndata;
+        *end = '\0';
         if(http_request_parse(p, end, &http_req) == -1) goto err_end;
         if(http_req.reqid == HTTP_GET)
         {

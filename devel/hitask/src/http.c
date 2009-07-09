@@ -252,7 +252,7 @@ int http_request_parse(char *p, char *end, HTTP_REQ *http_req)
             while(*s == 0x20)s++;
             for(i = 0; i < HTTP_HEADER_NUM; i++)
             {
-                if( (end - s) >= http_headers[i].elen
+                if((end - s) >= http_headers[i].elen
                         && strncasecmp(s, http_headers[i].e, http_headers[i].elen) == 0)
                 {
                     s +=  http_headers[i].elen;

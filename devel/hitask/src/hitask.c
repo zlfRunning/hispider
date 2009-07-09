@@ -106,6 +106,7 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
     {
         p = packet->data;
         end = packet->data + packet->ndata;
+        *end = '\0';
         /* http handler */        
         if(conn == tasklist[c_id].c_conn)
         {
@@ -559,8 +560,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 if((d_conn = tasklist[c_id].d_conn) && (n = (p - buf)) > 0)
                 {
                     DEBUG_LOGGER(logger, "send storage data:%08x size:%ld", UI(zdata), LI(nzdata));
-                    s_conn->push_chunk(d_conn, buf, n);
-                    s_conn->push_chunk(d_conn, zdata, nzdata);
+                    d_conn->push_chunk(d_conn, buf, n);
+                    d_conn->push_chunk(d_conn, zdata, nzdata);
                 }
                 tasklist[c_id].taskid = -1;
                 ret = 0;
