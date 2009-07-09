@@ -15,11 +15,10 @@
 #include "queue.h"
 #include "logger.h"
 static SBASE *sbase = NULL;
-static SERVICE *service = NULL;
-static SERVICE *adnservice = NULL;
+static SERVICE *hitaskd = NULL, *histore = NULL, *adns = NULL;
 static dictionary *dict = NULL;
 static LTASK *ltask = NULL;
-static void *logger = NULL;
+static void *hitaskd_logger = NULL, *histore_logger = NULL, *adns_logger = NULL;
 static int is_need_authorization = 0;
 static char *authorization_name = "Hitask Administration System";
 
@@ -41,7 +40,7 @@ int adns_packet_reader(CONN *conn, CB_DATA *buffer)
                 ltask->set_host_ip(ltask, hostent.name, hostent.addrs, hostent.naddrs);
                 ip = hostent.addrs[0];
                 p = (unsigned char *)&ip;
-                DEBUG_LOGGER(logger, "Got host[%s]'s ip[%d.%d.%d.%d] from %s:%d", 
+                DEBUG_LOGGER(adns_logger, "Got host[%s]'s ip[%d.%d.%d.%d] from %s:%d", 
                         hostent.name, p[0], p[1], p[2], p[3], conn->remote_ip, conn->remote_port);
             }
             left -= n;
@@ -59,7 +58,7 @@ int adns_packet_handler(CONN *conn, CB_DATA *packet)
 
     if(conn && (tid = conn->c_id) >= 0 && packet->ndata > 0 && packet->data)
     {
-        return adnservice->newtransaction(adnservice, conn, tid);
+        return adns->newtransaction(adns, conn, tid);
     }
     else 
     {
@@ -91,7 +90,7 @@ int adns_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
 
     if(conn && (tid = conn->c_id) >= 0)
     {
-        return adnservice->newtransaction(adnservice, conn, tid);
+        return adns->newtransaction(adns, conn, tid);
     }
     return -1;
 }
@@ -109,14 +108,14 @@ int adns_trans_handler(CONN *conn, int tid)
         conn->c_id = tid;
         conn->start_cstate(conn);
         conn->set_timeout(conn, EVDNS_TIMEOUT);
-        DEBUG_LOGGER(logger, "Ready for resolving dns on remote[%s:%d] local[%s:%d]", 
+        DEBUG_LOGGER(adns_logger, "Ready for resolving dns on remote[%s:%d] local[%s:%d]", 
                 conn->remote_ip, conn->remote_port, conn->local_ip, conn->local_port);
         if((qid = ltask->pop_host(ltask, (char *)hostname)) >= 0)
         {
             conn->s_id = qid;
             qid %= 65536;
             n = evdns_make_query((char *)hostname, 1, 1, (unsigned short)qid, 1, buf); 
-            DEBUG_LOGGER(logger, "Resolving %s from nameserver[%s]", 
+            DEBUG_LOGGER(adns_logger, "Resolving %s from nameserver[%s]", 
                     hostname, conn->remote_ip);
             return conn->push_chunk(conn, buf, n);
         }
@@ -131,7 +130,7 @@ void adns_heartbeat_handler(void *arg)
     int id = 0;
     CONN *conn = NULL;
 
-    if(arg == (void *)adnservice)
+    if(arg == (void *)adns)
     {
         /*
         total = QTOTAL(dnsqueue);
@@ -141,12 +140,12 @@ void adns_heartbeat_handler(void *arg)
             QUEUE_POP(dnsqueue, int, &id);
             if(id >= 0 && id < DNS_TASK_MAX)
             {
-                if((tasklist[id].conn = adnservice->newconn(adnservice, -1, 
+                if((tasklist[id].conn = adns->newconn(adns, -1, 
                     SOCK_DGRAM, tasklist[id].nameserver, DNS_DEFAULT_PORT, NULL)))
                 {
                     tasklist[id].conn->c_id = id;
                     tasklist[id].conn->start_cstate(tasklist[id].conn);
-                    adnservice->newtransaction(adnservice, tasklist[id].conn, id);
+                    adns->newtransaction(adns, tasklist[id].conn, id);
                 }
                 else
                 {
@@ -156,13 +155,13 @@ void adns_heartbeat_handler(void *arg)
         }
         */
         while((id = ltask->pop_dns(ltask, dns_ip)) >= 0 && 
-                (conn = adnservice->newconn(adnservice, -1, 
+                (conn = adns->newconn(adns, -1, 
                 SOCK_DGRAM, dns_ip, DNS_DEFAULT_PORT, NULL)))
 
         {
             conn->c_id = id;
             conn->start_cstate(conn);
-            adnservice->newtransaction(adnservice, conn, id);
+            adns->newtransaction(adns, conn, id);
         }
     }
 }
@@ -220,9 +219,9 @@ int hitaskd_auth(CONN *conn, HTTP_REQ *http_req)
 /* packet handler */
 int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
 {
-    char *p = NULL, *end = NULL, buf[HTTP_BUF_SIZE];
+    char buf[HTTP_BUF_SIZE], *host = NULL, *ip = NULL, *p = NULL, *end = NULL;
+    int urlid = 0, n = 0, i = 0, ips = 0;
     HTTP_REQ http_req = {0};
-    int urlid = 0, n = 0, i = 0;
 
     if(conn)
     {
@@ -283,22 +282,15 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
         }
         else if(http_req.reqid == HTTP_TASK)
         {
-            urlid = atoi(http_req.path);
-            //fprintf(stdout, "%s::%d TASK: %ld path:%s\n", 
-            //__FILE__, __LINE__, urlid, http_req.path);
-            if(urlid >= 0)
+            if(http_req.headers[HEAD_REQ_HOST] > 0 && http_req.headers[HEAD_RESP_SERVER] > 0)
             {
-                if((n = http_req.headers[HEAD_ENT_CONTENT_LENGTH]) > 0 
-                    && (n = atol(http_req.hlines + n)) > 0)
-                {
-                    conn->save_cache(conn, &http_req, sizeof(HTTP_REQ));
-                    conn->recv_chunk(conn, n);
-                }
-                else
-                {
-                    ltask->set_url_status(ltask, urlid, NULL, URL_STATUS_ERR);
-                }
+                host = http_req.hlines + http_req.headers[HEAD_REQ_HOST];
+                ip = http_req.hlines + http_req.headers[HEAD_RESP_SERVER];
+                ips = inet_addr(ip);
+                ltask->set_host_ip(ltask, host, &ips, 1);
+                DEBUG_LOGGER(hitaskd_logger, "Resolved name[%s]'s ip[%s] from client", host, ip);
             }
+            urlid = atoi(http_req.path);
             /* get new task */
             if(ltask->get_task(ltask, buf, &n) >= 0) 
             {
@@ -307,8 +299,8 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
             else
             {
                 if(conn->timeout >= TASK_WAIT_MAX) conn->timeout = 0;
-                DEBUG_LOGGER(logger, "set_timeout(%d) on %s:%d", 
-                    conn->timeout + TASK_WAIT_TIMEOUT, conn->remote_ip, conn->remote_port);
+                DEBUG_LOGGER(hitaskd_logger, "set_timeout(%d) on %s:%d", 
+                        conn->timeout + TASK_WAIT_TIMEOUT, conn->remote_ip, conn->remote_port);
                 conn->wait_evstate(conn);
                 return conn->set_timeout(conn, conn->timeout + TASK_WAIT_TIMEOUT);
             }
@@ -324,63 +316,10 @@ err_end:
 /*  data handler */
 int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
-    int urlid = 0, ips = 0, i = 0, n = 0;
-    char buf[HTTP_BUF_SIZE], *host = NULL, *date = NULL, *ip = NULL, *p = NULL;
-    HTTP_REQ *http_req = NULL;
 
     if(conn && packet && cache && chunk && chunk->ndata > 0)
     {
-        if((http_req = (HTTP_REQ *)cache->data))
-        {
-            if(http_req->reqid == HTTP_TASK)
-            {
-                if(http_req->headers[HEAD_REQ_HOST] > 0 && http_req->headers[HEAD_RESP_SERVER] > 0)
-                {
-                    host = http_req->hlines + http_req->headers[HEAD_REQ_HOST];
-                    ip = http_req->hlines + http_req->headers[HEAD_RESP_SERVER];
-                    ips = inet_addr(ip);
-                    ltask->set_host_ip(ltask, host, &ips, 1);
-                    DEBUG_LOGGER(logger, "Resolved name[%s]'s ip[%s] from client", host, ip);
-                }
-                urlid = atoi(http_req->path);
-                DEBUG_LOGGER(logger, "urlid:%d length:%d", urlid, chunk->ndata);
-                DEBUG_LOGGER(logger, "over urlid:%d length:%d", urlid, chunk->ndata);
-                if((n = http_req->headers[HEAD_ENT_LAST_MODIFIED]) > 0)
-                {
-                    date = (http_req->hlines + n);
-                }
-                /* doctype */
-                if((n = http_req->headers[HEAD_ENT_CONTENT_TYPE]) > 0)
-                    p = http_req->hlines + n;
-                ltask->update_content(ltask, urlid, date, p, chunk->data, chunk->ndata);
-                //ltask->extract_link(ltask, urlid, chunk->data, chunk->ndata);
-            }
-            else if(http_req->reqid == HTTP_POST)
-            {
-                http_argv_parse((char *)chunk->data, (char *)(chunk->data+chunk->ndata), http_req);
-                p = buf;
-                p += sprintf(p, "HTTP/1.0 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n"
-                        "Set-Cookie: abcd=abcdsd;\r\n\r\n");
-                for(i = 0; i < HTTP_HEADER_NUM; i++)
-                {
-                    if((n = http_req->headers[i]) > 0)
-                    {
-                        p += sprintf(p, "%s %s<br>\n", http_headers[i].e, http_req->hlines + n);
-                    }
-                }
-
-                for(i = 0; i < http_req->nargvs; i++)
-                {
-                    p += sprintf(p, "%.*s => %.*s<br>\n", 
-                            http_req->argvs[i].nk, http_req->line + http_req->argvs[i].k, 
-                            http_req->argvs[i].nv, http_req->line + http_req->argvs[i].v);
-                }
-                conn->push_chunk(conn, buf, p - buf);
-                conn->over(conn);
-            }
-            //ltable->add_document(ltable, urlid, 0, chunk->data, chunk->ndata); 
             return 0;
-        }
     }
     return -1;
 }
@@ -401,7 +340,7 @@ int hitaskd_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA
         else
         {
             if(conn->timeout >= TASK_WAIT_MAX) conn->timeout = 0;
-            //DEBUG_LOGGER(logger, "set_timeout(%d) on %s:%d", 
+            //DEBUG_LOGGER(hitaskd_logger, "set_timeout(%d) on %s:%d", 
             //        conn->timeout + TASK_WAIT_TIMEOUT, conn->remote_ip, conn->remote_port);
             conn->wait_evstate(conn);
             return conn->set_timeout(conn, conn->timeout + TASK_WAIT_TIMEOUT);
@@ -420,12 +359,117 @@ int hitaskd_oob_handler(CONN *conn, CB_DATA *oob)
     return -1;
 }
 
+/* packet reader */
+int histore_packet_reader(CONN *conn, CB_DATA *buffer)
+{
+    if(conn)
+    {
+        return 0;
+    }
+    return -1;
+}
+
+/* packet handler */
+int histore_packet_handler(CONN *conn, CB_DATA *packet)
+{
+    char *p = NULL, *end = NULL;
+    HTTP_REQ http_req = {0};
+    int urlid = 0, n = 0;
+
+    if(conn)
+    {
+        p = packet->data;
+        end = packet->data + packet->ndata;
+        if(http_request_parse(p, end, &http_req) == -1) goto err_end;
+        if(http_req.reqid == HTTP_GET)
+        {
+            return 0;
+        }
+        else if(http_req.reqid == HTTP_POST)
+        {
+            return 0;
+        }
+        else if(http_req.reqid == HTTP_PUT)
+        {
+            urlid = atoi(http_req.path);
+            if(urlid >= 0)
+            {
+                if((n = http_req.headers[HEAD_ENT_CONTENT_LENGTH]) > 0 
+                        && (n = atol(http_req.hlines + n)) > 0)
+                {
+                    conn->save_cache(conn, &http_req, sizeof(HTTP_REQ));
+                    conn->recv_chunk(conn, n);
+                    DEBUG_LOGGER(histore_logger, "Ready for recv_chunk[%d] from %s:%d via %d",
+                            n, conn->remote_ip, conn->remote_port, conn->fd);
+                }
+            }
+        }
+        else goto err_end;
+        return 0;
+    }
+err_end:
+    conn->push_chunk(conn, HTTP_BAD_REQUEST, strlen(HTTP_BAD_REQUEST));
+    return -1;
+}
+
+/*  data handler */
+int histore_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
+{
+    int urlid = 0, n = 0;
+    char *date = NULL, *p = NULL;
+    HTTP_REQ *http_req = NULL;
+
+    if(conn && packet && cache && chunk && chunk->ndata > 0)
+    {
+        if((http_req = (HTTP_REQ *)cache->data))
+        {
+            if(http_req->reqid == HTTP_PUT)
+            {
+                urlid = atoi(http_req->path);
+                if((n = http_req->headers[HEAD_ENT_LAST_MODIFIED]) > 0)
+                {
+                    date = (http_req->hlines + n);
+                }
+                /* doctype */
+                if((n = http_req->headers[HEAD_ENT_CONTENT_TYPE]) > 0)
+                    p = http_req->hlines + n;
+                ltask->update_content(ltask, urlid, date, p, chunk->data, chunk->ndata);
+            }
+            else if(http_req->reqid == HTTP_POST)
+            {
+            }
+            return 0;
+        }
+    }
+    return -1;
+}
+
+/* histore timeout handler */
+int histore_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
+{
+    if(conn)
+    {
+        return 0;
+    }
+    return -1;
+}
+
+/* oob handler */
+int histore_oob_handler(CONN *conn, CB_DATA *oob)
+{
+    if(conn)
+    {
+        return 0;
+    }
+    return -1;
+}
+
 /* Initialize from ini file */
 int sbase_initialize(SBASE *sbase, char *conf)
 {
     char *s = NULL, *p = NULL, *basedir = NULL, *start = NULL;
-         //*ep = NULL, *whitelist = NULL, *whost = NULL, 
-         //*host = NULL, *path = NULL;
+    //*ep = NULL, *whitelist = NULL, *whost = NULL, 
+    //*host = NULL, *path = NULL;
     int interval = 0;
 
     if((dict = iniparser_new(conf)) == NULL)
@@ -441,24 +485,24 @@ int sbase_initialize(SBASE *sbase, char *conf)
     sbase->set_log(sbase, iniparser_getstr(dict, "SBASE:logfile"));
     sbase->set_evlog(sbase, iniparser_getstr(dict, "SBASE:evlogfile"));
     /* HITASKD */
-    if((service = service_init()) == NULL)
+    if((hitaskd = service_init()) == NULL)
     {
         fprintf(stderr, "Initialize service failed, %s", strerror(errno));
         _exit(-1);
     }
-    service->family = iniparser_getint(dict, "HITASKD:inet_family", AF_INET);
-    service->sock_type = iniparser_getint(dict, "HITASKD:socket_type", SOCK_STREAM);
-    service->ip = iniparser_getstr(dict, "HITASKD:service_ip");
-    service->port = iniparser_getint(dict, "HITASKD:service_port", 2816);
-    service->working_mode = iniparser_getint(dict, "HITASKD:working_mode", WORKING_PROC);
-    service->service_type = iniparser_getint(dict, "HITASKD:service_type", S_SERVICE);
-    service->service_name = iniparser_getstr(dict, "HITASKD:service_name");
-    service->nprocthreads = iniparser_getint(dict, "HITASKD:nprocthreads", 1);
-    service->ndaemons = iniparser_getint(dict, "HITASKD:ndaemons", 0);
-    service->set_log(service, iniparser_getstr(dict, "HITASKD:logfile"));
-    service->session.packet_type = iniparser_getint(dict, "HITASKD:packet_type",PACKET_DELIMITER);
-    service->session.packet_delimiter = iniparser_getstr(dict, "HITASKD:packet_delimiter");
-    p = s = service->session.packet_delimiter;
+    hitaskd->family = iniparser_getint(dict, "HITASKD:inet_family", AF_INET);
+    hitaskd->sock_type = iniparser_getint(dict, "HITASKD:socket_type", SOCK_STREAM);
+    hitaskd->ip = iniparser_getstr(dict, "HITASKD:service_ip");
+    hitaskd->port = iniparser_getint(dict, "HITASKD:service_port", 2816);
+    hitaskd->working_mode = iniparser_getint(dict, "HITASKD:working_mode", WORKING_PROC);
+    hitaskd->service_type = iniparser_getint(dict, "HITASKD:service_type", S_SERVICE);
+    hitaskd->service_name = iniparser_getstr(dict, "HITASKD:service_name");
+    hitaskd->nprocthreads = iniparser_getint(dict, "HITASKD:nprocthreads", 1);
+    hitaskd->ndaemons = iniparser_getint(dict, "HITASKD:ndaemons", 0);
+    hitaskd->set_log(hitaskd, iniparser_getstr(dict, "HITASKD:logfile"));
+    hitaskd->session.packet_type = iniparser_getint(dict, "HITASKD:packet_type",PACKET_DELIMITER);
+    hitaskd->session.packet_delimiter = iniparser_getstr(dict, "HITASKD:packet_delimiter");
+    p = s = hitaskd->session.packet_delimiter;
     while(*p != 0 )
     {
         if(*p == '\\' && *(p+1) == 'n')
@@ -475,63 +519,108 @@ int sbase_initialize(SBASE *sbase, char *conf)
             *s++ = *p++;
     }
     *s++ = 0;
-    service->session.packet_delimiter_length = strlen(service->session.packet_delimiter);
-    service->session.buffer_size = iniparser_getint(dict, "HITASKD:buffer_size", SB_BUF_SIZE);
-    service->session.packet_reader = &hitaskd_packet_reader;
-    service->session.packet_handler = &hitaskd_packet_handler;
-    service->session.data_handler = &hitaskd_data_handler;
-    service->session.timeout_handler = &hitaskd_timeout_handler;
-    service->session.oob_handler = &hitaskd_oob_handler;
+    hitaskd->session.packet_delimiter_length = strlen(hitaskd->session.packet_delimiter);
+    hitaskd->session.buffer_size = iniparser_getint(dict, "HITASKD:buffer_size", SB_BUF_SIZE);
+    hitaskd->session.packet_reader = &hitaskd_packet_reader;
+    hitaskd->session.packet_handler = &hitaskd_packet_handler;
+    hitaskd->session.data_handler = &hitaskd_data_handler;
+    hitaskd->session.timeout_handler = &hitaskd_timeout_handler;
+    hitaskd->session.oob_handler = &hitaskd_oob_handler;
+    if((p = iniparser_getstr(dict, "HITASKD:access_log"))){LOGGER_INIT(hitaskd_logger,p);}
+    /* link  task table */
     if((ltask = ltask_init()))
     {
         basedir = iniparser_getstr(dict, "HITASKD:basedir");
         start = iniparser_getstr(dict, "HITASKD:start");
         ltask->set_basedir(ltask, basedir);
         ltask->add_url(ltask, -1, 0, start);
-        LOGGER_INIT(logger, iniparser_getstr(dict, "HITASKD:access_log"));
         //ltable->set_logger(ltable, NULL, logger);
         /*
-        host = iniparser_getstr(dict, "HITASKD:host");
-        path = iniparser_getstr(dict, "HITASKD:path");
-        whitelist = iniparser_getstr(dict, "HITASKD:whitelist");
-        ep = p = whitelist;
-        while(*p != '\0' || ep)
-        {
-            if(*p == ',' || *p == ' ')
-            {
-                *p = '\0';
-                whost = ep;
-                ep = ++p;
-            }else ++p;
-            if(*p == '\0') whost = ep;
-            if(whost){ltable->add_to_whitelist(ltable, whost); ep = whost = NULL;}
-        }
-        ltable->addurl(ltable, host, path);
-        */
+           host = iniparser_getstr(dict, "HITASKD:host");
+           path = iniparser_getstr(dict, "HITASKD:path");
+           whitelist = iniparser_getstr(dict, "HITASKD:whitelist");
+           ep = p = whitelist;
+           while(*p != '\0' || ep)
+           {
+           if(*p == ',' || *p == ' ')
+           {
+         *p = '\0';
+         whost = ep;
+         ep = ++p;
+         }else ++p;
+         if(*p == '\0') whost = ep;
+         if(whost){ltable->add_to_whitelist(ltable, whost); ep = whost = NULL;}
+         }
+         ltable->addurl(ltable, host, path);
+         */
     }
-    /* dns service */
-    if((adnservice = service_init()) == NULL)
+    /* histore */
+    if((histore = service_init()) == NULL)
     {
         fprintf(stderr, "Initialize service failed, %s", strerror(errno));
         _exit(-1);
     }
-    adnservice->family = iniparser_getint(dict, "ADNS:inet_family", AF_INET);
-    adnservice->sock_type = iniparser_getint(dict, "ADNS:socket_type", SOCK_STREAM);
-    adnservice->working_mode = iniparser_getint(dict, "ADNS:working_mode", WORKING_PROC);
-    adnservice->service_type = iniparser_getint(dict, "ADNS:service_type", C_SERVICE);
-    adnservice->service_name = iniparser_getstr(dict, "ADNS:service_name");
-    adnservice->nprocthreads = iniparser_getint(dict, "ADNS:nprocthreads", 1);
-    adnservice->ndaemons = iniparser_getint(dict, "ADNS:ndaemons", 0);
-    adnservice->set_log(adnservice, iniparser_getstr(dict, "ADNS:logfile"));
-    adnservice->session.packet_type = iniparser_getint(dict, "ADNS:packet_type", PACKET_CUSTOMIZED);
-    adnservice->session.buffer_size = iniparser_getint(dict, "ADNS:buffer_size", SB_BUF_SIZE);
-    adnservice->session.packet_reader = &adns_packet_reader;
-    adnservice->session.packet_handler = &adns_packet_handler;
-    adnservice->session.timeout_handler = &adns_timeout_handler;
-    adnservice->session.error_handler = &adns_error_handler;
-    adnservice->session.transaction_handler = &adns_trans_handler;
+    histore->family = iniparser_getint(dict, "HISTORE:inet_family", AF_INET);
+    histore->sock_type = iniparser_getint(dict, "HISTORE:socket_type", SOCK_STREAM);
+    histore->ip = iniparser_getstr(dict, "HISTORE:service_ip");
+    histore->port = iniparser_getint(dict, "HISTORE:service_port", 2816);
+    histore->working_mode = iniparser_getint(dict, "HISTORE:working_mode", WORKING_PROC);
+    histore->service_type = iniparser_getint(dict, "HISTORE:service_type", S_SERVICE);
+    histore->service_name = iniparser_getstr(dict, "HISTORE:service_name");
+    histore->nprocthreads = iniparser_getint(dict, "HISTORE:nprocthreads", 1);
+    histore->ndaemons = iniparser_getint(dict, "HISTORE:ndaemons", 0);
+    histore->set_log(histore, iniparser_getstr(dict, "HISTORE:logfile"));
+    histore->session.packet_type = iniparser_getint(dict, "HISTORE:packet_type",PACKET_DELIMITER);
+    histore->session.packet_delimiter = iniparser_getstr(dict, "HISTORE:packet_delimiter");
+    p = s = histore->session.packet_delimiter;
+    while(*p != 0 )
+    {
+        if(*p == '\\' && *(p+1) == 'n')
+        {
+            *s++ = '\n';
+            p += 2;
+        }
+        else if (*p == '\\' && *(p+1) == 'r')
+        {
+            *s++ = '\r';
+            p += 2;
+        }
+        else
+            *s++ = *p++;
+    }
+    *s++ = 0;
+    histore->session.packet_delimiter_length = strlen(histore->session.packet_delimiter);
+    histore->session.buffer_size = iniparser_getint(dict, "HISTORE:buffer_size", SB_BUF_SIZE);
+    histore->session.packet_reader = &histore_packet_reader;
+    histore->session.packet_handler = &histore_packet_handler;
+    histore->session.data_handler = &histore_data_handler;
+    histore->session.timeout_handler = &histore_timeout_handler;
+    histore->session.oob_handler = &histore_oob_handler;
+    if((p = iniparser_getstr(dict, "HISTORE:access_log"))){LOGGER_INIT(histore_logger, p);}
+    /* dns service */
+    if((adns = service_init()) == NULL)
+    {
+        fprintf(stderr, "Initialize service failed, %s", strerror(errno));
+        _exit(-1);
+    }
+    adns->family = iniparser_getint(dict, "ADNS:inet_family", AF_INET);
+    adns->sock_type = iniparser_getint(dict, "ADNS:socket_type", SOCK_STREAM);
+    adns->working_mode = iniparser_getint(dict, "ADNS:working_mode", WORKING_PROC);
+    adns->service_type = iniparser_getint(dict, "ADNS:service_type", C_SERVICE);
+    adns->service_name = iniparser_getstr(dict, "ADNS:service_name");
+    adns->nprocthreads = iniparser_getint(dict, "ADNS:nprocthreads", 1);
+    adns->ndaemons = iniparser_getint(dict, "ADNS:ndaemons", 0);
+    adns->set_log(adns, iniparser_getstr(dict, "ADNS:logfile"));
+    adns->session.packet_type = iniparser_getint(dict, "ADNS:packet_type", PACKET_CUSTOMIZED);
+    adns->session.buffer_size = iniparser_getint(dict, "ADNS:buffer_size", SB_BUF_SIZE);
+    adns->session.packet_reader = &adns_packet_reader;
+    adns->session.packet_handler = &adns_packet_handler;
+    adns->session.timeout_handler = &adns_timeout_handler;
+    adns->session.error_handler = &adns_error_handler;
+    adns->session.transaction_handler = &adns_trans_handler;
+    if((p = iniparser_getstr(dict, "ADNS:access_log"))){LOGGER_INIT(adns_logger, p);}
     interval = iniparser_getint(dict, "ADNS:heartbeat_interval", SB_HEARTBEAT_INTERVAL);
-    adnservice->set_heartbeat(adnservice, interval, &adns_heartbeat_handler, adnservice);
+    adns->set_heartbeat(adns, interval, &adns_heartbeat_handler, adns);
     p = iniparser_getstr(dict, "ADNS:nameservers");
     while(*p != '\0')
     {
@@ -545,7 +634,8 @@ int sbase_initialize(SBASE *sbase, char *conf)
             ++p;
         }
     }
-    return (sbase->add_service(sbase, service) | sbase->add_service(sbase, adnservice));
+    return (sbase->add_service(sbase, hitaskd) | sbase->add_service(sbase, histore) 
+            | sbase->add_service(sbase, adns));
 }
 
 static void hitaskd_stop(int sig){
@@ -613,6 +703,8 @@ int main(int argc, char **argv)
     sbase->stop(sbase);
     sbase->clean(&sbase);
     if(dict)iniparser_free(dict);
-    if(logger)LOGGER_CLEAN(logger);
+    if(hitaskd_logger){LOGGER_CLEAN(hitaskd_logger);}
+    if(histore_logger){LOGGER_CLEAN(histore_logger);}
+    if(adns_logger){LOGGER_CLEAN(adns_logger);}
     return 0;
 }

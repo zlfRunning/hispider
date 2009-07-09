@@ -71,7 +71,7 @@ do                                                                              
         mp = NULL;                                                                      \
     }                                                                                   \
 }while(0)
-
+#define ISALPHA(p) ((*p >= '0' && *p <= '9') ||(*p >= 'A' && *p <= 'Z')||(*p >= 'a' && *p <= 'z'))
 /* mkdir */
 int ltask_mkdir(char *path, int mode)
 {
@@ -708,7 +708,11 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
                 host = pp;
                 continue;
             }
-            if(host && e == NULL && *p == '/') e = pp;
+            if(host && e == NULL && *p != '.' && *p != '-' && !ISALPHA(p)) 
+            {
+                if(*p != '/') *pp++ = '/';
+                e = pp;
+            }
             if(*p >= 'A' && *p <= 'Z')
             {
                 *pp++ = *p++ + ('a' - 'A');
@@ -834,15 +838,15 @@ int ltask_pop_url(LTASK *task, char *url, int *itime, char *refer, char *cookie)
                 urlid = node.id;
             }
             else 
-	    {
-		DEBUG_LOGGER(task->logger, "Unknown task type:%d", node.type);
-		goto end;
-	    }
+            {
+                DEBUG_LOGGER(task->logger, "Unknown task type:%d", node.type);
+                goto end;
+            }
         }
         else
         {
             x = task->state->host_current;
-	    DEBUG_LOGGER(task->logger, "QURL host:%d", x);
+            DEBUG_LOGGER(task->logger, "QURL host:%d", x);
             do
             {
                 host_node = (LHOST *)(task->hostio.map 
@@ -853,7 +857,7 @@ int ltask_pop_url(LTASK *task, char *url, int *itime, char *refer, char *cookie)
                 {
                     urlid = host_node->url_current_id;
                     DEBUG_LOGGER(task->logger, "urlid:%d current:%d left:%d total:%d", urlid, 
-                        task->state->host_current, host_node->url_left, host_node->url_total);
+                            task->state->host_current, host_node->url_left, host_node->url_total);
                     break;
                 }
                 else host_node = NULL;
@@ -861,7 +865,7 @@ int ltask_pop_url(LTASK *task, char *url, int *itime, char *refer, char *cookie)
             }while(host_node == NULL);
         }
         /* read url */
-	DEBUG_LOGGER(task->logger, "READURL urlid:%d", urlid);
+        DEBUG_LOGGER(task->logger, "READURL urlid:%d", urlid);
         if(urlid >= 0 && pread(task->meta_fd, &meta, sizeof(LMETA), 
                     (off_t)(urlid * sizeof(LMETA))) > 0 && meta.url_len <= HTTP_URL_MAX
                 && meta.status >= 0 
@@ -876,7 +880,7 @@ int ltask_pop_url(LTASK *task, char *url, int *itime, char *refer, char *cookie)
             //refer
             refer[0] = '\0';
             if((n = meta.parent) >= 0 && pread(task->meta_fd, &meta, sizeof(LMETA),
-                (off_t)(n*sizeof(LMETA))) > 0 && meta.url_len <= HTTP_URL_MAX 
+                        (off_t)(n*sizeof(LMETA))) > 0 && meta.url_len <= HTTP_URL_MAX 
                     && meta.status >= 0)
             {
                 pread(task->url_fd, refer, meta.url_len, meta.url_off);
@@ -885,7 +889,10 @@ int ltask_pop_url(LTASK *task, char *url, int *itime, char *refer, char *cookie)
             //cookie
             cookie[0] = '\0';
         }
-	DEBUG_LOGGER(task->logger, "Unknown urlid:%d", urlid);
+        else
+        {
+            DEBUG_LOGGER(task->logger, "Unknown urlid:%d", urlid);
+        }
 end:
         MUTEX_UNLOCK(task->mutex);
     }
@@ -1433,11 +1440,13 @@ end:
     }
     return ret;
 }
-#define URLTOEND(up, eup, flag, dpp)                                    \
+#define URLTOEND(start, up, eup, flag, dpp)                             \
 do                                                                      \
 {                                                                       \
-    while(up < eup)                                                     \
+    while(up < eup && dpp < (start + HTTP_URL_MAX))                     \
     {                                                                   \
+        if(*up == 0x20 && (*(up+1) == 0x20 || *(up+1) == '\''           \
+                    || *(up+1) == '"' ))break;                          \
         if(flag && (*up == '"' || *up == '\'')){++up;break;}            \
         else if(flag == 0 && (*up == 0x20 || *up == '\t'                \
                     || *up != '\n' || *up != '\r'))                     \
@@ -1446,7 +1455,7 @@ do                                                                      \
         }                                                               \
         else                                                            \
         {                                                               \
-            if(*up == '#'){++up;break;}                                 \
+            if(*up == '#' || *up == '<' || *up == '>'){++up;break;}     \
             else if(*up == '\r' || *up == '\n' || *up == '\t')++up;     \
             else if(*up == '/' && *(up+1) == '/' && *(up-1) != ':')     \
             {                                                           \
@@ -1460,6 +1469,8 @@ do                                                                      \
             else *dpp++ = *up++;                                        \
         }                                                               \
     }                                                                   \
+    while(dpp > (start+2) && *(dpp-1) == '0' && *(dpp-2) == '2'         \
+            && *(dpp-3) == '%'){dpp -= 3; *dpp = '\0';}                 \
 }while(0)
 /* extract link */
 int ltask_extract_link(LTASK *task, int urlid, int depth, char *url, char *content, int ncontent)
@@ -1471,6 +1482,7 @@ int ltask_extract_link(LTASK *task, int urlid, int depth, char *url, char *conte
     if(task && url && (p = content) && ncontent > 0)
     {
         //parse url prefix
+        memset(buf, 0, HTTP_BUF_SIZE);
         ps = url;
         while(*ps != '\0')
         {
@@ -1544,7 +1556,7 @@ int ltask_extract_link(LTASK *task, int urlid, int depth, char *url, char *conte
                     //DEBUG_LOGGER(task->logger, "copy nurl:%d url:%s", n, url);  
                     memcpy(pp, url, n);                                         
                     pp += n;                                                    
-                    URLTOEND(p, end, pref, pp);                                 
+                    URLTOEND(buf, p, end, pref, pp);                                 
                 }                                                               
             }                                                                   
             else if(*p == '.')                                                  
@@ -1566,7 +1578,7 @@ int ltask_extract_link(LTASK *task, int urlid, int depth, char *url, char *conte
                     strncpy(pp, url, n);                                        
                     pp += n;                                                    
                     *pp++ = '/';                                                
-                    URLTOEND(p, end, pref, pp);                                 
+                    URLTOEND(buf, p, end, pref, pp);                                 
                 }                                                               
             }                                                                   
             else if(strncasecmp(p, HTTP_PREF, 7) == 0)                          
@@ -1574,7 +1586,7 @@ int ltask_extract_link(LTASK *task, int urlid, int depth, char *url, char *conte
                 p += 7;                                                         
                 pp = buf;                                                       
                 pp += sprintf(pp, "%s", HTTP_PREF);                             
-                URLTOEND(p, end, pref, pp);                                     
+                URLTOEND(buf, p, end, pref, pp);                                     
             }                                                                   
             else                                                                
             {                                                                   
@@ -1590,7 +1602,7 @@ int ltask_extract_link(LTASK *task, int urlid, int depth, char *url, char *conte
                     pp += n;                                                    
                     *pp++ = '/';                                                
                     p = ps;
-                    URLTOEND(p, end, pref, pp);                                 
+                    URLTOEND(buf, p, end, pref, pp);                                 
                 }                                                               
             } 
             if((pp - buf) > 0)
