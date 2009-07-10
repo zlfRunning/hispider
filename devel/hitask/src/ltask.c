@@ -72,6 +72,27 @@ do                                                                              
     }                                                                                   \
 }while(0)
 #define ISALPHA(p) ((*p >= '0' && *p <= '9') ||(*p >= 'A' && *p <= 'Z')||(*p >= 'a' && *p <= 'z'))
+static const char *running_ops[] = {"running", "stop"};
+static const char *__html__body__  =
+"<HTML><HEAD>\n"
+"<TITLE>Hispider Running Status</TITLE>\n"
+"<meta http-equiv='refresh' content='10; url=/'>\n</HEAD>\n"
+"<meta http-equiv='content-type' content='text/html; charset=UTF-8'>\n"
+"<BODY bgcolor='#000000' align=center >\n""<h1><font color=white >Hispider Running State  [<a href='/%s'>%s</a>]</font>\n</h1>\n"
+"<hr noshade><ul><br><table  align=center width='100%%' >\n"
+"<tr><td align=left ><font color=red size=72 ><li>URL Total:%d </li></font></td></tr>\n"
+"<tr><td align=left ><font color=red size=72 ><li>URL OK:%d </li></font></td></tr>\n"
+"<tr><td align=left ><font color=red size=72 ><li>URL ERROR:%d </li></font></td></tr>\n"
+"<tr><td align=left ><font color=red size=72 ><li>Doc Total:%lld/%lld </li></font></td></tr>\n"
+"<tr><td align=left ><font color=red size=72 ><li>DNS Count:%d/%d </li></font></td></tr>\n"
+"<tr><td align=left ><font color=red size=72 ><li>Time Used: %d day(s) [%02d:%02d:%02d +%06d]</li>"
+"</font></td></tr>\n"
+"<tr><td align=left ><font color=red size=72 ><li>Speed:%f (k/s)</li></font></td></tr>\n"
+"</table><br><hr  noshade><em>\n"
+"<font color=white ><a href='http://code.google.com/p/hispider' >"
+"Hispider</a> Powered By <a href='http://code.google.com/p/hispider'>"
+"http://code.google.com/p/hispider</a></font>"
+"</BODY></HTML>\n";
 /* mkdir */
 int ltask_mkdir(char *path, int mode)
 {
@@ -139,6 +160,7 @@ int ltask_set_basedir(LTASK *task, char *dir)
                 {
                     _EXIT_("mmap %s failed, %s\n", path, strerror(errno));
                 }
+                task->state->last_usec = PT_L_USEC(task->timer);
             }
             else
             {
@@ -755,7 +777,7 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
             dp = (void *)((long)(host_id + 1));
             TRIETAB_RADD(task->table, host, n, dp);
             task->hostio.end += (off_t)sizeof(LHOST);
-            task->state->host_total++;
+            if(task->state) task->state->host_total++;
         }
         else
         {
@@ -802,6 +824,7 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
                 host_node->url_last_id = id;
                 host_node->url_total++;
                 pwrite(task->meta_fd, &meta, sizeof(LMETA), (off_t)id * (off_t)sizeof(LMETA));
+                if(task->state) task->state->url_total++;
                 ret = 0;
             }
         }
@@ -931,6 +954,10 @@ int ltask_set_url_status(LTASK *task, int urlid, char *url, short status)
         if(urlid >= 0) 
         {
             pwrite(task->meta_fd, &status, sizeof(short), id * sizeof(LMETA));        
+            if(status && task->state)
+            {
+                task->state->url_error++;
+            }
             ret = 0;
         }
         MUTEX_UNLOCK(task->mutex);
@@ -990,7 +1017,8 @@ int ltask_get_task(LTASK *task, char *buf, int *nbuf)
     int urlid = -1, ip = 0, port = 0, itime = 0;
     LPROXY proxy = {0};
 
-    if(task && buf && nbuf && (urlid = ltask_pop_url(task, url, &itime, refer, cookie)) >= 0)
+    if(task && buf && nbuf  && task->state && task->state->running 
+            && (urlid = ltask_pop_url(task, url, &itime, refer, cookie)) >= 0)
     {
         p = ps = url + strlen(HTTP_PREF);
         while(*p != '\0' && *p != ':' && *p != '/')++p;
@@ -1361,6 +1389,40 @@ int ltask_list_users(LTASK *task, char *block, int *nblock)
     return 0;
 }
 
+/* get state infomation */
+int ltask_get_stateinfo(LTASK *task, char *block)
+{
+    char buf[HTTP_BUF_SIZE], *p = NULL;
+    int ret = -1, n = 0, interval = 0, day = 0, hour = 0, min = 0, sec = 0, usec = 0;
+    double speed = 0.0;
+
+    if(task && task->state)
+    {
+        TIMER_SAMPLE(task->timer);
+        day  = (PT_SEC_U(task->timer) / 86400);
+        hour = ((PT_SEC_U(task->timer) % 86400) /3600);
+        min  = ((PT_SEC_U(task->timer) % 3600) / 60);
+        sec  = (PT_SEC_U(task->timer) % 60);
+        usec = (PT_USEC_U(task->timer) % 1000000ll);
+        speed = task->state->speed;
+        if((interval = (int)((PT_L_USEC(task->timer) - task->state->last_usec))) > L_SPEED_INTERVAL)
+        {
+            speed = ((double)(task->state->doc_total_size - task->state->last_doc_size)/
+                    (double)1024) / (double)interval;
+            task->state->last_usec = PT_L_USEC(task->timer);
+            task->state->last_doc_size = task->state->doc_total_size;
+        }
+        p = (char *)running_ops[task->state->running];
+        n = sprintf(buf, __html__body__, p, p, task->state->url_total, task->state->url_ok,
+                task->state->url_error, task->state->doc_total_zsize, task->state->doc_total_size, 
+                task->state->host_current, task->state->host_total, 
+                day, hour, min, sec, usec, speed);
+        ret = sprintf(block, "HTTP/1.0 200 OK \r\nContent-Type: text/html\r\n"
+                "Content-Length: %d\r\n\r\n%s", n, buf);
+    }
+    return ret;
+}
+
 /* update url content  */
 int ltask_update_content(LTASK *task, int urlid, char *date, char *type, 
         char *content, int ncontent)
@@ -1410,6 +1472,12 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
                 meta.status = 0;
                 pwrite(task->meta_fd, &meta, sizeof(LMETA), (off_t)(urlid * sizeof(LMETA)));
                 ret = 0;
+                if(task->state)
+                {
+                    task->state->doc_total_zsize += ncontent;
+                    task->state->doc_total_size += ncontent;
+                    task->state->url_ok++;
+                }
             }
         }
         if(date)
@@ -1429,6 +1497,10 @@ end:
                 if(uncompress((Bytef *)data, (uLongf *)&ndata, 
                             (const Bytef *)content, (uLong)ncontent) == 0)
                 {
+                    if(task->state)
+                    {
+                        task->state->doc_total_size += (ndata - ncontent);
+                    }
                     DEBUG_LOGGER(task->logger, "url:%s nurl:%d ndata:%ld", 
                             url, meta.url_len, LI(ndata));
                     task->extract_link(task, urlid, meta.depth, url, data, ndata);
@@ -1716,6 +1788,7 @@ LTASK *ltask_init()
         task->update_permission     = ltask_update_permission;
         task->authorization         = ltask_authorization;
         task->list_users            = ltask_list_users;
+        task->get_stateinfo         = ltask_get_stateinfo;
         task->update_content        = ltask_update_content;
         task->extract_link          = ltask_extract_link;
         task->clean                 = ltask_clean;

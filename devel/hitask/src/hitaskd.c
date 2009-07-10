@@ -261,15 +261,14 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
             {
                 ltask->set_state_running(ltask, 1);
             }
-            /*
             if((n = ltask->get_stateinfo(ltask, buf)))
             {
-                conn->push_chunk(conn, buf, n);
+                return conn->push_chunk(conn, buf, n);
             }
             else
             {
                 goto err_end;
-            }*/
+            }
         }
         else if(http_req.reqid == HTTP_POST)
         {
@@ -292,6 +291,11 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
                 DEBUG_LOGGER(hitaskd_logger, "Resolved name[%s]'s ip[%s] from client", host, ip);
             }
             urlid = atoi(http_req.path);
+            //error 
+            if(urlid >= 0 && (n = http_req.headers[HEAD_GEN_WARNING]) > 0)
+            {
+                ltask->set_url_status(ltask, urlid, NULL, URL_STATUS_ERR);
+            }
             /* get new task */
             if(ltask->get_task(ltask, buf, &n) >= 0) 
             {

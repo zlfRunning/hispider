@@ -49,6 +49,7 @@
 #define TASK_STATE_INIT         0x00
 #define TASK_STATE_OK           0x02
 #define TASK_STATE_ERROR        0x04
+#define L_SPEED_INTERVAL        20000000
 #define L_USER_MAX              32
 #define L_PASSWD_MAX            16
 #define L_STATE_NAME            "hi.state"
@@ -130,10 +131,15 @@ typedef struct _LSTATE
     short is_use_proxy;
     int   is_extract_image;
     int   url_total;
+    int   url_ok;
+    int   url_error;
     int   host_current;
     int   host_total;
-    off_t document_size_total;
-    int   speed;
+    off_t doc_total_zsize;
+    off_t doc_total_size;
+    off_t last_doc_size;
+    long long int last_usec;
+    double  speed;
 }LSTATE;
 /* IO/MAP */
 typedef struct _LIO
@@ -225,6 +231,7 @@ typedef struct _LTASK
     int (*authorization)(struct _LTASK *, int userid, char *username, char *passwd, LUSER *user);
     int (*set_user_status)(struct _LTASK *, int userid, char *username, int status);
     int (*list_users)(struct _LTASK *, char *block, int *nblock);
+    int (*get_stateinfo)(struct _LTASK *, char *block);
     int (*update_content)(struct _LTASK *, int urlid, char *date, 
             char *type, char *content, int ncontent);
     int (*extract_link)(struct _LTASK *, int urlid, int depth, 
