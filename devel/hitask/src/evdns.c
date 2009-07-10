@@ -90,7 +90,7 @@ unsigned char *evdns_expand_name(unsigned char *ptr, unsigned char *start,
         else
         {
             n = *p++;
-            while(n-- > 0){*q++ = *p++;}
+            while(p < end && n-- > 0){*q++ = *p++;}
             *q++ = '.';
         }
     }

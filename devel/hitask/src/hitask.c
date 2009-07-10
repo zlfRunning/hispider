@@ -24,6 +24,9 @@
 #ifndef LI
 #define LI(_x_) ((long int)(_x_))
 #endif
+#ifndef LLI
+#define LLI(_x_) ((long long int)(_x_))
+#endif
 typedef struct _TASK
 {
     CONN *d_conn;
@@ -67,6 +70,7 @@ int http_download_error(int c_id, int err)
 
     if(c_id >= 0 && c_id < ntask && tasklist[c_id].s_conn)
     {
+        memset(buf, 0, HTTP_BUF_SIZE);
         p = buf;
         p += sprintf(p, "TASK %d HTTP/1.0\r\n", tasklist[c_id].taskid);
         if(tasklist[c_id].is_new_host)
@@ -78,6 +82,7 @@ int http_download_error(int c_id, int err)
         p += sprintf(p, "%s", "\r\n");
         n = p - buf;
         tasklist[c_id].is_new_host = 0;
+        DEBUG_LOGGER(logger, "task %d", tasklist[c_id].taskid);
         return tasklist[c_id].s_conn->push_chunk(tasklist[c_id].s_conn, buf, n);
     }
     return -1;
@@ -114,6 +119,7 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
             {
                 conn->over_cstate(conn);
                 conn->over(conn);
+                ERROR_LOGGER(logger, "Invalid http response header");
                 return http_download_error(c_id, ERR_PROGRAM);
             }
             //check content-type
@@ -123,6 +129,7 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
             {
                 conn->over_cstate(conn);
                 conn->close(conn);
+                ERROR_LOGGER(logger, "Invalid http response number ");
                 return http_download_error(c_id, ERR_CONTENT_TYPE);
             }
             else
@@ -150,6 +157,7 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
                 conn->over(conn);
                 QUEUE_PUSH(taskqueue, int, &c_id);
                 tasklist[c_id].s_conn = NULL;
+                ERROR_LOGGER(logger, "Invalid http response from taskd");
                 return -1;
             }
             if(http_resp.respid == RESP_OK)
@@ -215,7 +223,6 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
                         p += sprintf(p, "Referer: %s\r\n", http_resp.hlines + n);
                     if((n = http_resp.headers[HEAD_ENT_LAST_MODIFIED]) > 0)
                         p += sprintf(p, "If-Modified-Since: %s\r\n", http_resp.hlines + n);
-
                     //end
                     p += sprintf(p, "%s", "\r\n");
                     tasklist[c_id].nrequest = p - tasklist[c_id].request;
@@ -430,7 +437,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 }
                 else
                 {
-                    DEBUG_LOGGER(logger, "unspported encoding:%s", p);
+                    //DEBUG_LOGGER(logger, "unspported encoding:%s", p);
                     goto err_end;
                 }
             }
@@ -441,10 +448,11 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 if(is_text) is_need_compress = 1;
             }
             //check text/plain/html/xml...  charset 
+            memset(charset, 0, CHARSET_MAX);
             if(is_text)
             {
-                DEBUG_LOGGER(logger, "is_need_convert:%d data:%08x ndata:%ld", 
-                        is_need_convert, UI(rawdata), LI(nrawdata));
+                DEBUG_LOGGER(logger, "is_need_convert:%d data:%p ndata:%ld", 
+                        is_need_convert, rawdata, LI(nrawdata));
                 if(rawdata && nrawdata > 0 && chardet_create(&pdet) == 0)
                 {
                     if(chardet_handle_data(pdet, rawdata, nrawdata) == 0 
@@ -455,8 +463,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     }
                     chardet_destroy(pdet);
                 }
-                DEBUG_LOGGER(logger, "is_need_convert:%d data:%08x ndata:%ld", 
-                        is_need_convert, UI(rawdata), LI(nrawdata));
+                DEBUG_LOGGER(logger, "is_need_convert:%d data:%p ndata:%ld", 
+                        is_need_convert, rawdata, LI(nrawdata));
                 //convert charset 
                 if(is_need_convert && (cd = iconv_open("UTF-8", charset)) != (iconv_t)-1)
                 {
@@ -486,8 +494,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
             zdata = NULL;
             nzdata = 0;
             //compress with zlib::inflate()
-            DEBUG_LOGGER(logger, "is_need_compess:%d data:%08x ndata:%ld", 
-                    is_need_compress, UI(rawdata), LI(nrawdata));
+            DEBUG_LOGGER(logger, "is_need_compess:%d data:%p ndata:%ld", 
+                    is_need_compress, rawdata, LI(nrawdata));
             if(is_need_compress && rawdata && nrawdata  > 0)
             {
                 nzdata = nrawdata + Z_HEADER_SIZE;
@@ -505,13 +513,14 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 }
                 DEBUG_LOGGER(logger, "compressed data %d to %ld", n, LI(nzdata));
             }
-            DEBUG_LOGGER(logger, "reset data %08x", UI(data));
+            DEBUG_LOGGER(logger, "reset data %p", data);
             if(data){free(data); data = NULL;}
-            DEBUG_LOGGER(logger, "reset outbuf %08x", UI(outbuf));
+            DEBUG_LOGGER(logger, "reset outbuf %p", outbuf);
             if(outbuf){free(outbuf); outbuf = NULL;}
             if(zdata && nzdata > 0 && http_resp)
             {
                 /* task header */
+                memset(buf, 0, HTTP_BUF_SIZE);
                 p = buf;
                 p += sprintf(p, "TASK %d HTTP/1.0\r\n", tasklist[c_id].taskid);
                 if((n = http_resp->headers[HEAD_ENT_LAST_MODIFIED]))
@@ -521,12 +530,15 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 }
                 if(tasklist[c_id].is_new_host)
                 {
+                    DEBUG_LOGGER(logger, "new domain:%s ip:%s", tasklist[c_id].host, 
+                            tasklist[c_id].ip);
                     p += sprintf(p, "Host: %s\r\nServer: %s\r\n", 
                             tasklist[c_id].host, tasklist[c_id].ip);
+                    tasklist[c_id].is_new_host = 0;
                 }
-                tasklist[c_id].is_new_host = 0;
                 if(http_resp->ncookies > 0)
                 {
+                    ps = p;
                     p += sprintf(p, "%s", "Cookie: ");
                     i = 0;
                     do
@@ -536,6 +548,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                                 http_resp->cookies[i].nv, http_resp->hlines 
                                 + http_resp->cookies[i].v);
                     }while(++i < http_resp->ncookies);
+                    DEBUG_LOGGER(logger, "%s", ps); 
                     p += sprintf(p, "%s", "\r\n");
                 }
                 p += sprintf(p, "%s", "\r\n");
@@ -546,6 +559,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     tasklist[c_id].c_conn = NULL;
                 }
                 //store data 
+                memset(buf, 0, HTTP_BUF_SIZE);
                 p = buf;
                 p += sprintf(p, "PUT %d HTTP/1.0\r\n", tasklist[c_id].taskid);
                 if((n = http_resp->headers[HEAD_ENT_LAST_MODIFIED]))
@@ -553,13 +567,15 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     ps = http_resp->hlines + n;
                     p += sprintf(p, "Last-Modified: %s\r\n", ps);
                 }
-                p += sprintf(p, "Content-Type: %s\r\n", http_resp->hlines 
-                        + http_resp->headers[HEAD_ENT_CONTENT_TYPE]);
+                if((n = http_resp->headers[HEAD_ENT_CONTENT_TYPE]))
+                {
+                    p += sprintf(p, "Content-Type: %s\r\n", http_resp->hlines +n);
+                }
                 p += sprintf(p, "Content-Length: %ld\r\n", LI(nzdata));
                 p += sprintf(p, "%s", "\r\n");
                 if((d_conn = tasklist[c_id].d_conn) && (n = (p - buf)) > 0)
                 {
-                    DEBUG_LOGGER(logger, "send storage data:%08x size:%ld", UI(zdata), LI(nzdata));
+                    DEBUG_LOGGER(logger, "send storage data:%p size:%ld", zdata, LI(nzdata));
                     d_conn->push_chunk(d_conn, buf, n);
                     d_conn->push_chunk(d_conn, zdata, nzdata);
                 }
