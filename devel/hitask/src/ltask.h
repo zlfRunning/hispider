@@ -134,6 +134,7 @@ typedef struct _LSTATE
     int   url_total;
     int   url_ok;
     int   url_error;
+    int   url_tasks;
     int   host_current;
     int   host_total;
     off_t doc_total_zsize;

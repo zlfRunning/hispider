@@ -81,6 +81,7 @@ static const char *__html__body__  =
 "<BODY bgcolor='#000000' align=center >\n""<h1><font color=white >Hispider Running State  [<a href='/%s'>%s</a>]</font>\n</h1>\n"
 "<hr noshade><ul><br><table  align=center width='100%%' >\n"
 "<tr><td align=left ><font color=red size=72 ><li>URL Total:%d </li></font></td></tr>\n"
+"<tr><td align=left ><font color=red size=72 ><li>URL TASKS:%d </li></font></td></tr>\n"
 "<tr><td align=left ><font color=red size=72 ><li>URL OK:%d </li></font></td></tr>\n"
 "<tr><td align=left ><font color=red size=72 ><li>URL ERROR:%d </li></font></td></tr>\n"
 "<tr><td align=left ><font color=red size=72 ><li>Doc Total:%lld/%lld </li></font></td></tr>\n"
@@ -735,7 +736,7 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
             }
             if(host && e == NULL && *p != '.' && *p != '-' && !ISALPHA(p)) 
             {
-                if(*p != '/') *pp++ = '/';
+                if(*p != '/' && *p != ':') *pp++ = '/';
                 e = pp;
             }
             if(*p >= 'A' && *p <= 'Z')
@@ -1063,6 +1064,7 @@ int ltask_get_task(LTASK *task, char *buf, int *nbuf)
         DEBUG_LOGGER(task->logger, "New TASK[%d] ip[%d.%d.%d.%d:%d] "
                 "http://%s/%s", urlid, sip[0], sip[1], sip[2], sip[3],
                 port, ps, path);
+        if(task->state) task->state->url_tasks++;
     }
     return urlid;
 }
@@ -1415,9 +1417,9 @@ int ltask_get_stateinfo(LTASK *task, char *block)
             task->state->last_doc_size = task->state->doc_total_size;
         }
         p = (char *)running_ops[task->state->running];
-        n = sprintf(buf, __html__body__, p, p, task->state->url_total, task->state->url_ok,
-                task->state->url_error, task->state->doc_total_zsize, task->state->doc_total_size, 
-                task->state->host_current, task->state->host_total, 
+        n = sprintf(buf, __html__body__, p, p, task->state->url_total, task->state->url_tasks,
+                task->state->url_ok, task->state->url_error, task->state->doc_total_zsize, 
+                task->state->doc_total_size, task->state->host_current, task->state->host_total, 
                 day, hour, min, sec, usec, task->state->speed);
         ret = sprintf(block, "HTTP/1.0 200 OK \r\nContent-Type: text/html\r\n"
                 "Content-Length: %d\r\n\r\n%s", n, buf);
