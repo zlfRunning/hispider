@@ -48,8 +48,8 @@
 #define HTML_MAX_SIZE           1048576
 #define TASK_STATE_INIT         0x00
 #define TASK_STATE_OK           0x02
-#define TASK_STATE_ERROR        0x04
-#define L_SPEED_INTERVAL        20000000
+#define TASK_STATE_ERROR        0x046
+#define L_SPEED_INTERVAL        60000000
 #define L_USER_MAX              32
 #define L_PASSWD_MAX            16
 #define L_STATE_NAME            "hi.state"

@@ -161,6 +161,7 @@ int ltask_set_basedir(LTASK *task, char *dir)
                     _EXIT_("mmap %s failed, %s\n", path, strerror(errno));
                 }
                 task->state->last_usec = PT_L_USEC(task->timer);
+                task->state->speed = 0;
             }
             else
             {
@@ -1394,7 +1395,6 @@ int ltask_get_stateinfo(LTASK *task, char *block)
 {
     char buf[HTTP_BUF_SIZE], *p = NULL;
     int ret = -1, n = 0, interval = 0, day = 0, hour = 0, min = 0, sec = 0, usec = 0;
-    double speed = 0.0;
 
     if(task && task->state)
     {
@@ -1404,11 +1404,13 @@ int ltask_get_stateinfo(LTASK *task, char *block)
         min  = ((PT_SEC_U(task->timer) % 3600) / 60);
         sec  = (PT_SEC_U(task->timer) % 60);
         usec = (PT_USEC_U(task->timer) % 1000000ll);
-        speed = task->state->speed;
-        if((interval = (int)((PT_L_USEC(task->timer) - task->state->last_usec))) > L_SPEED_INTERVAL)
+        if((interval = (int)((PT_L_USEC(task->timer) - task->state->last_usec))) > 0)
         {
-            speed = ((double)(task->state->doc_total_size - task->state->last_doc_size)/
-                    (double)1024) / (double)interval;
+            task->state->speed = (double)1000000 * (((double)(task->state->doc_total_size 
+                - task->state->last_doc_size)/(double)1024)/(double)interval);
+        }
+        if(interval  > L_SPEED_INTERVAL)
+        {
             task->state->last_usec = PT_L_USEC(task->timer);
             task->state->last_doc_size = task->state->doc_total_size;
         }
@@ -1416,7 +1418,7 @@ int ltask_get_stateinfo(LTASK *task, char *block)
         n = sprintf(buf, __html__body__, p, p, task->state->url_total, task->state->url_ok,
                 task->state->url_error, task->state->doc_total_zsize, task->state->doc_total_size, 
                 task->state->host_current, task->state->host_total, 
-                day, hour, min, sec, usec, speed);
+                day, hour, min, sec, usec, task->state->speed);
         ret = sprintf(block, "HTTP/1.0 200 OK \r\nContent-Type: text/html\r\n"
                 "Content-Length: %d\r\n\r\n%s", n, buf);
     }
@@ -1474,8 +1476,8 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
                 ret = 0;
                 if(task->state)
                 {
-                    task->state->doc_total_zsize += ncontent;
-                    task->state->doc_total_size += ncontent;
+                    task->state->doc_total_zsize += (off_t)ncontent;
+                    task->state->doc_total_size += (off_t)ncontent;
                     task->state->url_ok++;
                 }
             }
@@ -1497,9 +1499,9 @@ end:
                 if(uncompress((Bytef *)data, (uLongf *)&ndata, 
                             (const Bytef *)content, (uLong)ncontent) == 0)
                 {
-                    if(task->state)
+                    if(task->state && (n = (ndata - ncontent)) > 0)
                     {
-                        task->state->doc_total_size += (ndata - ncontent);
+                        task->state->doc_total_size += (off_t)n;
                     }
                     DEBUG_LOGGER(task->logger, "url:%s nurl:%d ndata:%ld", 
                             url, meta.url_len, LI(ndata));
