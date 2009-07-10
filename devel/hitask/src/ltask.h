@@ -65,6 +65,7 @@
 #define L_META_NAME             "hi.meta"
 #define L_DNS_NAME              "hi.dns"
 #define L_USER_NAME             "hi.user"
+#define L_ERR_NAME              "hi.err"
 #define USER_AGENT              "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10.5; zh-CN; rv:1.9.0.1) Gecko/2008070206 Firefox/3.0.1"
 #define ACCEPT_TYPE             "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 #define ACCEPT_LANGUAGE         "zh-cn,zh;q=0.5"
@@ -201,6 +202,7 @@ typedef struct _LTASK
     void *timer;
     void *mutex;
     void *logger;
+    void *errlogger;
 
     int (*set_basedir)(struct _LTASK *, char *basedir);
     int (*set_state_running)(struct _LTASK *, int state);
@@ -221,7 +223,7 @@ typedef struct _LTASK
     int (*set_host_level)(struct _LTASK *, int hostid, char *host, short level);
     int (*add_url)(struct _LTASK *, int parentid, int parent_depth, char *url);
     int (*pop_url)(struct _LTASK *, char *url, int *time, char *refer, char *cookie);
-    int (*set_url_status)(struct _LTASK *, int urlid, char *url, short status);
+    int (*set_url_status)(struct _LTASK *, int urlid, char *url, short status, short err);
     int (*set_url_level)(struct _LTASK *, int urlid, char *url, short level);
     int (*get_task)(struct _LTASK *, char *buf, int *nbuf);
     int (*add_user)(struct _LTASK *, char *name, char *passwd);

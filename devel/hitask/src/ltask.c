@@ -149,6 +149,8 @@ int ltask_set_basedir(LTASK *task, char *dir)
             _EXIT_("mkdir -p %s failed, %s\n", path, strerror(errno));
         }
         LOGGER_INIT(task->logger, path);
+        sprintf(path, "%s/%s", dir, L_ERR_NAME);
+        LOGGER_INIT(task->errlogger, path);
         sprintf(path, "%s/%s", dir, L_STATE_NAME);
         if((task->state_fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
         {
@@ -924,7 +926,7 @@ end:
 }
 
 /* set url status */
-int ltask_set_url_status(LTASK *task, int urlid, char *url, short status)
+int ltask_set_url_status(LTASK *task, int urlid, char *url, short status, short err)
 {
     char newurl[HTTP_URL_MAX], *p = NULL, *pp = NULL;
     unsigned char key[MD5_LEN];
@@ -952,15 +954,13 @@ int ltask_set_url_status(LTASK *task, int urlid, char *url, short status)
                 if(dp) id = (long )dp - 1;
             }
         }else id = urlid;
-        if(urlid >= 0) 
+        if(id >= 0) 
         {
             pwrite(task->meta_fd, &status, sizeof(short), id * sizeof(LMETA));        
-            if(status && task->state)
-            {
-                task->state->url_error++;
-            }
             ret = 0;
         }
+        if(status && task->state)task->state->url_error++;
+        if(err){REALLOG(task->errlogger, "%d:%d", id, err);}
         MUTEX_UNLOCK(task->mutex);
     }
     return ret;

@@ -90,6 +90,18 @@ do{                                                                             
     MUTEX_UNLOCK(PL(ptr)->mutex);                                                   \
     }                                                                               \
 }while(0)
+#define REALLOG(ptr, format...)                                                     \
+do{                                                                                 \
+    if(ptr)                                                                         \
+    {                                                                               \
+    MUTEX_LOCK(PL(ptr)->mutex);                                                     \
+    PLPS(ptr) = PLB(ptr);                                                           \
+    PLPS(ptr) += sprintf(PLPS(ptr), format);                                        \
+    *PLPS(ptr)++ = '\n';                                                            \
+    write(PLFD(ptr), PLB(ptr), (PLPS(ptr) - PLB(ptr)));                             \
+    MUTEX_UNLOCK(PL(ptr)->mutex);                                                   \
+    }                                                                               \
+}while(0)
 #ifdef _DEBUG
 #define DEBUG_LOGGER(ptr, format...) {LOGGER_ADD(ptr, __DEBUG__, format);}
 #else

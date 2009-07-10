@@ -220,7 +220,7 @@ int hitaskd_auth(CONN *conn, HTTP_REQ *http_req)
 int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
 {
     char buf[HTTP_BUF_SIZE], *host = NULL, *ip = NULL, *p = NULL, *end = NULL;
-    int urlid = 0, n = 0, i = 0, ips = 0;
+    int urlid = 0, n = 0, i = 0, ips = 0, err = 0;
     HTTP_REQ http_req = {0};
 
     if(conn)
@@ -294,7 +294,8 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
             //error 
             if(urlid >= 0 && (n = http_req.headers[HEAD_GEN_WARNING]) > 0)
             {
-                ltask->set_url_status(ltask, urlid, NULL, URL_STATUS_ERR);
+                err = atoi(http_req.hlines + n);
+                ltask->set_url_status(ltask, urlid, NULL, URL_STATUS_ERR, err);
             }
             /* get new task */
             if(ltask->get_task(ltask, buf, &n) >= 0) 
