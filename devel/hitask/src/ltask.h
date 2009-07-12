@@ -4,6 +4,7 @@
 #define HTTP_HOST_MAX           256
 #define HTTP_IP_MAX             16
 #define HTTP_URL_MAX            4096
+#define HTTP_URL_MMAX            2048
 #define HTTP_COOKIE_MAX         4096
 #define HOST_INCRE_NUM          1000000   
 #define PROXY_INCRE_NUM         10000

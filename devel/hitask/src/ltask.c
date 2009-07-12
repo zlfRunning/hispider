@@ -707,7 +707,7 @@ int ltask_set_host_level(LTASK *task, int hostid, char *host, short level)
 /* add url */
 int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
 {
-    char newurl[HTTP_URL_MAX], URL[HTTP_URL_MAX], *p = NULL, 
+    char newurl[HTTP_BUF_SIZE], URL[HTTP_BUF_SIZE], *p = NULL, 
          *pp = NULL, *e = NULL, *host = NULL, *purl = NULL;
     void *dp = NULL, *olddp = NULL;
     int ret = -1, n = 0, nurl = 0, id = 0, host_id = 0;
@@ -791,7 +791,7 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
                     host_id, n, newurl, nurl, purl, e, host_node->url_left, host_node->url_total);
         }
         /* check/add url */
-        if((n = (pp - newurl)) <= 0) goto err;
+        if((n = (pp - newurl)) <= 0 && n > HTTP_URL_MAX) goto err;
         memset(key, 0, MD5_LEN);
         md5((unsigned char *)newurl, n, key);
         if(fstat(task->meta_fd, &st) != 0) goto err;
@@ -1519,7 +1519,7 @@ end:
 #define URLTOEND(start, up, eup, flag, dpp)                             \
 do                                                                      \
 {                                                                       \
-    while(up < eup && dpp < (start + HTTP_URL_MAX))                     \
+    while(up < eup && dpp < (start + HTTP_URL_MAX - 1))                     \
     {                                                                   \
         if(*up == 0x20 && (*(up+1) == 0x20 || *(up+1) == '\''           \
                     || *(up+1) == '"' ))break;                          \
@@ -1681,7 +1681,7 @@ int ltask_extract_link(LTASK *task, int urlid, int depth, char *url, char *conte
                     URLTOEND(buf, p, end, pref, pp);                                 
                 }                                                               
             } 
-            if((pp - buf) > 0)
+            if((n = (pp - buf)) > 0 && n < HTTP_URL_MMAX)
             {
                 *pp = '\0';
                 DEBUG_LOGGER(task->logger, "add url:%s from %s\n", buf, url);
