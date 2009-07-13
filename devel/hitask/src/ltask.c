@@ -90,6 +90,7 @@ static const char *__html__body__  =
 "</font></td></tr>\n"
 "<tr><td align=left ><font color=red size=72 ><li>Speed:%f (k/s)</li></font></td></tr>\n"
 "</table><br><hr  noshade><em>\n"
+"<form method=post><input name='' type=radio ></form>\n"
 "<font color=white ><a href='http://code.google.com/p/hispider' >"
 "Hispider</a> Powered By <a href='http://code.google.com/p/hispider'>"
 "http://code.google.com/p/hispider</a></font>"

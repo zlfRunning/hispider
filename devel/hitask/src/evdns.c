@@ -90,8 +90,11 @@ unsigned char *evdns_expand_name(unsigned char *ptr, unsigned char *start,
         else
         {
             n = *p++;
-            while(p < end && n-- > 0){*q++ = *p++;}
-            *q++ = '.';
+            while(p < end && n-- > 0 && q < (name + DNS_NAME_MAX))
+            {
+                *q++ = *p++;
+            }
+            if(q < (name + DNS_NAME_MAX)) *q++ = '.';
         }
     }
     if(flag == 0) ret = p+1;
@@ -143,7 +146,7 @@ int evdns_parse_reply(unsigned char *buf, int nbuf, HOSTENT *hostent)
                 qdcount, ancount, nscount, arcount);
         */
         /* parse question */
-        if(p > end) return -1;
+        if(p >= end) return -1;
         for(i = 0; i < qdcount; i++)
         {
             ps = (unsigned char *)hostent->name;

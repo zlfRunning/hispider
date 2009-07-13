@@ -141,7 +141,7 @@ static const char *rcodes[] = {
 #define EVDNS_TIMEOUT_MAX 6
 #define DNS_MAX_NUM   32
 #ifndef DNS_NAME_MAX
-#define DNS_NAME_MAX  128
+#define DNS_NAME_MAX  256
 #endif
 #define DNS_DEFAULT_PORT 53
 typedef struct _HOSTENT
