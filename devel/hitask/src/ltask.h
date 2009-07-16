@@ -51,6 +51,7 @@
 #define TASK_STATE_OK           0x02
 #define TASK_STATE_ERROR        0x046
 #define L_SPEED_INTERVAL        60000000
+#define L_COOKIE_MAX            1024
 #define L_USER_MAX              32
 #define L_PASSWD_MAX            16
 #define L_STATE_NAME            "hi.state"
@@ -67,6 +68,7 @@
 #define L_DNS_NAME              "hi.dns"
 #define L_USER_NAME             "hi.user"
 #define L_ERR_NAME              "hi.err"
+#define L_COOKIE_NAME           "hi.cookie"
 #define USER_AGENT              "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10.5; zh-CN; rv:1.9.0.1) Gecko/2008070206 Firefox/3.0.1"
 #define ACCEPT_TYPE             "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 #define ACCEPT_LANGUAGE         "zh-cn,zh;q=0.5"
@@ -90,6 +92,7 @@ typedef struct _LHOST
     int url_total;
     int url_left;
     int url_last_id;
+    int cookie_off;
 }LHOST;
 /* proxy */
 typedef struct _LPROXY
@@ -171,7 +174,8 @@ typedef struct _LDNS
 /* COOKIE */
 typedef struct _LCOOKIE
 {
-
+    int hostid;
+    int offsets[L_COOKIE_MAX];
 }LCOOKIE;
 /* USER */
 typedef struct _LUSER
@@ -201,6 +205,8 @@ typedef struct _LTASK
     void *users;
     LSTATE *state;
     int state_fd;
+    int  cookie_fd;
+    void *cookies;
     void *timer;
     void *mutex;
     void *logger;
@@ -223,6 +229,9 @@ typedef struct _LTASK
     void(*list_host_ip)(struct _LTASK *, FILE *fp);
     int (*set_host_status)(struct _LTASK *, int hostid, char *host, short status);
     int (*set_host_level)(struct _LTASK *, int hostid, char *host, short level);
+    int (*add_cookie)(struct _LTASK *, int hostid, char *cookies);
+    int (*update_cookie)(struct _LTASK *, int hostid, char *cookies);
+    int (*del_cookie)(struct _LTASK *, int hostid, char *cookies);
     int (*add_url)(struct _LTASK *, int parentid, int parent_depth, char *url);
     int (*pop_url)(struct _LTASK *, char *url, int *time, char *refer, char *cookie);
     int (*set_url_status)(struct _LTASK *, int urlid, char *url, short status, short err);

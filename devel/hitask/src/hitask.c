@@ -364,7 +364,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
     if(conn && (c_id = conn->c_id) >= 0 && c_id < ntask)
     {
         if(conn == tasklist[c_id].c_conn && chunk && chunk->data && chunk->ndata > 0
-            && cache && (http_resp = (HTTP_RESPONSE *)cache->data))
+                && cache && cache->ndata > 0 && (http_resp = (HTTP_RESPONSE *)cache->data))
         {
             DEBUG_LOGGER(logger, "Ready for data handling on %s:%d via %d ndata:%d", 
                     conn->remote_ip, conn->remote_port, conn->fd, chunk->ndata);
@@ -382,7 +382,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 if(strncasecmp(p, "gzip", 4) == 0) 
                 {
                     ndata =  nzdata * 8 + Z_HEADER_SIZE;
-                    if((data = calloc(1, ndata)))
+                    if((data = (char *)calloc(1, ndata)))
                     {
                         if((n = httpgzdecompress((Bytef *)zdata, 
                                         nzdata, (Bytef *)data, (uLong *)&ndata)) == 0)
@@ -390,8 +390,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                             gzdoc_total++;
                             DEBUG_LOGGER(logger, "gzdecompress data from %ld to %ld "
                                     " rate:(%lld/%lld) = %f", LI(nzdata), LI(ndata), 
-                                    gzdoc_total, doc_total, 
-                                    ((double)gzdoc_total/(double)doc_total));
+                                    gzdoc_total, doc_total, ((double)gzdoc_total/(double)doc_total));
                             rawdata = data;
                             nrawdata = ndata;
                             is_need_compress = 1;
@@ -405,7 +404,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     }
                     else 
                     {
-                        ERROR_LOGGER(logger, "gzdecompress data from %ld to %ld failed, %d:%s", 
+                        ERROR_LOGGER(logger, "httpgzdecompress data from %ld to %ld failed, %d:%s", 
                                 LI(nzdata), LI(ndata), n, strerror(errno));
                         goto err_end;
                     }
@@ -413,11 +412,10 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 else if(strncasecmp(p, "deflate", 7) == 0)
                 {
                     ndata =  nzdata * 8 + Z_HEADER_SIZE;
-                    if( (data = calloc(1, ndata)))
+                    if((data = (char *)calloc(1, ndata)))
                     {
 
-                        if(zdecompress((Bytef *)zdata, nzdata, (Bytef *)data, 
-                                    (uLong *)&ndata) == 0)
+                        if(zdecompress((Bytef *)zdata, nzdata, (Bytef *)data, (uLong *)&ndata) == 0)
                         {
                             zdoc_total++;
                             DEBUG_LOGGER(logger, "zdecompress data from %ld to %ld "
@@ -433,7 +431,12 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                             goto err_end;
                         }
                     }
-                    else goto err_end;
+                    else 
+                    {
+                        ERROR_LOGGER(logger, "gzdecompress data from %ld to %ld failed, %d:%s", 
+                                LI(nzdata), LI(ndata), n, strerror(errno));
+                        goto err_end;
+                    }
                 }
                 else
                 {
@@ -471,9 +474,9 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     p = rawdata;
                     ninbuf = nrawdata;
                     n = noutbuf = ninbuf * 8;
-                    if((ps = outbuf = calloc(1, noutbuf)))
+                    if((ps = outbuf = (char *)calloc(1, noutbuf)))
                     {
-                        if(iconv(cd, &p, &ninbuf, &ps, (size_t *)&n) == -1)
+                        if(iconv(cd, &p, &ninbuf, &ps, (size_t *)&n) == (size_t)-1)
                         {
                             free(outbuf);
                             outbuf = NULL;
@@ -513,10 +516,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 }
                 DEBUG_LOGGER(logger, "compressed data %d to %ld", n, LI(nzdata));
             }
-            DEBUG_LOGGER(logger, "reset data %p", data);
-            if(data){free(data); data = NULL;}
-            DEBUG_LOGGER(logger, "reset outbuf %p", outbuf);
-            if(outbuf){free(outbuf); outbuf = NULL;}
+            //content data
             if(zdata && nzdata > 0 && http_resp)
             {
                 /* task header */
@@ -573,28 +573,28 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 }
                 p += sprintf(p, "Content-Length: %ld\r\n", LI(nzdata));
                 p += sprintf(p, "%s", "\r\n");
-                if((d_conn = tasklist[c_id].d_conn) && (n = (p - buf)) > 0)
+                if((d_conn = tasklist[c_id].d_conn) && d_conn->push_chunk && (n = (p - buf)) > 0)
                 {
                     DEBUG_LOGGER(logger, "send storage data:%p size:%ld", zdata, LI(nzdata));
                     d_conn->push_chunk(d_conn, buf, n);
+                    DEBUG_LOGGER(logger, "sent storage data:%p size:%ld", zdata, LI(nzdata));
                     d_conn->push_chunk(d_conn, zdata, nzdata);
+                    DEBUG_LOGGER(logger, "sent storage data:%p size:%ld", zdata, LI(nzdata));
                 }
                 tasklist[c_id].taskid = -1;
                 ret = 0;
-                if(zdata){free(zdata);zdata = NULL;}
                 goto end;
             }
-            else 
-            {
-                if(zdata){free(zdata);zdata = NULL;}
-                goto err_end;
-            }
+            else goto err_end; 
         }
 err_end:
         http_download_error(c_id, ERR_DATA);
 end:    
         conn->over_cstate(conn);
         conn->close(conn);
+        if(data) free(data); data = NULL;
+        if(outbuf) free(outbuf); outbuf = NULL;
+        if(is_new_zdata && zdata) free(zdata); zdata = NULL;
     }
     return ret;
 }

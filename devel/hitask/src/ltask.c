@@ -255,6 +255,12 @@ int ltask_set_basedir(LTASK *task, char *dir)
             _EXIT_("open %s failed, %s\n", path, strerror(errno));
         }
         /* host/table */
+        //cookie
+        sprintf(path, "%s/%s", dir, L_COOKIE_NAME);
+        if((task->cookie_fd = open(path, O_CREAT|O_RDWR, 0644)) < 0)
+        {
+            _EXIT_("open %s failed, %s\n", path, strerror(errno));
+        }
         if(task->hostio.total > 0 && (host_node = (LHOST *)(task->hostio.map))
                 && fstat(task->domain_fd, &st) == 0 && st.st_size > 0)
         {
@@ -1710,12 +1716,14 @@ void ltask_clean(LTASK **ptask)
         if((*ptask)->urlmap) {KVMAP_CLEAN((*ptask)->urlmap);}
         if((*ptask)->table) {TRIETAB_CLEAN((*ptask)->table);}
         if((*ptask)->users) {TRIETAB_CLEAN((*ptask)->users);}
+        if((*ptask)->cookies) {TRIETAB_CLEAN((*ptask)->cookies);}
         if((*ptask)->qtask){FQUEUE_CLEAN((*ptask)->qtask);}
         if((*ptask)->qproxy){QUEUE_CLEAN((*ptask)->qproxy);}
         if((*ptask)->key_fd > 0) close((*ptask)->key_fd);
         if((*ptask)->url_fd > 0) close((*ptask)->url_fd);
         if((*ptask)->domain_fd > 0) close((*ptask)->domain_fd);
         if((*ptask)->doc_fd > 0) close((*ptask)->doc_fd);
+        if((*ptask)->cookie_fd > 0) close((*ptask)->cookie_fd);
         if((*ptask)->state_fd > 0) 
         {
             _MUNMAP_((*ptask)->state, sizeof(LSTATE));
@@ -1761,6 +1769,7 @@ LTASK *ltask_init()
         KVMAP_INIT(task->urlmap);
         TRIETAB_INIT(task->table);
         TRIETAB_INIT(task->users);
+        TRIETAB_INIT(task->cookies);
         TIMER_INIT(task->timer);
         MUTEX_INIT(task->mutex);
         QUEUE_INIT(task->qproxy);
