@@ -14,6 +14,7 @@
 #include "evdns.h"
 #include "queue.h"
 #include "logger.h"
+#include "trie.h"
 static SBASE *sbase = NULL;
 static SERVICE *hitaskd = NULL, *histore = NULL, *adns = NULL;
 static dictionary *dict = NULL;
@@ -21,7 +22,33 @@ static LTASK *ltask = NULL;
 static void *hitaskd_logger = NULL, *histore_logger = NULL, *adns_logger = NULL;
 static int is_need_authorization = 0;
 static char *authorization_name = "Hitask Administration System";
-
+static void *argvmap = NULL;
+static char *e_argvs[] = 
+{
+    "op", 
+#define E_ARGV_OP       0
+    "host",
+#define E_ARGV_HOST     1
+    "url",
+#define E_ARGV_URL      2
+    "pattern",
+#define E_ARGV_PATTERN  3
+    "host_id",
+#define E_ARGV_HOST_ID  4
+    "url_id",
+#define E_ARGV_URL_ID   5
+    "name"
+#define E_ARGV_NAME     6
+};
+#define E_ARGV_NUM      7
+static char *e_ops[]=
+{
+    "host_up",
+#define E_OP_HOST_UP 0
+    "host_down",
+#define E_OP_HOST_DOWN 1
+};
+#define E_OP_NUM 2
 /* dns packet reader */
 int adns_packet_reader(CONN *conn, CB_DATA *buffer)
 {
@@ -276,8 +303,7 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
                     && (n = atol(http_req.hlines + n)) > 0)
             {
                 conn->save_cache(conn, &http_req, sizeof(HTTP_REQ));
-                conn->recv_chunk(conn, n);
-                //conn->recv_file(conn, "/tmp/recv.txt", 0, n);
+                return conn->recv_chunk(conn, n);
             }
         }
         else if(http_req.reqid == HTTP_TASK)
@@ -322,10 +348,35 @@ err_end:
 /*  data handler */
 int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
+    char *p = NULL, *end = NULL;
+    HTTP_REQ *http_req = NULL;
+    int i = 0, id = 0, n = 0;
+    void *dp = NULL;
 
     if(conn && packet && cache && chunk && chunk->ndata > 0)
     {
-            return 0;
+        if((http_req = (HTTP_REQ *)cache->data))
+        {
+            if(http_req->reqid == HTTP_POST)
+            {
+                end = chunk->data + chunk->ndata;
+                if(http_argv_parse(p, end, http_req) == -1)goto end;
+                for(i = 0; i < http_req->nargvs; i++)
+                {
+                    if(http_req->argvs[i].nk > 0 && (n = http_req->argvs[i].k) > 0 
+                            && (p = (http_req->line + n)))
+                    {
+                        TRIETAB_GET(argvmap, p, http_req->argvs[i].nk, dp);
+                        if((id = ((long)dp - 1)) >= 0)
+                        {
+
+                        }
+                    }
+                }
+            }
+        }
+end:
+        return 0;
     }
     return -1;
 }
@@ -444,6 +495,7 @@ int histore_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
             }
             else if(http_req->reqid == HTTP_POST)
             {
+
             }
             return 0;
         }
@@ -477,7 +529,8 @@ int sbase_initialize(SBASE *sbase, char *conf)
     char *s = NULL, *p = NULL, *basedir = NULL, *start = NULL;
     //*ep = NULL, *whitelist = NULL, *whost = NULL, 
     //*host = NULL, *path = NULL;
-    int interval = 0;
+    int interval = 0, i = 0;
+    void *dp = NULL;
 
     if((dict = iniparser_new(conf)) == NULL)
     {
@@ -534,6 +587,22 @@ int sbase_initialize(SBASE *sbase, char *conf)
     hitaskd->session.timeout_handler = &hitaskd_timeout_handler;
     hitaskd->session.oob_handler = &hitaskd_oob_handler;
     if((p = iniparser_getstr(dict, "HITASKD:access_log"))){LOGGER_INIT(hitaskd_logger,p);}
+    //argvmap
+    TRIETAB_INIT(argvmap);
+    if(argvmap == NULL) _exit(-1);
+    else
+    {
+        for(i = 0; i < E_ARGV_NUM; i++)
+        {
+            dp = (void *)((long)(i+1));
+            TRIETAB_ADD(argvmap, e_argvs[i], strlen(e_argvs[i]), dp);
+        }
+        for(i = 0; i < E_OP_NUM; i++)
+        {
+            dp = (void *)((long)(i+1));
+            TRIETAB_ADD(argvmap, e_ops[i], strlen(e_ops[i]), dp);
+        }
+    }
     /* link  task table */
     if((ltask = ltask_init()))
     {
@@ -560,6 +629,10 @@ int sbase_initialize(SBASE *sbase, char *conf)
          }
          ltable->addurl(ltable, host, path);
          */
+    }
+    else 
+    {
+        _exit(-1);
     }
     /* histore */
     if((histore = service_init()) == NULL)
@@ -660,15 +733,20 @@ static void hitaskd_stop(int sig){
 int main(int argc, char **argv)
 {
     pid_t pid;
-    char *conf = NULL;
+    char *conf = NULL, ch = 0;
+    int is_daemon = 0;
 
     /* get configure file */
-    if(getopt(argc, argv, "c:") != 'c')
+    while((ch = getopt(argc, argv, "c:d")) != -1)
+    {
+        if(ch == 'c') conf = optarg;
+        else if(ch == 'd') is_daemon = 1;
+    }
+    if(conf == NULL)
     {
         fprintf(stderr, "Usage:%s -c config_file\n", argv[0]);
         _exit(-1);
     }
-    conf = optarg;
     /* locale */
     setlocale(LC_ALL, "C");
     /* signal */
@@ -676,19 +754,23 @@ int main(int argc, char **argv)
     signal(SIGINT,  &hitaskd_stop);
     signal(SIGHUP,  &hitaskd_stop);
     signal(SIGPIPE, SIG_IGN);
-    pid = fork();
-    switch (pid) {
-        case -1:
-            perror("fork()");
-            exit(EXIT_FAILURE);
-            break;
-        case 0: /* child process */
-            if(setsid() == -1)
+    //daemon
+    if(is_daemon)
+    {
+        pid = fork();
+        switch (pid) {
+            case -1:
+                perror("fork()");
                 exit(EXIT_FAILURE);
-            break;
-        default:/* parent */
-            _exit(EXIT_SUCCESS);
-            break;
+                break;
+            case 0: // child process 
+                if(setsid() == -1)
+                    exit(EXIT_FAILURE);
+                break;
+            default:// parent 
+                _exit(EXIT_SUCCESS);
+                break;
+        }
     }
     /*setrlimiter("RLIMIT_NOFILE", RLIMIT_NOFILE, 65536)*/
     if((sbase = sbase_init()) == NULL)
@@ -713,5 +795,6 @@ int main(int argc, char **argv)
     if(hitaskd_logger){LOGGER_CLEAN(hitaskd_logger);}
     if(histore_logger){LOGGER_CLEAN(histore_logger);}
     if(adns_logger){LOGGER_CLEAN(adns_logger);}
+    if(argvmap){TRIETAB_CLEAN(argvmap);}
     return 0;
 }

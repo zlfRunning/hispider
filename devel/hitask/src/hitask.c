@@ -761,15 +761,20 @@ static void hitask_stop(int sig){
 int main(int argc, char **argv)
 {
     pid_t pid;
-    char *conf = NULL;
+    char *conf = NULL, ch = 0;
+    int is_daemon = 0;
 
     /* get configure file */
-    if(getopt(argc, argv, "c:") != 'c')
+    while((ch = getopt(argc, argv, "c:d")) != -1)
+    {
+        if(ch == 'c') conf = optarg;
+        else if(ch == 'd') is_daemon = 1;
+    }
+    if(conf == NULL)
     {
         fprintf(stderr, "Usage:%s -c config_file\n", argv[0]);
         _exit(-1);
     }
-    conf = optarg;
     /* locale */
     setlocale(LC_ALL, "C");
     /* signal */
@@ -777,22 +782,24 @@ int main(int argc, char **argv)
     signal(SIGINT,  &hitask_stop);
     signal(SIGHUP,  &hitask_stop);
     signal(SIGPIPE, SIG_IGN);
-    pid = fork();
-    switch (pid) {
-        case -1:
-            perror("fork()");
-            exit(EXIT_FAILURE);
-            break;
-        case 0: // child process 
-            if(setsid() == -1)
+    //daemon 
+    if(is_daemon)
+    {
+        pid = fork();
+        switch (pid) {
+            case -1:
+                perror("fork()");
                 exit(EXIT_FAILURE);
-            break;
-        default:// parent 
-            _exit(EXIT_SUCCESS);
-            break;
+                break;
+            case 0: // child process 
+                if(setsid() == -1)
+                    exit(EXIT_FAILURE);
+                break;
+            default:// parent 
+                _exit(EXIT_SUCCESS);
+                break;
+        }
     }
-    /*
-    */
     /*setrlimiter("RLIMIT_NOFILE", RLIMIT_NOFILE, 65536)*/
     if((sbase = sbase_init()) == NULL)
     {
