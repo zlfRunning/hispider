@@ -161,7 +161,7 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
             _MMAP_(hibase->pnodeio, st, PNODE, PNODE_INCRE_NUM); 
             pnode = (PNODE *)hibase->pnodeio.map;
             hibase->pnodeio.left = 0;
-            for(i = 0; i < hibase->pnodeio.total; i++)
+            for(i = 1; i < hibase->pnodeio.total; i++)
             {
                 if(pnode[i].status && (n = strlen(pnode[i].name)) > 0)
                 {
@@ -517,7 +517,7 @@ int hibase_pnode_exists(HIBASE *hibase, char *name, int len)
 /* add pnode */
 int hibase_add_pnode(HIBASE *hibase, int parentid, char *name)
 {
-    int pnodeid = -1, n = 0;
+    int pnodeid = -1, n = 0, *px = NULL, x = 0;
     struct stat st = {0};
     PNODE *pnode = NULL, *pparent = NULL;
     void *dp = NULL;
@@ -528,11 +528,17 @@ int hibase_add_pnode(HIBASE *hibase, int parentid, char *name)
         MUTEX_LOCK(hibase->mutex);
         if(hibase->pnodeio.left == 0)
         {_MMAP_(hibase->pnodeio, st, PNODE, PNODE_INCRE_NUM);}
-        if(FQUEUE_POP(hibase->qpnode, int, &pnodeid) != 0)
+        px = &x;
+        if(FQUEUE_POP(hibase->qpnode, int, px) != 0)
         {
             pnodeid = ++(hibase->pnodeio.current);
         }
-        if(parentid >= 0 && parentid < hibase->pnodeio.total && pnodeid >= 0 
+        else
+        {
+            pnodeid = x;
+        }
+        if(parentid >= 0 && parentid < hibase->pnodeio.total 
+                && pnodeid >= 0  && pnodeid < hibase->pnodeio.total 
                 && (pnode = (PNODE *)hibase->pnodeio.map) && pnode != (PNODE *)-1)
         {
             memset(&(pnode[pnodeid]), 0, sizeof(PNODE));
@@ -553,6 +559,7 @@ int hibase_add_pnode(HIBASE *hibase, int parentid, char *name)
             dp = (void *)((long)(pnodeid + 1));
             TRIETAB_ADD(hibase->mpnode, name, n, dp);
             hibase->pnodeio.left--;
+            fprintf(stdout, "%d::%d->%d\n", parentid, pnodeid, hibase->pnodeio.current);
         }
         MUTEX_UNLOCK(hibase->mutex);
     }
@@ -622,8 +629,10 @@ int hibase_update_pnode(HIBASE *hibase, int pnodeid, char *name)
                 && (pnode = (PNODE *)(hibase->pnodeio.map)) 
                 && pnode != (PNODE *)-1)
         {
-            x = strlen(pnode[pnodeid].name);
-            TRIETAB_DEL(hibase->mpnode, pnode[pnodeid].name, x, dp);
+            if((x = strlen(pnode[pnodeid].name)) > 0)
+            {
+                TRIETAB_DEL(hibase->mpnode, pnode[pnodeid].name, x, dp);
+            }
             memset(pnode[pnodeid].name, 0, PNODE_NAME_MAX);
             memcpy(pnode[pnodeid].name, name, n); 
             dp = (void *)((long ) (pnodeid + 1));
@@ -651,12 +660,14 @@ int hibase_delete_pnode(HIBASE *hibase, int pnodeid, char *pnode_name)
         if(id >= 0 && id < hibase->pnodeio.total 
                 && (pnode = (PNODE *)(hibase->pnodeio.map)) && pnode != (PNODE *)-1)
         {
-            n = strlen(pnode[id].name);
-            TRIETAB_DEL(hibase->mpnode, pnode[id].name, n, dp);
+            if((n = strlen(pnode[id].name)) > 0)
+            {
+                TRIETAB_DEL(hibase->mpnode, pnode[id].name, n, dp);
+            }
             if((n = pnode[id].parent) >= 0 && n < hibase->pnodeio.total)
             {
                 parent = &(pnode[n]);
-                if(parent->first == id) parent->first = 0;
+                if(parent->first == id) parent->first = pnode[id].next;
                 if(parent->last == id) parent->last = pnode[id].prev;
                 parent->nchilds--;
             }
@@ -848,22 +859,22 @@ int main(int argc, char **argv)
         hibase_list_table(hibase, stdout);
         //add pnode 
         char name[1024];
-        hibase_add_pnode(hibase, -1, "Root");
         for(i = 1; i < 10000; i++)
         {
             sprintf(name, "node_%d", i);
             x = random()%i;
             if((n = hibase_add_pnode(hibase, x, name)) >= 0)
             {
-                fprintf(stdout, "%d::add node_%d to node_%d\n", n, i, x);
+                fprintf(stdout, "%d::add node:%d to node:%d\n", n, i, x);
             }
         }
         hibase_list_pnode(hibase, 0, stdout);
         hibase_update_pnode(hibase, 9999, "my_node");
-        //hibase_list_pnode(hibase, 0, stdout);
+        hibase_list_pnode(hibase, 0, stdout);
+        fprintf(stdout, "%d::OK\n", __LINE__);
         hibase->clean(&hibase);
     }
     return 0;
 }
-//gcc -o hibase hibase.c utils/*.c -I utils -D_DEBUG_HIBASE 
+//gcc -o hibase hibase.c utils/*.c -I utils -D_DEBUG_HIBASE -lz 
 #endif
