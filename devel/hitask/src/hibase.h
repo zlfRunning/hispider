@@ -48,7 +48,8 @@ typedef struct _ITABLE
 #define PNODE_NAME_MAX  64
 typedef struct _PNODE
 {
-    int status;
+    short status;
+    short level;
     int nchilds;
     int parent;
     int first;
@@ -125,6 +126,7 @@ typedef struct _HIBASE
     int 	(*update_template)(struct _HIBASE *, int template_id, ITEMPLATE *);
     int 	(*delete_template)(struct _HIBASE *, int template_id, char *template_name);
     int     (*add_pnode)(struct _HIBASE *, int parent, char *name);
+    int     (*get_pnode)(struct _HIBASE *, int id, PNODE *pnodes);
     int     (*get_pnode_childs)(struct _HIBASE *, int parent, PNODE *pnodes);
     int     (*update_pnode)(struct _HIBASE *, int id, char *name);
     int     (*delete_pnode)(struct _HIBASE *, int id, char *name);
