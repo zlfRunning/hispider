@@ -5,7 +5,7 @@ libhibase_la_CPPFLAGS = -I utils -D_FILE_OFFSET_BITS=64 -Wall
 include_HEADERS = hibase.h
 #hitaskd hitask
 bin_PROGRAMS=hitaskd hitask
-hitaskd_SOURCES= hitaskd.c evdns.c evdns.h http.c http.h ltask.c ltask.h \
+hitaskd_SOURCES= hitaskd.c evdns.c evdns.h http.c http.h ltask.c ltask.h hibase.h hibase.c \
 utils/fqueue.h utils/kvmap.c utils/kvmap.h utils/logger.h utils/md5.c utils/md5.h \
 utils/mutex.h utils/queue.h utils/timer.h utils/trie.c utils/trie.h \
 utils/zstream.c utils/zstream.h iniparser.c iniparser.h utils/tm.c utils/tm.h

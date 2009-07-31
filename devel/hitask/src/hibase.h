@@ -21,6 +21,7 @@ extern "C" {
 #define TABLE_INCRE_NUM         256
 #define TEMPLATE_INCRE_NUM      10000
 #define PNODE_INCRE_NUM         10000
+#define PNODE_CHILDS_MAX        10000
 #define TAB_STATUS_ERR          -1
 #define TAB_STATUS_OK           1
 #define TEMP_STATUS_ERR         -1

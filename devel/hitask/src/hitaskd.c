@@ -14,11 +14,13 @@
 #include "evdns.h"
 #include "queue.h"
 #include "logger.h"
+#include "hibase.h"
 #include "trie.h"
 static SBASE *sbase = NULL;
 static SERVICE *hitaskd = NULL, *histore = NULL, *adns = NULL;
 static dictionary *dict = NULL;
 static LTASK *ltask = NULL;
+static HIBASE *hibase = NULL;
 static void *hitaskd_logger = NULL, *histore_logger = NULL, *adns_logger = NULL;
 static int is_need_authorization = 0;
 static char *authorization_name = "Hitask Administration System";
@@ -33,22 +35,34 @@ static char *e_argvs[] =
 #define E_ARGV_URL      2
     "pattern",
 #define E_ARGV_PATTERN  3
-    "host_id",
-#define E_ARGV_HOST_ID  4
-    "url_id",
-#define E_ARGV_URL_ID   5
-    "name"
+    "hostid",
+#define E_ARGV_HOSTID   4
+    "urlid",
+#define E_ARGV_URLID    5
+    "name",
 #define E_ARGV_NAME     6
+    "parentid",
+#define E_ARGV_PARENTID 7
+    "nodeid"
+#define E_ARGV_NODEID   8
 };
-#define E_ARGV_NUM      7
+#define E_ARGV_NUM      9
 static char *e_ops[]=
 {
     "host_up",
-#define E_OP_HOST_UP 0
+#define E_OP_HOST_UP        0
     "host_down",
-#define E_OP_HOST_DOWN 1
+#define E_OP_HOST_DOWN      1
+    "node_add",
+#define E_OP_NODE_ADD       2
+    "node_update",
+#define E_OP_NODE_UPDATE    3
+    "node_delete",
+#define E_OP_NODE_DELETE    4
+    "node_childs"       
+#define E_OP_NODE_CHILDS    5
 };
-#define E_OP_NUM 2
+#define E_OP_NUM 6
 /* dns packet reader */
 int adns_packet_reader(CONN *conn, CB_DATA *buffer)
 {
@@ -348,9 +362,12 @@ err_end:
 /*  data handler */
 int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
-    char *p = NULL, *end = NULL;
+    int i = 0, id = 0, n = 0, op = -1, nodeid = -1, 
+        parentid = -1, urlid = -1, hostid = -1;
+    char *p = NULL, *end = NULL, *name = NULL, *host = NULL, *url = NULL, 
+         *pattern = NULL, buf[HTTP_BUF_SIZE], block[HTTP_BUF_SIZE];
     HTTP_REQ *http_req = NULL;
-    int i = 0, id = 0, n = 0;
+    PNODE pnodes[PNODE_CHILDS_MAX];
     void *dp = NULL;
 
     if(conn && packet && cache && chunk && chunk->ndata > 0)
@@ -367,16 +384,118 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                             && (p = (http_req->line + n)))
                     {
                         TRIETAB_GET(argvmap, p, http_req->argvs[i].nk, dp);
-                        if((id = ((long)dp - 1)) >= 0)
+                        if((id = ((long)dp - 1)) >= 0 && http_req->argvs[i].nv > 0
+                                && (n = http_req->argvs[i].v) > 0 
+                                && (p = (http_req->line + n)))
                         {
-
+                            switch(id)
+                            {
+                                case E_ARGV_OP :
+                                    TRIETAB_GET(argvmap, p, http_req->argvs[i].nv, dp);
+                                    op = (long)dp - 1;
+                                    break;
+                                case E_ARGV_NAME :
+                                    name = p;
+                                    break;
+                                case E_ARGV_NODEID :
+                                    nodeid = atoi(p);
+                                    break;
+                                case E_ARGV_PARENTID:
+                                    parentid = atoi(p);
+                                    break;
+                                case E_ARGV_PATTERN:
+                                    pattern = p;
+                                    break;
+                                case E_ARGV_HOST :
+                                    host = p;
+                                    break;
+                                case E_ARGV_HOSTID :
+                                    hostid = atoi(p);
+                                    break;
+                                case  E_ARGV_URL :
+                                    url = p;
+                                    break;
+                                case  E_ARGV_URLID :
+                                    urlid = atoi(p);
+                                    break;
+                                default:
+                                    break;
+                            }
                         }
                     }
+                }
+                switch(op)
+                {
+                    case E_OP_NODE_ADD :
+                        if(parentid > 0 && name)
+                        {
+                            id = hibase->add_pnode(hibase, parentid, name);
+                            n = sprintf(buf, "%d", id);
+                            n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
+                                    "Content-Length:%d\r\nConnection:close\r\n\r\n%d", n, id);
+                            conn->push_chunk(conn, buf, n);
+                            goto end;
+                        }
+                        else goto err_end;
+                        break;
+                    case E_OP_NODE_UPDATE :
+                        if(nodeid > 0 && name)
+                        {
+                            id = hibase->update_pnode(hibase, nodeid, name);
+                            n = sprintf(buf, "%d", id);
+                            n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
+                                    "Content-Length:%d\r\nConnection:close\r\n\r\n%d", n, id);
+                            conn->push_chunk(conn, buf, n);
+                            goto end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_NODE_DELETE :
+                        if(nodeid > 0 || name)
+                        {
+                            id = hibase->delete_pnode(hibase, nodeid, name);
+                            n = sprintf(buf, "%d", id);
+                            n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
+                                    "Content-Length:%d\r\nConnection:close\r\n\r\n%d", n, id);
+                            conn->push_chunk(conn, buf, n);
+                            goto end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_NODE_CHILDS :
+                        if(nodeid > 0)
+                        {
+                            if((n = hibase->get_pnode_childs(hibase, nodeid, pnodes)) > 0)
+                            {
+                                p = buf;
+                                p += sprintf(p, "['id':'%d','nchilds':'%d', 'chlilds':[", nodeid,n);
+                                for(i = 0; i < n; i++)
+                                {
+                                    if(i < (n - 1))
+                                        p += sprintf(p, "['id':'%d','name':'%s','nchilds':'%d'],",
+                                                pnodes[i].id, pnodes[i].name, pnodes[i].nchilds);
+                                    else
+                                        p += sprintf(p, "['id':'%d','name':'%s','nchilds':'%d']",
+                                                pnodes[i].id, pnodes[i].name, pnodes[i].nchilds);
+                                }
+                                p += sprintf(p, "%s", "]]");
+                                p = block;
+                                n = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
+                                        "Content-Length:%d\r\nConnection:close\r\n\r\n%s",
+                                        (p - buf), buf);
+                                conn->push_chunk(conn, block, n);
+                                goto end;
+                            }else goto err_end;
+                        }else goto err_end;
+                        break;
+                    default:
+                        goto err_end;
+                        break;
                 }
             }
         }
 end:
         return 0;
+err_end:
+        conn->push_chunk(conn, HTTP_BAD_REQUEST, strlen(HTTP_BAD_REQUEST));
     }
     return -1;
 }
