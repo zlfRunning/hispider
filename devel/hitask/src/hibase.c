@@ -168,6 +168,8 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
                     dp = (void *)((long)(i + 1));
                     TRIETAB_ADD(hibase->mpnode, pnode[i].name, n, dp);
                     hibase->pnodeio.current = i;
+                    if(pnode[i].nchilds > hibase->pnode_childs_max)
+                        hibase->pnode_childs_max = pnode[i].nchilds;
                 }
                 else hibase->pnodeio.left++;
             }
@@ -543,6 +545,7 @@ int hibase_add_pnode(HIBASE *hibase, int parentid, char *name)
         {
             memset(&(pnode[pnodeid]), 0, sizeof(PNODE));
             memcpy(pnode[pnodeid].name, name, n); 
+            pnode[pnodeid].id = pnodeid;
             pnode[pnodeid].status = 1;
             pnode[pnodeid].parent = parentid;
             pparent = &(pnode[parentid]);
@@ -556,6 +559,8 @@ int hibase_add_pnode(HIBASE *hibase, int parentid, char *name)
                 pparent->last = pnodeid;
             }
             pparent->nchilds++;
+            if(pparent->nchilds > hibase->pnode_childs_max)
+                hibase->pnode_childs_max = pparent->nchilds;
             dp = (void *)((long)(pnodeid + 1));
             TRIETAB_ADD(hibase->mpnode, name, n, dp);
             hibase->pnodeio.left--;
@@ -719,7 +724,7 @@ int hibase_list_pnode(HIBASE *hibase, int pnodeid, FILE *fp)
         }
         else
         {
-            fprintf(fp, "-%s\n", pnode[pnodeid].name);
+            fprintf(fp, "---%s\n", pnode[pnodeid].name);
         }
         x = pnode[pnodeid].first;
         for(i = 0; i < pnode[pnodeid].nchilds; i++)
@@ -740,27 +745,38 @@ void hibase_clean(HIBASE **phibase)
 {
     if(phibase && *phibase)
     {
+        fprintf(stdout, "%d::OK\n", __LINE__);
         if((*phibase)->mtable) {TRIETAB_CLEAN((*phibase)->mtable);}
         if((*phibase)->mtemplate) {TRIETAB_CLEAN((*phibase)->mtemplate);}
         if((*phibase)->mpnode) {TRIETAB_CLEAN((*phibase)->mpnode);}
+        fprintf(stdout, "%d::OK\n", __LINE__);
         if((*phibase)->tableio.map && (*phibase)->tableio.size > 0)
         {
             _MUNMAP_((*phibase)->tableio.map, (*phibase)->tableio.size);
         }
+        fprintf(stdout, "%d::OK\n", __LINE__);
         if((*phibase)->tableio.map && (*phibase)->tableio.size > 0)
         {
             _MUNMAP_((*phibase)->templateio.map, (*phibase)->templateio.size);
         }
+        fprintf(stdout, "%d::OK\n", __LINE__);
         if((*phibase)->pnodeio.map && (*phibase)->pnodeio.size > 0)
         {
             _MUNMAP_((*phibase)->pnodeio.map, (*phibase)->pnodeio.size);
         }
+        fprintf(stdout, "%d::OK\n", __LINE__);
         if((*phibase)->tableio.fd > 0) close((*phibase)->tableio.fd);
+        fprintf(stdout, "%d::OK\n", __LINE__);
         if((*phibase)->templateio.fd > 0) close((*phibase)->templateio.fd);
+        fprintf(stdout, "%d::OK\n", __LINE__);
         if((*phibase)->pnodeio.fd > 0) close((*phibase)->pnodeio.fd);
+        fprintf(stdout, "%d::OK\n", __LINE__);
         if((*phibase)->qpnode){FQUEUE_CLEAN((*phibase)->qpnode);}
+        fprintf(stdout, "%d::OK\n", __LINE__);
         if((*phibase)->mutex){MUTEX_DESTROY((*phibase)->mutex);}
+        fprintf(stdout, "%d::OK\n", __LINE__);
         free(*phibase);
+        fprintf(stdout, "%d::OK\n", __LINE__);
         *phibase = NULL;
     }
     return ;
@@ -872,6 +888,16 @@ int main(int argc, char **argv)
         hibase_update_pnode(hibase, 9999, "my_node");
         hibase_list_pnode(hibase, 0, stdout);
         fprintf(stdout, "%d::OK\n", __LINE__);
+        PNODE pnode[10000];
+        memset(pnode, 0, 10000 * sizeof(PNODE));
+        if((n = hibase_get_pnode_childs(hibase, 0, pnode)) > 0)
+        {
+            for(i = 0; i < n; i++)
+            {
+                fprintf(stdout, "%d::node:%d level:%d nchilds:%d\n", 
+                        i, pnode[i].id, pnode[i].level, pnode[i].nchilds);
+            }
+        }
         hibase->clean(&hibase);
     }
     return 0;

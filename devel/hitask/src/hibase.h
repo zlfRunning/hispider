@@ -50,6 +50,7 @@ typedef struct _PNODE
 {
     short status;
     short level;
+    int id;
     int nchilds;
     int parent;
     int first;
@@ -105,11 +106,11 @@ typedef struct _HIBASE
     void    *mtable;
     void    *mtemplate;
     void    *mpnode;
-    int     pnode_count;
     HIO     tableio;
     HIO     templateio;
     HIO     pnodeio;
     void    *qpnode;
+    int     pnode_childs_max;
     void    *logger;
     void    *mutex;
     char    basedir[HIBASE_PATH_MAX];
