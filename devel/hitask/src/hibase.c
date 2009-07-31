@@ -531,13 +531,14 @@ int hibase_add_pnode(HIBASE *hibase, int parentid, char *name)
         if(hibase->pnodeio.left == 0)
         {_MMAP_(hibase->pnodeio, st, PNODE, PNODE_INCRE_NUM);}
         px = &x;
-        if(FQUEUE_POP(hibase->qpnode, int, px) != 0)
+        if(FQUEUE_POP(hibase->qpnode, int, px) == 0)
         {
-            pnodeid = ++(hibase->pnodeio.current);
+            pnodeid = x;
+            fprintf(stdout, "%d::FQUEUE_POP(%d)\n", __LINE__, pnodeid);
         }
         else
         {
-            pnodeid = x;
+            pnodeid = ++(hibase->pnodeio.current);
         }
         if(parentid >= 0 && parentid < hibase->pnodeio.total 
                 && pnodeid >= 0  && pnodeid < hibase->pnodeio.total 
@@ -564,7 +565,7 @@ int hibase_add_pnode(HIBASE *hibase, int parentid, char *name)
             dp = (void *)((long)(pnodeid + 1));
             TRIETAB_ADD(hibase->mpnode, name, n, dp);
             hibase->pnodeio.left--;
-            fprintf(stdout, "%d::%d->%d\n", parentid, pnodeid, hibase->pnodeio.current);
+            fprintf(stdout, "%d::%s->%d\n", parentid, name, pnodeid);
         }
         MUTEX_UNLOCK(hibase->mutex);
     }
@@ -582,7 +583,8 @@ int hibase_get_pnode(HIBASE *hibase, int pnodeid, PNODE *ppnode)
     {
         MUTEX_LOCK(hibase->mutex);
         if(pnodeid >= 0 && pnodeid < hibase->pnodeio.total 
-                && (pnode = (PNODE *)(hibase->pnodeio.map)) && pnode != (PNODE *)-1)
+                && (pnode = (PNODE *)(hibase->pnodeio.map)) 
+                && pnode != (PNODE *)-1 && pnode[pnodeid].status > 0)
         {
             memcpy(ppnode, &(pnode[pnodeid]), sizeof(PNODE));
             ret = 0;
@@ -632,7 +634,7 @@ int hibase_update_pnode(HIBASE *hibase, int pnodeid, char *name)
         MUTEX_LOCK(hibase->mutex);
         if(pnodeid >= 0 && pnodeid < hibase->pnodeio.total 
                 && (pnode = (PNODE *)(hibase->pnodeio.map)) 
-                && pnode != (PNODE *)-1)
+                && pnode != (PNODE *)-1 && pnode[pnodeid].status > 0)
         {
             if((x = strlen(pnode[pnodeid].name)) > 0)
             {
@@ -642,6 +644,7 @@ int hibase_update_pnode(HIBASE *hibase, int pnodeid, char *name)
             memcpy(pnode[pnodeid].name, name, n); 
             dp = (void *)((long ) (pnodeid + 1));
             TRIETAB_ADD(hibase->mpnode, name, n, dp);
+            id = pnodeid;
         }
         else id = -1;
         MUTEX_UNLOCK(hibase->mutex);
@@ -649,57 +652,69 @@ int hibase_update_pnode(HIBASE *hibase, int pnodeid, char *name)
     return id;
 }
 
+/* reset pnode */
+int hibase_reset_pnode(HIBASE *hibase, int pnodeid)
+{
+    PNODE *pnodes = NULL, *parent = NULL;
+    int id = -1, i = 0, x = 0, xx = 0, n = 0, *px = NULL;
+    void *dp = NULL;
+    if(hibase)
+    {
+        if((id = pnodeid) > 0 && id < hibase->pnodeio.total 
+                && (pnodes = (PNODE *)(hibase->pnodeio.map)) 
+                && pnodes != (PNODE *)-1 && pnodes[id].status > 0)
+        {
+            if((n = strlen(pnodes[id].name)) > 0)
+            {
+                TRIETAB_DEL(hibase->mpnode, pnodes[id].name, n, dp);
+            }
+            if((x = pnodes[id].parent) >= 0 && x < hibase->pnodeio.total)
+            {
+                parent = &(pnodes[x]);
+                if(parent->first == id) parent->first = pnodes[id].next;
+                if(parent->last == id) parent->last = pnodes[id].prev;
+                parent->nchilds--;
+            }
+            if((n = pnodes[id].prev) > 0 && n < hibase->pnodeio.total)
+            {
+                pnodes[n].next = pnodes[n].next;
+            }
+            if((n = pnodes[id].next) > 0 && n < hibase->pnodeio.total)
+            {
+                pnodes[n].prev = pnodes[n].prev;
+            }
+            px = &id;
+            FQUEUE_PUSH(hibase->qpnode, int, px);
+            i = 0;
+            n = pnodes[id].nchilds;
+            x = pnodes[id].first;
+            while(i < n && x > 0 && x < hibase->pnodeio.total)
+            {
+                xx = pnodes[x].next;
+                hibase_reset_pnode(hibase, x);
+                x = xx;
+                i++;
+            }
+            fprintf(stdout, "%d::delete %d nodes from node:%d ->%s\n",
+                    __LINE__, n, id, pnodes[id].name);
+            memset(&(pnodes[id]), 0, sizeof(PNODE));
+            hibase->pnodeio.left++;
+        }
+    }
+    return id;
+}
 /* delete pnode */
 int hibase_delete_pnode(HIBASE *hibase, int pnodeid, char *pnode_name)
 {
-    PNODE *pnode = NULL, *parent = NULL;
-    int id = -1, i = 0, x = 0, n = 0;
-    void *dp = NULL;
+    int id = -1, n = 0;
 
-    if(hibase && hibase->mpnode)
+    if(hibase)
     {
         if(pnode_name && (n = strlen(pnode_name)) > 0) 
             id = hibase_pnode_exists(hibase, pnode_name, n);
         MUTEX_LOCK(hibase->mutex);
         if(id < 0 && pnodeid >= 0 ) id = pnodeid;
-        if(id >= 0 && id < hibase->pnodeio.total 
-                && (pnode = (PNODE *)(hibase->pnodeio.map)) && pnode != (PNODE *)-1)
-        {
-            if((n = strlen(pnode[id].name)) > 0)
-            {
-                TRIETAB_DEL(hibase->mpnode, pnode[id].name, n, dp);
-            }
-            if((n = pnode[id].parent) >= 0 && n < hibase->pnodeio.total)
-            {
-                parent = &(pnode[n]);
-                if(parent->first == id) parent->first = pnode[id].next;
-                if(parent->last == id) parent->last = pnode[id].prev;
-                parent->nchilds--;
-            }
-            if((n = pnode[id].prev) > 0 && n < hibase->pnodeio.total)
-            {
-                pnode[n].next = pnode[n].next;
-            }
-            if((n = pnode[id].next) > 0 && n < hibase->pnodeio.total)
-            {
-                pnode[n].prev = pnode[n].prev;
-            }
-            if(pnode[id].nchilds > 0)
-            {
-                i = 0;
-                x = pnode[id].first;
-                while(i < pnode[id].nchilds && x >= 0 && x < hibase->pnodeio.total)
-                {
-                    hibase_delete_pnode(hibase, x, NULL);
-                    x = pnode[x].next;
-                    i++;
-                }
-            }
-            memset(&(pnode[id]), 0, sizeof(PNODE));
-            FQUEUE_PUSH(hibase->qpnode, int, &id);
-            hibase->pnodeio.left++;
-        }
-        else id = -1;
+        hibase_reset_pnode(hibase, id);
         MUTEX_UNLOCK(hibase->mutex);
     }
     return id;
@@ -720,11 +735,11 @@ int hibase_list_pnode(HIBASE *hibase, int pnodeid, FILE *fp)
         }
         if(pnode[pnodeid].nchilds > 0)
         {
-            fprintf(fp, "--+%s\n", pnode[pnodeid].name);
+            fprintf(fp, "--+[%d]%s[%d]\n", pnode[pnodeid].nchilds, pnode[pnodeid].name, pnodeid);
         }
         else
         {
-            fprintf(fp, "---%s\n", pnode[pnodeid].name);
+            fprintf(fp, "---%s[%d]\n", pnode[pnodeid].name, pnodeid);
         }
         x = pnode[pnodeid].first;
         for(i = 0; i < pnode[pnodeid].nchilds; i++)
@@ -745,38 +760,27 @@ void hibase_clean(HIBASE **phibase)
 {
     if(phibase && *phibase)
     {
-        fprintf(stdout, "%d::OK\n", __LINE__);
         if((*phibase)->mtable) {TRIETAB_CLEAN((*phibase)->mtable);}
         if((*phibase)->mtemplate) {TRIETAB_CLEAN((*phibase)->mtemplate);}
         if((*phibase)->mpnode) {TRIETAB_CLEAN((*phibase)->mpnode);}
-        fprintf(stdout, "%d::OK\n", __LINE__);
         if((*phibase)->tableio.map && (*phibase)->tableio.size > 0)
         {
             _MUNMAP_((*phibase)->tableio.map, (*phibase)->tableio.size);
         }
-        fprintf(stdout, "%d::OK\n", __LINE__);
         if((*phibase)->tableio.map && (*phibase)->tableio.size > 0)
         {
             _MUNMAP_((*phibase)->templateio.map, (*phibase)->templateio.size);
         }
-        fprintf(stdout, "%d::OK\n", __LINE__);
         if((*phibase)->pnodeio.map && (*phibase)->pnodeio.size > 0)
         {
             _MUNMAP_((*phibase)->pnodeio.map, (*phibase)->pnodeio.size);
         }
-        fprintf(stdout, "%d::OK\n", __LINE__);
         if((*phibase)->tableio.fd > 0) close((*phibase)->tableio.fd);
-        fprintf(stdout, "%d::OK\n", __LINE__);
         if((*phibase)->templateio.fd > 0) close((*phibase)->templateio.fd);
-        fprintf(stdout, "%d::OK\n", __LINE__);
         if((*phibase)->pnodeio.fd > 0) close((*phibase)->pnodeio.fd);
-        fprintf(stdout, "%d::OK\n", __LINE__);
         if((*phibase)->qpnode){FQUEUE_CLEAN((*phibase)->qpnode);}
-        fprintf(stdout, "%d::OK\n", __LINE__);
         if((*phibase)->mutex){MUTEX_DESTROY((*phibase)->mutex);}
-        fprintf(stdout, "%d::OK\n", __LINE__);
         free(*phibase);
-        fprintf(stdout, "%d::OK\n", __LINE__);
         *phibase = NULL;
     }
     return ;
@@ -804,6 +808,11 @@ HIBASE * hibase_init()
         hibase->get_template        = hibase_get_template;
         hibase->update_template     = hibase_update_template;
         hibase->delete_template     = hibase_delete_template;
+        hibase->add_pnode           = hibase_add_pnode;
+        hibase->get_pnode           = hibase_get_pnode;
+        hibase->get_pnode_childs    = hibase_get_pnode_childs;
+        hibase->update_pnode        = hibase_update_pnode;
+        hibase->delete_pnode        = hibase_delete_pnode;
         hibase->clean               = hibase_clean;
     }
     return hibase;
@@ -821,6 +830,7 @@ int main(int argc, char **argv)
     if((hibase = hibase_init()))
     {
         hibase->set_basedir(hibase, "/tmp/hibase");
+#ifdef  _DEBUG_TABLE
         //add table
         for(i = 0; i < table_num; i++)
         {
@@ -873,6 +883,8 @@ int main(int argc, char **argv)
         table.nfields =  n;
         hibase->delete_table(hibase, -1, table.name);
         hibase_list_table(hibase, stdout);
+#endif
+#ifdef _DEBUG_PNODE
         //add pnode 
         char name[1024];
         for(i = 1; i < 10000; i++)
@@ -884,23 +896,61 @@ int main(int argc, char **argv)
                 fprintf(stdout, "%d::add node:%d to node:%d\n", n, i, x);
             }
         }
-        hibase_list_pnode(hibase, 0, stdout);
-        hibase_update_pnode(hibase, 9999, "my_node");
-        hibase_list_pnode(hibase, 0, stdout);
-        fprintf(stdout, "%d::OK\n", __LINE__);
-        PNODE pnode[10000];
-        memset(pnode, 0, 10000 * sizeof(PNODE));
-        if((n = hibase_get_pnode_childs(hibase, 0, pnode)) > 0)
+        //hibase_list_pnode(hibase, 0, stdout);
+        PNODE pnode = {0};
+        x = random()%10000;
+        fprintf(stdout, "ready updated node_%d\n", x);
+        if((n = sprintf(name, "node_%d", x)) > 0 
+                && (x = hibase_pnode_exists(hibase, name, n)) > 0 
+                && (n = sprintf(name, "my_node_%d", x)) > 0
+                && (n = hibase_update_pnode(hibase, x, name)) == x)
+        {
+            fprintf(stdout, "%d:: updated node:%d name:%s\n", __LINE__, n, name);
+            if((x = hibase_get_pnode(hibase, n, &pnode)) >= 0)
+            {
+                fprintf(stdout, "%d::node:%d name:%s level:%d nchilds:%d\n",
+                        __LINE__, pnode.id, pnode.name, pnode.level, pnode.nchilds);
+            }
+        }
+        if(hibase_get_pnode(hibase, 215, &pnode) >= 0)
+        {
+            fprintf(stdout, "%d::node:%d level:%d nchilds:%d\n",
+                    __LINE__, pnode.id, pnode.level, pnode.nchilds);
+        }
+        if((n = hibase_delete_pnode(hibase, 215, NULL)) > 0)
+        {
+            fprintf(stdout, "%d:: delete node:%d\n", __LINE__, n);
+            if((x = hibase_get_pnode(hibase, n, &pnode)) >= 0)
+            {
+                fprintf(stdout, "%d::node:%d level:%d nchilds:%d\n",
+                        __LINE__, pnode.id, pnode.level, pnode.nchilds);
+            }
+        }
+        if((n = hibase_delete_pnode(hibase, -1, "node_8925")) > 0)
+        {
+            fprintf(stdout, "%d:: delete node:%d\n", __LINE__, n);
+            if((x = hibase_get_pnode(hibase, n, &pnode)) >= 0)
+            {
+                fprintf(stdout, "%d::node:%d level:%d nchilds:%d\n",
+                        __LINE__, pnode.id, pnode.level, pnode.nchilds);
+            }
+        }
+        PNODE pnodes[10000];
+        memset(pnodes, 0, 10000 * sizeof(PNODE));
+        if((n = hibase_get_pnode_childs(hibase, 0, pnodes)) > 0)
         {
             for(i = 0; i < n; i++)
             {
                 fprintf(stdout, "%d::node:%d level:%d nchilds:%d\n", 
-                        i, pnode[i].id, pnode[i].level, pnode[i].nchilds);
+                        i, pnodes[i].id, pnodes[i].level, pnodes[i].nchilds);
             }
         }
+        fprintf(stdout, "%d::hibase->pnode_childs_max:%d\n", __LINE__, hibase->pnode_childs_max);
+        //hibase_list_pnode(hibase, 0, stdout);
+#endif
         hibase->clean(&hibase);
     }
     return 0;
 }
-//gcc -o hibase hibase.c utils/*.c -I utils -D_DEBUG_HIBASE -lz 
+//gcc -o hibase hibase.c utils/*.c -I utils -D_DEBUG_HIBASE -D_DEBUG_PNODE -lz 
 #endif

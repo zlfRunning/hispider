@@ -126,9 +126,10 @@ typedef struct _HIBASE
     int 	(*get_template)(struct _HIBASE *, int template_id, char *template_name, ITEMPLATE *);
     int 	(*update_template)(struct _HIBASE *, int template_id, ITEMPLATE *);
     int 	(*delete_template)(struct _HIBASE *, int template_id, char *template_name);
+    int     (*pnode_exists)(struct _HIBASE *, char *name, int name_len);
     int     (*add_pnode)(struct _HIBASE *, int parent, char *name);
-    int     (*get_pnode)(struct _HIBASE *, int id, PNODE *pnodes);
-    int     (*get_pnode_childs)(struct _HIBASE *, int parent, PNODE *pnodes);
+    int     (*get_pnode)(struct _HIBASE *, int id, PNODE *pnode);
+    int     (*get_pnode_childs)(struct _HIBASE *, int id, PNODE *pnodes);
     int     (*update_pnode)(struct _HIBASE *, int id, char *name);
     int     (*delete_pnode)(struct _HIBASE *, int id, char *name);
     void 	(*clean)(struct _HIBASE **);	
