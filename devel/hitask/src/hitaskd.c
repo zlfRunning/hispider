@@ -466,17 +466,17 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                             if((n = hibase->get_pnode_childs(hibase, nodeid, pnodes)) > 0)
                             {
                                 p = buf;
-                                p += sprintf(p, "['id':'%d','nchilds':'%d', 'chlilds':[", nodeid,n);
+                                p += sprintf(p, "({id:'%d',nchilds:'%d', chlilds:[", nodeid,n);
                                 for(i = 0; i < n; i++)
                                 {
                                     if(i < (n - 1))
-                                        p += sprintf(p, "['id':'%d','name':'%s','nchilds':'%d'],",
+                                        p += sprintf(p, "{id:'%d',name:'%s',nchilds:'%d'},",
                                                 pnodes[i].id, pnodes[i].name, pnodes[i].nchilds);
                                     else
-                                        p += sprintf(p, "['id':'%d','name':'%s','nchilds':'%d']",
+                                        p += sprintf(p, "{'id':'%d','name':'%s',nchilds:'%d'}",
                                                 pnodes[i].id, pnodes[i].name, pnodes[i].nchilds);
                                 }
-                                p += sprintf(p, "%s", "]]");
+                                p += sprintf(p, "%s", "]})");
                                 p = block;
                                 n = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
                                         "Content-Length:%d\r\nConnection:close\r\n\r\n%s",
