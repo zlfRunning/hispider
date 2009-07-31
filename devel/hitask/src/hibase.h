@@ -100,7 +100,6 @@ typedef struct _HIO
     off_t   size;
     void    *map;
 }HIO;
-
 /* hibase */
 typedef struct _HIBASE
 {
@@ -135,6 +134,8 @@ typedef struct _HIBASE
     int     (*delete_pnode)(struct _HIBASE *, int id, char *name);
     void 	(*clean)(struct _HIBASE **);	
 }HIBASE;
+/* hibase initialize */
+HIBASE *hibase_init();
 #ifdef __cplusplus
  }
 #endif

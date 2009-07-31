@@ -753,6 +753,13 @@ int sbase_initialize(SBASE *sbase, char *conf)
     {
         _exit(-1);
     }
+    if((hibase = hibase_init()))
+    {
+        if((p = iniparser_getstr(dict, "HITASKD:hibasedir")) == NULL)
+            p = "/tmp/hibase";
+        hibase->set_basedir(hibase, p); 
+    }
+    else _exit(-1);
     /* histore */
     if((histore = service_init()) == NULL)
     {
