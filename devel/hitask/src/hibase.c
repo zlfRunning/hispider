@@ -731,7 +731,7 @@ int hibase_list_pnode(HIBASE *hibase, int pnodeid, FILE *fp)
     {
         for(i = 0; i < pnode[pnodeid].level; i++)
         {
-            fprintf(fp, "%s", "  |");
+            fprintf(fp, "%s", "  ┆");
         }
         if(pnode[pnodeid].nchilds > 0)
         {
@@ -946,7 +946,7 @@ int main(int argc, char **argv)
             }
         }
         fprintf(stdout, "%d::hibase->pnode_childs_max:%d\n", __LINE__, hibase->pnode_childs_max);
-        //hibase_list_pnode(hibase, 0, stdout);
+        hibase_list_pnode(hibase, 0, stdout);
 #endif
         hibase->clean(&hibase);
     }

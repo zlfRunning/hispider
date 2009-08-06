@@ -1,13 +1,43 @@
 <html>
     <head>
-        <title>Check Box Tree</title>
+        <title>Hitask Monitor</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
         <style>
             body{margin:0px;}
-            .line{position:absolute;display:none;background-color:#3366cc;color:#ffffff;}
-            .title{border:0px;font-size:16px;background-color:#777;}
-            .btitle{border:0px;font-size:16px;background-color:#C0D9D9;}
-            .node{padding-left:30px;overflow:hidden;background-color:#3366cc;}
-            .icon{display:inline;margin-right:5px;cursor:pointer;}
+            #treebody{position:absolute;background-color:#ffffff;
+               border:1px solid #81BEF7;left:10px;top:10px;}
+            .treeline{border:0px;font-size:12pt;font-weight:bold;color:#BDBDBD;}
+            .title{border:0px;font-size:12pt;background-color:#ffffff;color:#000000;}
+            .btitle{border:0px;font-size:12pt;background-color:#F2F2F2;}
+            .node
+            {
+                overflow:hidden;
+                color:black;
+                font-size:12pt;
+            }
+            .editor
+            {
+                display:inline;
+                color:blue;
+                font-size:10pt;
+                cursor:pointer;
+            }
+            .icon
+            {
+                display:inline;
+                color:#A4A4A4;
+                font-size:12pt;
+                text-align:center;
+                cursor:pointer;
+            }
+            .nchilds
+            {
+                display:inline;
+                color:red;
+                font-size:12pt;
+                font-weight:bolder;
+            }
+
         </style>
     <script language='javascript'>
     function FindArr(arr, v)
@@ -59,7 +89,6 @@
         this.TreeNodeNum = 0;
         this.TreeList = new Array();
         this.Root = document.getElementById(rootid);
-        //node array p[] = {0/n(nchilds), parentid, level, name, childs};
         //add node
         this.Add = function(pid, name)
         {
@@ -129,8 +158,7 @@
         //add node
         this.AddNode = function(pid, id, name)
         {
-            //nodeid = this.Add(pid, name);
-            //if(nodeid < 0) return ;
+            if(document.getElementById('node'+id)) return;
             var oParent = null;
             if(pid >= 0)
             {
@@ -142,21 +170,49 @@
             }
             if(oParent == null) return;
             var oNode = document.createElement('div');
+            var level = oParent.getAttribute('level') * 1;
+            var nchilds = oParent.getAttribute('nchilds') * 1;
+            oParent.setAttribute('nchilds', nchilds + 1);
+            var ofold = null;
+            if(nchilds == 0 && (ofold = document.getElementById('fold_'+pid)))
+            {
+                ofold.innerHTML = '▼';
+            }
+            var onchilds = null;
+            if((onchilds = document.getElementById('ch_'+pid)))
+            {
+                onchilds.innerHTML = nchilds+1;
+            }
             oNode.id = "node" + id;
             oNode.className = 'node';
-            var htmlstr = "";
-            /*
-            var node = this.TreeList[nodeid];
-            var i = 0;
-            for(i = 0; i < node[2]; i++)
-            {
-                htmlstr += "";//┆&nbsp;&nbsp;&nbsp;&nbsp;";
-            }
-            */
-            htmlstr += "<div id='title_"+ id +"' class='title' ";
+            oNode.setAttribute('level', level + 1);
+            oNode.setAttribute('nchilds', 0);
+            htmlstr = "<div id='title_"+ id +"' class='title' ";
             htmlstr += " onmousemove='highlight(this);' onmouseout='backcss(this);'>";
-            htmlstr += "<span class='icon' onclick='Fold(this)'>-</span>";
-            htmlstr += "<input type=checkbox name='chk"+ id +"' value='"+ id +"'>"+ name +"</div>";
+            htmlstr += "<span class='treeline'>";
+            var i = 0;
+            for(i = 0; i < (level-1); i++)
+            {
+                htmlstr += "&nbsp;&nbsp;&nbsp;";
+                htmlstr += "┊";
+            }
+            if(level > 0)
+            {
+                htmlstr += "&nbsp;&nbsp;&nbsp;";
+            }
+            htmlstr += "</span>";
+            htmlstr += "<span id='fold_"+ id +"' class='icon' onclick='Fold(this)'>►</span>";
+            htmlstr += "&nbsp;&nbsp;";
+            htmlstr += "<span id='nd_"+id+"' class='nd_name'>"+name+"</span>";
+            htmlstr += "[<span id='ch_"+ id +"' class='nchilds' >0</span>]";
+            htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+            htmlstr += "<span class='editor' title='Add' onclick='AddChild(this)'>✚</span>";
+            htmlstr += "&nbsp;&nbsp;&nbsp;";
+            htmlstr += "<span class='editor' title='Delete' onclick='DeleteNode(this)'>✘</span>";
+            htmlstr += "&nbsp;&nbsp;&nbsp;";
+            htmlstr += "<span class='editor' title='Rename' onclick='EditNode(this)'>✎</span>";
+            htmlstr += "&nbsp;&nbsp;&nbsp;";
+            htmlstr += "</div>\r\n";
             oNode.innerHTML = htmlstr; 
             oParent.appendChild(oNode);
         }
@@ -176,24 +232,25 @@
     }
     function Fold(element)
     {
-        if(element.innerText == '+')
+        var nchilds = element.parentNode.parentNode.getAttribute('nchilds') * 1;
+        if(element.innerHTML == '✚')
         {
             element.parentNode.parentNode.style.height = '';
-            element.innerText = '-';
+            if(nchilds > 0)element.innerHTML = '▼';
         }
         else
         {
-            element.innerText = '+';
             element.parentNode.parentNode.style.height = element.parentNode.offsetHeight;
+            if(nchilds > 0) element.innerHTML = '✚';
         }
     }
     </script>
     </head>
     <body>
-    <form action="#" ><div id='treebody' ></div></form>
+    <form action="#" ><div id='treebody' level='0'></div></form>
     <script language='javascript'>
     var dxtree = new xtree('treebody');
-    dxtree.init("OK");
+    dxtree.init("root");
     var i = 0, j = 0, k = 0; x = 0, z = 0;
     for(i = 1; i < 10; i++)
     {
@@ -210,6 +267,7 @@
         }
     }
     /*
+    alert(document.getElementById('treebody').innerHTML);
     document.write("<pre>");
     document.write(dxtree.TreeList);
     document.write("</pre>");
