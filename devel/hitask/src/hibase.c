@@ -565,7 +565,7 @@ int hibase_add_pnode(HIBASE *hibase, int parentid, char *name)
             dp = (void *)((long)(pnodeid + 1));
             TRIETAB_ADD(hibase->mpnode, name, n, dp);
             hibase->pnodeio.left--;
-            fprintf(stdout, "%d::%s->%d\n", parentid, name, pnodeid);
+            //fprintf(stdout, "%d::%s->%d\n", parentid, name, pnodeid);
         }
         MUTEX_UNLOCK(hibase->mutex);
     }
@@ -630,9 +630,9 @@ int hibase_update_pnode(HIBASE *hibase, int pnodeid, char *name)
 
     if(hibase && hibase->mpnode && name && (n = strlen(name)) > 0 && n < PNODE_NAME_MAX)
     {
-        if((id = hibase_pnode_exists(hibase, name, n)) >= 0) return id;
+        if((id = hibase_pnode_exists(hibase, name, n)) > 0) return id;
         MUTEX_LOCK(hibase->mutex);
-        if(pnodeid >= 0 && pnodeid < hibase->pnodeio.total 
+        if(pnodeid > 0 && pnodeid < hibase->pnodeio.total 
                 && (pnode = (PNODE *)(hibase->pnodeio.map)) 
                 && pnode != (PNODE *)-1 && pnode[pnodeid].status > 0)
         {

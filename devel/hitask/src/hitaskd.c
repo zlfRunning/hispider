@@ -366,7 +366,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
         parentid = -1, urlid = -1, hostid = -1;
     char *p = NULL, *end = NULL, *name = NULL, *host = NULL, *url = NULL, 
          *pattern = NULL, buf[HTTP_BUF_SIZE], block[HTTP_BUF_SIZE];
-    HTTP_REQ *http_req = NULL;
+    HTTP_REQ httpRQ = {0}, *http_req = NULL;
     PNODE pnodes[PNODE_CHILDS_MAX];
     void *dp = NULL;
 
@@ -376,22 +376,31 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
         {
             if(http_req->reqid == HTTP_POST)
             {
+                p = chunk->data;
                 end = chunk->data + chunk->ndata;
-                if(http_argv_parse(p, end, http_req) == -1)goto end;
-                for(i = 0; i < http_req->nargvs; i++)
+                DEBUG_LOGGER(hitaskd_logger, "Ready parsing(%s)", p);
+                if(http_argv_parse(p, end, &httpRQ) == -1)goto err_end;
+                DEBUG_LOGGER(hitaskd_logger, "Over parsing(%s) nargvs:%d", p, httpRQ.nargvs);
+                for(i = 0; i < httpRQ.nargvs; i++)
                 {
-                    if(http_req->argvs[i].nk > 0 && (n = http_req->argvs[i].k) > 0 
-                            && (p = (http_req->line + n)))
+                    DEBUG_LOGGER(hitaskd_logger, "argv[%d]:%.*s->%.*s", 
+                                i, httpRQ.argvs[i].nk, httpRQ.line+httpRQ.argvs[i].k, 
+                                httpRQ.argvs[i].nv, httpRQ.line+httpRQ.argvs[i].v);
+                    if(httpRQ.argvs[i].nk > 0 && (n = httpRQ.argvs[i].k) > 0 
+                            && (p = (httpRQ.line + n)))
                     {
-                        TRIETAB_GET(argvmap, p, http_req->argvs[i].nk, dp);
-                        if((id = ((long)dp - 1)) >= 0 && http_req->argvs[i].nv > 0
-                                && (n = http_req->argvs[i].v) > 0 
-                                && (p = (http_req->line + n)))
+                        DEBUG_LOGGER(hitaskd_logger, "argv[%d]:%.*s->%.*s", 
+                                i, httpRQ.argvs[i].nk, httpRQ.line+httpRQ.argvs[i].k, 
+                                httpRQ.argvs[i].nv, httpRQ.line+httpRQ.argvs[i].v);
+                        TRIETAB_GET(argvmap, p, httpRQ.argvs[i].nk, dp);
+                        if((id = ((long)dp - 1)) >= 0 && httpRQ.argvs[i].nv > 0
+                                && (n = httpRQ.argvs[i].v) > 0 
+                                && (p = (httpRQ.line + n)))
                         {
                             switch(id)
                             {
                                 case E_ARGV_OP :
-                                    TRIETAB_GET(argvmap, p, http_req->argvs[i].nv, dp);
+                                    TRIETAB_GET(argvmap, p, httpRQ.argvs[i].nv, dp);
                                     op = (long)dp - 1;
                                     break;
                                 case E_ARGV_NAME :
@@ -427,12 +436,12 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                 switch(op)
                 {
                     case E_OP_NODE_ADD :
-                        if(parentid > 0 && name)
+                        if(parentid >= 0 && name)
                         {
                             id = hibase->add_pnode(hibase, parentid, name);
-                            n = sprintf(buf, "%d", id);
+                            n = sprintf(buf, "%d\r\n", id);
                             n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
-                                    "Content-Length:%d\r\nConnection:close\r\n\r\n%d", n, id);
+                                    "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", n, id);
                             conn->push_chunk(conn, buf, n);
                             goto end;
                         }
@@ -441,10 +450,11 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                     case E_OP_NODE_UPDATE :
                         if(nodeid > 0 && name)
                         {
+                            DEBUG_LOGGER(hitaskd_logger, "op:%d id:%d name:%s", op, nodeid, name);
                             id = hibase->update_pnode(hibase, nodeid, name);
-                            n = sprintf(buf, "%d", id);
+                            n = sprintf(buf, "%d\r\n", id);
                             n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
-                                    "Content-Length:%d\r\nConnection:close\r\n\r\n%d", n, id);
+                                    "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", n, id);
                             conn->push_chunk(conn, buf, n);
                             goto end;
                         }else goto err_end;
@@ -452,17 +462,19 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                     case E_OP_NODE_DELETE :
                         if(nodeid > 0 || name)
                         {
+                            DEBUG_LOGGER(hitaskd_logger, "op:%d id:%d name:%s", op, nodeid, name);
                             id = hibase->delete_pnode(hibase, nodeid, name);
-                            n = sprintf(buf, "%d", id);
+                            n = sprintf(buf, "%d\r\n", id);
                             n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
-                                    "Content-Length:%d\r\nConnection:close\r\n\r\n%d", n, id);
+                                    "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", n, id);
                             conn->push_chunk(conn, buf, n);
                             goto end;
                         }else goto err_end;
                         break;
                     case E_OP_NODE_CHILDS :
-                        if(nodeid > 0)
+                        if(nodeid >= 0)
                         {
+                            DEBUG_LOGGER(hitaskd_logger, "op:%d id:%d name:%s", op, nodeid, name);
                             if((n = hibase->get_pnode_childs(hibase, nodeid, pnodes)) > 0)
                             {
                                 p = buf;
@@ -476,7 +488,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                                         p += sprintf(p, "{'id':'%d','name':'%s',nchilds:'%d'}",
                                                 pnodes[i].id, pnodes[i].name, pnodes[i].nchilds);
                                 }
-                                p += sprintf(p, "%s", "]})");
+                                p += sprintf(p, "%s", "]})\r\n");
                                 p = block;
                                 n = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
                                         "Content-Length:%d\r\nConnection:close\r\n\r\n%s",
@@ -648,7 +660,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
     char *s = NULL, *p = NULL, *basedir = NULL, *start = NULL;
     //*ep = NULL, *whitelist = NULL, *whost = NULL, 
     //*host = NULL, *path = NULL;
-    int interval = 0, i = 0;
+    int interval = 0, i = 0, n = 0;
     void *dp = NULL;
 
     if((dict = iniparser_new(conf)) == NULL)
@@ -714,12 +726,14 @@ int sbase_initialize(SBASE *sbase, char *conf)
         for(i = 0; i < E_ARGV_NUM; i++)
         {
             dp = (void *)((long)(i+1));
-            TRIETAB_ADD(argvmap, e_argvs[i], strlen(e_argvs[i]), dp);
+            n = strlen(e_argvs[i]);
+            TRIETAB_ADD(argvmap, e_argvs[i], n, dp);
         }
         for(i = 0; i < E_OP_NUM; i++)
         {
             dp = (void *)((long)(i+1));
-            TRIETAB_ADD(argvmap, e_ops[i], strlen(e_ops[i]), dp);
+            n = strlen(e_ops[i]);
+            TRIETAB_ADD(argvmap, e_ops[i], n, dp);
         }
     }
     /* link  task table */
