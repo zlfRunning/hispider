@@ -42,6 +42,10 @@
 
         </style>
         <script language='javascript'>
+            function trim(str)
+            {
+                return str.replace(/(^\s+|\s+$)/, "");
+            }
             function highlight(obj)
             {
                 obj.className = "btitle";
@@ -72,7 +76,7 @@
                 }
                 return xmlhttp;
             }
-            function AddNode(pid, id, name)
+            function AddNode(pid, id, name, count)
             {
                 if(document.getElementById("node"+id) != null) return;
                 //alert("pid:"+pid+"id:"+id+"name:"+name);
@@ -103,7 +107,7 @@
                 oNode.id = "node" + id;
                 oNode.className = 'node';
                 oNode.setAttribute('level', level + 1);
-                oNode.setAttribute('nchilds', 0);
+                oNode.setAttribute('nchilds', count);
                 oNode.setAttribute('parent', pid);
                 oNode.setAttribute('UID', id);
                 oNode.setAttribute('UName', name);
@@ -121,16 +125,19 @@
                     htmlstr += "&nbsp;&nbsp;&nbsp;";
                 }
                 htmlstr += "</span>";
-                htmlstr += "<span id='fold_"+ id +"' class='icon' onclick='Fold(this)'>►</span>";
+                if(count > 0)
+                    htmlstr += "<span id='fold_"+ id +"' class='icon' onclick='Fold(this)'>✚</span>";
+                else
+                    htmlstr += "<span id='fold_"+ id +"' class='icon' onclick='Fold(this)'>►</span>";
                 htmlstr += "&nbsp;&nbsp;";
                 htmlstr += "<span id='nd_"+id+"' class='nd_name'>"+name+"</span>";
-                htmlstr += "[<span id='ch_"+ id +"' class='nchilds' >0</span>]";
+                htmlstr += "[<span id='ch_"+ id +"' class='nchilds' >"+count+"</span>]";
                 htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
                 htmlstr += "<span class='editor' title='Add' ";
                 htmlstr += "onclick='XAdd(event)'>✚</span>";
                 htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
                 htmlstr += "<span class='editor' title='Delete' ";
-                htmlstr += "onclick='DeleteNode(this)'>✘</span>";
+                htmlstr += "onclick='XDelete("+id+")'>✘</span>";
                 htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
                 htmlstr += "<span class='editor' title='Rename' ";
                 htmlstr += "onclick='XEdit(event)'>✎</span>";
@@ -138,6 +145,19 @@
                 htmlstr += "</div>\r\n";
                 oNode.innerHTML = htmlstr; 
                 oParent.appendChild(oNode);
+            }
+            function UpdateNode(id, name)
+            {
+                var oNode = document.getElementById('node'+id);
+                if(oNode != null)
+                {
+                    oNode.setAttribute('UName', name);
+                    var oName = document.getElementById('nd_'+id);
+                    if(oName != null)
+                    {
+                        oName.innerHTML = name;
+                    }
+                }
             }
             function ListChilds(pid, url, argv)
             {
@@ -160,15 +180,11 @@
                                     for(i = 0; i < tnode['nchilds']; i++)
                                     {
                                         AddNode(pid, tnode['childs'][i]['id'] * 1, 
-                                            tnode['childs'][i]['name']);
+                                        tnode['childs'][i]['name'], 
+                                        tnode['childs'][i]['nchilds']);
                                     }
                                 }
                             }
-                            else 
-                            {
-                                alert("http_err_code:"+xmlHttp.status);
-                            }
-                            
                         }
                     }
                     xmlHttp.send(argv);
@@ -202,10 +218,10 @@
                 e = e || window.event;
                 var element = e.target || e.srcElement;
                 var form = document.forms["editorform"];
-                form['nodeid'].value = element.parentNode.parentNode.getAttribute('UID');
                 form['op'].value = 'node_update';
-                form['nodename'].value = element.parentNode.parentNode.getAttribute('UName');
                 form['pid'].value = '';
+                form['nodeid'].value = element.parentNode.parentNode.getAttribute('UID');
+                form['nodename'].value = element.parentNode.parentNode.getAttribute('UName');
                 var Xdiv =  document.getElementById("txtform");
                 var x = e.clientX;
                 var y = e.clientY;
@@ -216,8 +232,8 @@
             function EditNode(form)
             {
                 var argv = "";
-                var op = form['op']value;
-                var pid = form['pid']value;
+                var op = form['op'].value;
+                var pid = form['pid'].value;
                 var nodeid = form['nodeid'].value;
                 var nodename = form['nodename'].value;
                 if(op == 'node_add' && nodename && pid >= 0)
@@ -229,7 +245,7 @@
                     argv = "op="+op+"&name="+nodename+"&nodeid="+nodeid;
                 }
                 else return ;
-                alert(op+pid+nodename);
+                //alert("op:"+op+"nodeid:"+nodeid+"pid:"+pid+"nodename:"+nodename);
                 var xmlHttp = CreateXMLHTTP();
                 if(xmlHttp != null)
                 {
@@ -242,10 +258,14 @@
                         {
                             if(xmlHttp.status == 200)
                             {
-                                var id = 0;
-                                if(op == 'node_add' && (id = xmlHttp.responseText) > 0)
+                                var id = trim(xmlHttp.responseText);
+                                if(op == 'node_add' && id  > 0)
                                 {
-                                    AddNode(pid, id, nodename);
+                                    AddNode(pid, id, nodename, 0);
+                                }
+                                else if(op == 'node_update' && id > 0 && id == nodeid)
+                                {
+                                    UpdateNode(id, nodename);
                                 }
                             }
                             
@@ -256,17 +276,38 @@
                 var div = document.getElementById('txtform');
                 div.style.display = 'none';
                 return true;
-
             }
             //delete node
-            function DeleteNode(id)
+            function XDelete(nodeid)
             {
-                var oNode = document.getElementById("node"+id);
-                oNode.innerHTML = ""; 
-            }
-            //update node
-            function UpdateNode(id, name)
-            {
+                var xmlHttp = null;
+                var oNode = document.getElementById("node"+nodeid);
+                var name = null;
+                if(nodeid > 0 && oNode != null && (name = oNode.getAttribute('UName'))
+                    && confirm('Really delete node:'+nodeid+' name:'+name+' ?') 
+                    && (xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    var argv = "op=node_delete&nodeid="+nodeid;
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                var id = trim(xmlHttp.responseText);
+                                if(id == nodeid)
+                                {
+                                    oNode.innerHTML = ""; 
+                                }
+                            }
+                            
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
             }
             //fold node
             function Fold(element)
@@ -296,7 +337,7 @@
     <body>
     <div id='treebody' level='0'></div>
     <div id='txtform' class='formdiv'>
-        <form name="editorform" action="javascript:return EditNode(this);"> 
+        <form name="editorform" action="javascript:void(0)" onsubmit="return EditNode(this);"> 
             <input type=hidden name='op' value='node_add' >
             <input type=hidden name='nodeid' value='0' >
             <input type=hidden name='pid' value='0' >
@@ -306,7 +347,7 @@
         </form>
     </div>
     <script language='javascript'>
-    AddNode(-1,0,"Root");
+    AddNode(-1,0,"Root",0);
     /*
     var levels = 0;
     function addnodes(pid)
