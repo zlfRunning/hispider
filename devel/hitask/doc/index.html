@@ -243,6 +243,14 @@
                 Xdiv.style.top = y + 10;
                 Xdiv.style.display = 'inline';
             }
+
+            function HiddenEditor()
+            {
+                var div = document.getElementById('txtform');
+                div.style.display = 'none';
+                return true;
+            }
+
             function EditNode(form)
             {
                 var argv = "";
@@ -254,9 +262,15 @@
                 {
                     argv = "op="+op+"&name="+nodename+"&parentid="+pid;
                 }
-                else if(op == 'node_update' && nodename && nodeid > 0)
+                else if(op == 'node_update' && nodename)
                 {
-                    argv = "op="+op+"&name="+nodename+"&nodeid="+nodeid;
+                    if(nodeid > 0)
+                        argv = "op="+op+"&name="+nodename+"&nodeid="+nodeid;
+                    else 
+                    {
+                        UpdateNode(nodeid, nodename);
+                        return HiddenEditor();
+                    }
                 }
                 else return ;
                 //alert("op:"+op+"nodeid:"+nodeid+"pid:"+pid+"nodename:"+nodename);
@@ -298,10 +312,9 @@
                     }
                     xmlHttp.send(argv);
                 }
-                var div = document.getElementById('txtform');
-                div.style.display = 'none';
-                return true;
+                return HiddenEditor();
             }
+
             //delete node
             function XDelete(nodeid)
             {
