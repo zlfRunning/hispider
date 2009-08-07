@@ -106,6 +106,7 @@
                 oNode.setAttribute('nchilds', 0);
                 oNode.setAttribute('parent', pid);
                 oNode.setAttribute('UID', id);
+                oNode.setAttribute('UName', name);
                 htmlstr = "<div id='title_"+ id +"' class='title' ";
                 htmlstr += " onmousemove='highlight(this);' onmouseout='backcss(this);'>";
                 htmlstr += "<span class='treeline'>";
@@ -184,6 +185,11 @@
             {
                 e = e || window.event;
                 var element = e.target || e.srcElement;
+                var form = document.forms["editorform"];
+                form['op'].value = 'node_add';
+                form['nodeid'].value = '';
+                form['nodename'].value = '';
+                form['pid'].value = element.parentNode.parentNode.getAttribute('UID');
                 var Xdiv =  document.getElementById("txtform");
                 var x = e.clientX;
                 var y = e.clientY;
@@ -195,12 +201,62 @@
             {
                 e = e || window.event;
                 var element = e.target || e.srcElement;
+                var form = document.forms["editorform"];
+                form['nodeid'].value = element.parentNode.parentNode.getAttribute('UID');
+                form['op'].value = 'node_update';
+                form['nodename'].value = element.parentNode.parentNode.getAttribute('UName');
+                form['pid'].value = '';
                 var Xdiv =  document.getElementById("txtform");
                 var x = e.clientX;
                 var y = e.clientY;
                 Xdiv.style.left = x - 50;
                 Xdiv.style.top = y + 10;
                 Xdiv.style.display = 'inline';
+            }
+            function EditNode(form)
+            {
+                var argv = "";
+                var op = form['op']value;
+                var pid = form['pid']value;
+                var nodeid = form['nodeid'].value;
+                var nodename = form['nodename'].value;
+                if(op == 'node_add' && nodename && pid >= 0)
+                {
+                    argv = "op="+op+"&name="+nodename+"&parentid="+pid;
+                }
+                else if(op == 'node_update' && nodename && nodeid > 0)
+                {
+                    argv = "op="+op+"&name="+nodename+"&nodeid="+nodeid;
+                }
+                else return ;
+                alert(op+pid+nodename);
+                var xmlHttp = CreateXMLHTTP();
+                if(xmlHttp != null)
+                {
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                var id = 0;
+                                if(op == 'node_add' && (id = xmlHttp.responseText) > 0)
+                                {
+                                    AddNode(pid, id, nodename);
+                                }
+                            }
+                            
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+                var div = document.getElementById('txtform');
+                div.style.display = 'none';
+                return true;
+
             }
             //delete node
             function DeleteNode(id)
@@ -240,11 +296,11 @@
     <body>
     <div id='treebody' level='0'></div>
     <div id='txtform' class='formdiv'>
-        <form name="editform" action="#" >
+        <form name="editorform" action="javascript:return EditNode(this);"> 
             <input type=hidden name='op' value='node_add' >
             <input type=hidden name='nodeid' value='0' >
             <input type=hidden name='pid' value='0' >
-            <input type='text' name='name' class='txtinput' size=16>
+            <input type='text' name='nodename' class='txtinput' size=16>
             <input type=submit value='ok' class='submit' >
             &nbsp;&nbsp;<span class='formclose' onclick="CloseForm(this)">x</span>
         </form>
