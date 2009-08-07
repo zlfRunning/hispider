@@ -633,14 +633,14 @@ void ltask_list_host_ip(LTASK *task, FILE *fp)
                 {
                     host[host_node->host_len] = '\0';
                     ips = (int *)(task->ipio.map + host_node->ip_off);
-                    fprintf(stdout, "[%d][%s]", i, host);
+                    fprintf(fp, "[%d][%s]", i, host);
                     x = host_node->ip_count;
                     while(--x >= 0)
                     {
                         pp = (unsigned char *)&(ips[x]);
-                        fprintf(stdout, "[%d.%d.%d.%d]", pp[0], pp[1], pp[2], pp[3]);
+                        fprintf(fp, "[%d.%d.%d.%d]", pp[0], pp[1], pp[2], pp[3]);
                     }
-                    fprintf(stdout, "\n");
+                    fprintf(fp, "\n");
                 }
             }
             ++host_node;

@@ -95,9 +95,10 @@
                 var nchilds = oParent.getAttribute('nchilds') * 1;
                 oParent.setAttribute('nchilds', nchilds + 1);
                 var ofold = null;
-                if(nchilds == 0 && (ofold = document.getElementById('fold_'+pid)))
+                if((ofold = document.getElementById('fold_'+pid)))
                 {
-                    ofold.innerHTML = '▼';
+                    if(ofold.innerHTML == '✚' || ofold.innerHTML == '►') Fold(ofold);
+                    //ofold.innerHTML = '▼';
                 }
                 var onchilds = null;
                 if((onchilds = document.getElementById('ch_'+pid)))
@@ -258,14 +259,25 @@
                         {
                             if(xmlHttp.status == 200)
                             {
-                                var id = trim(xmlHttp.responseText);
-                                if(op == 'node_add' && id  > 0)
+                                if(op == 'node_add')
                                 {
-                                    AddNode(pid, id, nodename, 0);
+                                    var tnode = eval(xmlHttp.responseText);
+                                    if(tnode['id'] == pid)
+                                    {
+                                        var i = 0;
+                                        for(i = 0; i < tnode['nchilds']; i++)
+                                        {
+                                            AddNode(pid, tnode['childs'][i]['id'] * 1, 
+                                                tnode['childs'][i]['name'], 
+                                            tnode['childs'][i]['nchilds']);
+                                        }
+                                    }
                                 }
-                                else if(op == 'node_update' && id > 0 && id == nodeid)
+                                else if(op == 'node_update')
                                 {
-                                    UpdateNode(id, nodename);
+                                    var id = trim(xmlHttp.responseText);
+                                    if(id > 0 && id == nodeid)
+                                        UpdateNode(id, nodename);
                                 }
                             }
                             

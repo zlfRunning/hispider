@@ -695,8 +695,10 @@ int hibase_reset_pnode(HIBASE *hibase, int pnodeid)
                 x = xx;
                 i++;
             }
+            /*
             fprintf(stdout, "%d::delete %d nodes from node:%d ->%s\n",
                     __LINE__, n, id, pnodes[id].name);
+            */
             memset(&(pnodes[id]), 0, sizeof(PNODE));
             hibase->pnodeio.left++;
         }

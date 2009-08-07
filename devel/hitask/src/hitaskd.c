@@ -474,12 +474,34 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                     case E_OP_NODE_ADD :
                         if(parentid >= 0 && name)
                         {
-                            id = hibase->add_pnode(hibase, parentid, name);
+                            if((id = hibase->add_pnode(hibase, parentid, name)) > 0
+                                && (n = hibase->get_pnode_childs(hibase, parentid, pnodes)) > 0)
+                            {
+                                p = buf;
+                                p += sprintf(p, "({id:'%d',nchilds:'%d', childs:[", parentid, n);
+                                for(i = 0; i < n; i++)
+                                {
+                                    if(i < (n - 1))
+                                        p += sprintf(p, "{id:'%d',name:'%s',nchilds:'%d'},",
+                                                pnodes[i].id, pnodes[i].name, pnodes[i].nchilds);
+                                    else
+                                        p += sprintf(p, "{'id':'%d','name':'%s',nchilds:'%d'}",
+                                                pnodes[i].id, pnodes[i].name, pnodes[i].nchilds);
+                                }
+                                p += sprintf(p, "%s", "]})\r\n");
+                                n = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
+                                        "Content-Length:%d\r\nConnection:close\r\n\r\n%s",
+                                        (p - buf), buf);
+                                conn->push_chunk(conn, block, n);
+                                goto end;
+                            }else goto err_end;
+                            /*
                             n = sprintf(buf, "%d\r\n", id);
                             n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
                                     "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", n, id);
                             conn->push_chunk(conn, buf, n);
                             goto end;
+                            */
                         }
                         else goto err_end;
                         break;
