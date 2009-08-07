@@ -1056,7 +1056,7 @@ int ltask_get_task(LTASK *task, char *buf, int *nbuf)
                     "Host: %s\r\nServer: %d.%d.%d.%d\r\nTE:%d\r\n", 
                     (long)urlid, path, ps, sip[0], sip[1], sip[2], sip[3], port);
         }
-        if(itime != 0 && GMTstrdate(itime, date) == 0)
+        if(itime != 0 && GMTstrdate(itime, date) > 0)
             p += sprintf(p, "Last-Modified: %s\r\n", date);
         if(refer[0] != '\0') p += sprintf(p, "Referer: %s\r\n", refer);
         if(cookie[0] != '\0') p += sprintf(p, "Cookie: %s\r\n", cookie);

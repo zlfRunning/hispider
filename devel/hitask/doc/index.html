@@ -5,7 +5,10 @@
         <style>
             body{margin:0px;}
             #treebody{position:absolute;background-color:#ffffff;
-               border:1px solid #81BEF7;left:10px;top:10px;}
+                border:1px solid #81BEF7;left:10px;top:10px;}
+            .formdiv{position:absolute;width:200px;background-color:#ffffff;
+                border:1px solid #81BEF7;padding:10px;overflow:auto;display:none;}
+            .formclose{font-size:14pt;font-weight:100;color:silver;cursor:pointer;display:inline;}
             .treeline{border:0px;font-size:12pt;font-weight:bold;color:#BDBDBD;}
             .title{border:0px;font-size:12pt;background-color:#ffffff;color:#000000;}
             .btitle{border:0px;font-size:12pt;background-color:#F2F2F2;}
@@ -17,9 +20,9 @@
             }
             .editor
             {
-                display:inline;
                 color:blue;
-                font-size:10pt;
+                font-size:13pt;
+                font-weight:bolder;
                 cursor:pointer;
             }
             .icon
@@ -35,237 +38,232 @@
                 display:inline;
                 color:red;
                 font-size:12pt;
-                font-weight:bolder;
             }
 
         </style>
-    <script language='javascript'>
-    function FindArr(arr, v)
-    {
-        var i = 0;
-        do
-        {
-            if(arr[i] == v) 
-            return i;
-        }while(++i < arr.length);
-        return -1;
-    }
-    function DelArr(arr, v)
-    {
-        var i = 0;
-        do
-        {
-            if(arr[i] == v) 
+        <script language='javascript'>
+            function highlight(obj)
             {
-                arr.splice(i, 1);
-                return i;
+                obj.className = "btitle";
             }
-        }while(++i < arr.length);
-        return -1;
-    }
-    function ReplaceArr(arr, v, newv)
-    {
-        var i = 0;
-        do
-        {
-            if(arr[i] == v) 
+            function backcss(obj)
             {
-                arr[i] = newv;
-                return i;
+                obj.className = "title";
             }
-        }while(++i < arr.length);
-        return -1;
-    }
-    function highlight(obj)
-    {
-        obj.className = "btitle";
-    }
-    function backcss(obj)
-    {
-        obj.className = "title";
-    }
-    xtree = function(rootid)
-    {
-        this.TreeNodeNum = 0;
-        this.TreeList = new Array();
-        this.Root = document.getElementById(rootid);
-        //add node
-        this.Add = function(pid, name)
-        {
-            var pnode = null;
-            var node = new Array();
-            var id = -1;
-            if(pid >= 0) pnode = this.TreeList[pid];
-            if(pnode == null || pnode[0] == 0 || (pnode[0] > 0 && FindArr(pnode[4], name) == -1))
+            function CreateXMLHTTP()
             {
-                node[0] = 0;
-                node[1] = pid;
-                if(pnode)node[2] = pnode[2] + 1;
-                else node[2] = 0;
-                node[3] = name;
-                node[4] = new Array();
-                node[5] = new Array();
-                this.TreeList.push(node);
-                id = (this.TreeNodeNum)++;
-                if(pnode)
+                var xmlhttp = null;
+                try{
+                    xmlhttp = new ActiveXObject("Microsoft.XMLHTTP");
+                    as = 1;
+                    }catch(e){
+                    try{
+                        xmlhttp = new ActiveXObject("Msxml2.XMLHTTP");
+                        as = 1;
+                        }catch(e){
+                        try{
+                            xmlhttp = new XMLHttpRequest();
+                            as = 2;
+                            }catch(e){
+                            xmlhttp = null;
+                            as = 0;
+                        }
+                    }
+                }
+                return xmlhttp;
+            }
+            function AddNode(pid, id, name)
+            {
+                if(document.getElementById("node"+id) != null) return;
+                //alert("pid:"+pid+"id:"+id+"name:"+name);
+                var oParent = null;
+                if(pid >= 0)
                 {
-                    pnode[4].push(name);
-                    pnode[5].push(id);
-                    pnode[0]++;
+                    oParent = document.getElementById("node"+pid);
+                }
+                else
+                {
+                    oParent = document.getElementById('treebody');
+                }
+                if(oParent == null) return;
+                var oNode = document.createElement('div');
+                var level = oParent.getAttribute('level') * 1;
+                var nchilds = oParent.getAttribute('nchilds') * 1;
+                oParent.setAttribute('nchilds', nchilds + 1);
+                var ofold = null;
+                if(nchilds == 0 && (ofold = document.getElementById('fold_'+pid)))
+                {
+                    ofold.innerHTML = '▼';
+                }
+                var onchilds = null;
+                if((onchilds = document.getElementById('ch_'+pid)))
+                {
+                    onchilds.innerHTML = nchilds+1;
+                }
+                oNode.id = "node" + id;
+                oNode.className = 'node';
+                oNode.setAttribute('level', level + 1);
+                oNode.setAttribute('nchilds', 0);
+                oNode.setAttribute('parent', pid);
+                oNode.setAttribute('UID', id);
+                htmlstr = "<div id='title_"+ id +"' class='title' ";
+                htmlstr += " onmousemove='highlight(this);' onmouseout='backcss(this);'>";
+                htmlstr += "<span class='treeline'>";
+                var i = 0;
+                for(i = 0; i < (level-1); i++)
+                {
+                    htmlstr += "&nbsp;&nbsp;&nbsp;";
+                    htmlstr += "┊";
+                }
+                if(level > 0)
+                {
+                    htmlstr += "&nbsp;&nbsp;&nbsp;";
+                }
+                htmlstr += "</span>";
+                htmlstr += "<span id='fold_"+ id +"' class='icon' onclick='Fold(this)'>►</span>";
+                htmlstr += "&nbsp;&nbsp;";
+                htmlstr += "<span id='nd_"+id+"' class='nd_name'>"+name+"</span>";
+                htmlstr += "[<span id='ch_"+ id +"' class='nchilds' >0</span>]";
+                htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+                htmlstr += "<span class='editor' title='Add' ";
+                htmlstr += "onclick='XAdd(event)'>✚</span>";
+                htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
+                htmlstr += "<span class='editor' title='Delete' ";
+                htmlstr += "onclick='DeleteNode(this)'>✘</span>";
+                htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
+                htmlstr += "<span class='editor' title='Rename' ";
+                htmlstr += "onclick='XEdit(event)'>✎</span>";
+                htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
+                htmlstr += "</div>\r\n";
+                oNode.innerHTML = htmlstr; 
+                oParent.appendChild(oNode);
+            }
+            function ListChilds(pid, url, argv)
+            {
+                var xmlHttp = CreateXMLHTTP();
+                if(xmlHttp != null)
+                {
+                    xmlHttp.open('POST', url, true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                var tnode = eval(xmlHttp.responseText);
+                                if(tnode['id'] == pid)
+                                {
+                                    var i = 0;
+                                    for(i = 0; i < tnode['nchilds']; i++)
+                                    {
+                                        AddNode(pid, tnode['childs'][i]['id'] * 1, 
+                                            tnode['childs'][i]['name']);
+                                    }
+                                }
+                            }
+                            else 
+                            {
+                                alert("http_err_code:"+xmlHttp.status);
+                            }
+                            
+                        }
+                    }
+                    xmlHttp.send(argv);
                 }
             }
-            return id;
-        }
-
-        //remove node
-        this.Remove = function(cid)
-        {
-            var node = false;
-            var pnode = false;
-            var i = 0, pid = 0;
-
-            if((node = this.TreeList[cid]))
+            //close form
+            function CloseForm(element)
             {
-                if((pid = node[1]) && (pnode = this.TreeList[pid]))
+                element.parentNode.parentNode.style.display = "none";
+            }
+
+            //Add child
+            function XAdd(e)
+            {
+                e = e || window.event;
+                var element = e.target || e.srcElement;
+                var Xdiv =  document.getElementById("txtform");
+                var x = e.clientX;
+                var y = e.clientY;
+                Xdiv.style.left = x - 50;
+                Xdiv.style.top = y + 10;
+                Xdiv.style.display = 'inline';
+            }
+            function XEdit(e)
+            {
+                e = e || window.event;
+                var element = e.target || e.srcElement;
+                var Xdiv =  document.getElementById("txtform");
+                var x = e.clientX;
+                var y = e.clientY;
+                Xdiv.style.left = x - 50;
+                Xdiv.style.top = y + 10;
+                Xdiv.style.display = 'inline';
+            }
+            //delete node
+            function DeleteNode(id)
+            {
+                var oNode = document.getElementById("node"+id);
+                oNode.innerHTML = ""; 
+            }
+            //update node
+            function UpdateNode(id, name)
+            {
+            }
+            //fold node
+            function Fold(element)
+            {
+                var nchilds = element.parentNode.parentNode.getAttribute('nchilds') * 1;
+                var uid = element.parentNode.parentNode.getAttribute('UID') * 1;
+                var url = "/";
+                var argv = "op=node_childs&nodeid="+uid;
+                if(element.innerHTML == '✚')
                 {
-                    DelArr(pnode[4], node[3]);
-                    DelArr(pnode[5], cid);
-                    pnode[0]--;
+                    element.parentNode.parentNode.style.height = '';
+                    if(nchilds > 0)element.innerHTML = '▼';
+                    ListChilds(uid, url, argv);
                 }
-                for(i = 0; i < node[0]; i++)
+                else if(element.innerHTML == '►')
                 {
-                    this.Remove(node[0][i]);
+                    ListChilds(uid, url, argv);
                 }
-                this.TreeList[cid] = "";
-            }
-        }
-        //update 
-        this.Update = function(cid, name)
-        {
-            var node = false;
-            var pnode = false;
-            var pid = 0;
-
-            if((node = this.TreeList[cid]))
-            {
-                if((pid = node[1]) && (pnode = this.TreeList[pid]))
+                else
                 {
-                    ReplaceArr(pnode[4], node[3], name);
+                    element.parentNode.parentNode.style.height = element.parentNode.offsetHeight;
+                    if(nchilds > 0) element.innerHTML = '✚';
                 }
-                node[3] = name;
             }
-        }
-        //add node
-        this.AddNode = function(pid, id, name)
-        {
-            if(document.getElementById('node'+id)) return;
-            var oParent = null;
-            if(pid >= 0)
-            {
-                oParent = document.getElementById("node"+pid);
-            }
-            else
-            {
-                oParent = this.Root;//document.getElementById(this.RootId);
-            }
-            if(oParent == null) return;
-            var oNode = document.createElement('div');
-            var level = oParent.getAttribute('level') * 1;
-            var nchilds = oParent.getAttribute('nchilds') * 1;
-            oParent.setAttribute('nchilds', nchilds + 1);
-            var ofold = null;
-            if(nchilds == 0 && (ofold = document.getElementById('fold_'+pid)))
-            {
-                ofold.innerHTML = '▼';
-            }
-            var onchilds = null;
-            if((onchilds = document.getElementById('ch_'+pid)))
-            {
-                onchilds.innerHTML = nchilds+1;
-            }
-            oNode.id = "node" + id;
-            oNode.className = 'node';
-            oNode.setAttribute('level', level + 1);
-            oNode.setAttribute('nchilds', 0);
-            htmlstr = "<div id='title_"+ id +"' class='title' ";
-            htmlstr += " onmousemove='highlight(this);' onmouseout='backcss(this);'>";
-            htmlstr += "<span class='treeline'>";
-            var i = 0;
-            for(i = 0; i < (level-1); i++)
-            {
-                htmlstr += "&nbsp;&nbsp;&nbsp;";
-                htmlstr += "┊";
-            }
-            if(level > 0)
-            {
-                htmlstr += "&nbsp;&nbsp;&nbsp;";
-            }
-            htmlstr += "</span>";
-            htmlstr += "<span id='fold_"+ id +"' class='icon' onclick='Fold(this)'>►</span>";
-            htmlstr += "&nbsp;&nbsp;";
-            htmlstr += "<span id='nd_"+id+"' class='nd_name'>"+name+"</span>";
-            htmlstr += "[<span id='ch_"+ id +"' class='nchilds' >0</span>]";
-            htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-            htmlstr += "<span class='editor' title='Add' onclick='AddChild(this)'>✚</span>";
-            htmlstr += "&nbsp;&nbsp;&nbsp;";
-            htmlstr += "<span class='editor' title='Delete' onclick='DeleteNode(this)'>✘</span>";
-            htmlstr += "&nbsp;&nbsp;&nbsp;";
-            htmlstr += "<span class='editor' title='Rename' onclick='EditNode(this)'>✎</span>";
-            htmlstr += "&nbsp;&nbsp;&nbsp;";
-            htmlstr += "</div>\r\n";
-            oNode.innerHTML = htmlstr; 
-            oParent.appendChild(oNode);
-        }
-
-        //drop node
-        this.DropNode = function(id)
-        {
-            this.Remove(id);
-            var oNode = document.getElementById("node"+id);
-            oNode.innerHTML = ""; 
-        }
-        //init root
-        this.init = function(name)
-        {
-            this.AddNode(-1, 0, name);
-        }
-    }
-    function Fold(element)
-    {
-        var nchilds = element.parentNode.parentNode.getAttribute('nchilds') * 1;
-        if(element.innerHTML == '✚')
-        {
-            element.parentNode.parentNode.style.height = '';
-            if(nchilds > 0)element.innerHTML = '▼';
-        }
-        else
-        {
-            element.parentNode.parentNode.style.height = element.parentNode.offsetHeight;
-            if(nchilds > 0) element.innerHTML = '✚';
-        }
-    }
-    </script>
+        </script>
     </head>
     <body>
-    <form action="#" ><div id='treebody' level='0'></div></form>
+    <div id='treebody' level='0'></div>
+    <div id='txtform' class='formdiv'>
+        <form name="editform" action="#" >
+            <input type=hidden name='op' value='node_add' >
+            <input type=hidden name='nodeid' value='0' >
+            <input type=hidden name='pid' value='0' >
+            <input type='text' name='name' class='txtinput' size=16>
+            <input type=submit value='ok' class='submit' >
+            &nbsp;&nbsp;<span class='formclose' onclick="CloseForm(this)">x</span>
+        </form>
+    </div>
     <script language='javascript'>
-    var dxtree = new xtree('treebody');
-    dxtree.init("root");
-    var i = 0, j = 0, k = 0; x = 0, z = 0;
-    for(i = 1; i < 10; i++)
+    AddNode(-1,0,"Root");
+    /*
+    var levels = 0;
+    function addnodes(pid)
     {
-        dxtree.AddNode(0, i, "node"+i);
-        for(j = 0; j < 10; j++)
+        var i = 0, id = 0;
+        for(i = 1; i < 10; i++)
         {
-            x = i * 10 + j;
-            dxtree.AddNode(i, x, "node" + x);
-            for(k = 0; k < 10; k++)
-            {
-                z = k * 100 + i * 10 + k;
-                dxtree.AddNode(x, z, "node" + z);
-            }
+            id = pid * 10 + i;
+            AddNode(pid, id, "node"+id);
         }
     }
+    addnodes(0);
+    */
     /*
     alert(document.getElementById('treebody').innerHTML);
     document.write("<pre>");

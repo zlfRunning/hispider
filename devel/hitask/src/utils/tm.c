@@ -59,15 +59,15 @@ time_t str2time(char *datestr)
 int GMTstrdate(time_t time, char *date)
 {
     struct tm *tp = NULL;
+    int n = 0;
 
     if(time > 0 && (tp = gmtime(&time)))
     {
-        sprintf(date, "%s, %02d %s %d %02d:%02d:%02d GMT", _wdays_[tp->tm_wday],
+        n = sprintf(date, "%s, %02d %s %d %02d:%02d:%02d GMT", _wdays_[tp->tm_wday],
                 tp->tm_mday, _ymonths_[tp->tm_mon], 1900+tp->tm_year, tp->tm_hour,
                 tp->tm_min, tp->tm_sec);
-        return 0;
     }
-    return -1;
+    return n;
 }
 
 #ifdef _DEBUG_TM

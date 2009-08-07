@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <errno.h>
+#include <sys/stat.h>
 #include <sys/resource.h>
 #include <locale.h>
 #include <sbase.h>
@@ -16,6 +17,8 @@
 #include "logger.h"
 #include "hibase.h"
 #include "trie.h"
+#include "tm.h"
+static char *httpd_home = NULL;
 static SBASE *sbase = NULL;
 static SERVICE *hitaskd = NULL, *histore = NULL, *adns = NULL;
 static dictionary *dict = NULL;
@@ -260,8 +263,10 @@ int hitaskd_auth(CONN *conn, HTTP_REQ *http_req)
 /* packet handler */
 int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
 {
-    char buf[HTTP_BUF_SIZE], *host = NULL, *ip = NULL, *p = NULL, *end = NULL;
-    int urlid = 0, n = 0, i = 0, ips = 0, err = 0;
+    char buf[HTTP_BUF_SIZE], file[HTTP_PATH_MAX], *host = NULL, 
+        *ip = NULL, *p = NULL, *end = NULL;
+    int urlid = 0, n = 0, ips = 0, err = 0;
+    struct stat st = {0};
     HTTP_REQ http_req = {0};
 
     if(conn)
@@ -286,21 +291,51 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
         }
         if(http_req.reqid == HTTP_GET)
         {
-            if(strncasecmp(http_req.path, "/index", 6) == 0)
-            {
-                p += sprintf(p, "%s", HTTP_RESP_OK);
-                for(i = 0; i < http_req.nargvs; i++)
-                {
-
-                }
-            }
-            else if(strncasecmp(http_req.path, "/stop", 5) == 0)
+            if(strncasecmp(http_req.path, "/stop", 5) == 0)
             {
                 ltask->set_state_running(ltask, 0);
             }
             else if(strncasecmp(http_req.path, "/running", 8) == 0)
             {
                 ltask->set_state_running(ltask, 1);
+            }
+            else
+            {
+                p = file;
+                if(http_req.path[0] != '/')
+                    p += sprintf(p, "%s/%s", httpd_home, http_req.path);
+                else
+                    p += sprintf(p, "%s%s", httpd_home, http_req.path);
+                if(http_req.path[1] == '\0')
+                    p += sprintf(p, "%s", "index.html");
+                DEBUG_LOGGER(hitaskd_logger, "HTTP_GET[%s]", file);
+                if((n = (p - file)) > 0 && lstat(file, &st) == 0)
+                {
+                    if(st.st_size == 0)
+                    {
+                        return conn->push_chunk(conn, HTTP_NO_CONTENT, strlen(HTTP_NO_CONTENT));
+                    }
+                    else if((n = http_req.headers[HEAD_REQ_IF_MODIFIED_SINCE]) > 0
+                        && str2time(http_req.hlines + n) == st.st_mtime)
+                    {
+                        return conn->push_chunk(conn, HTTP_NOT_MODIFIED, strlen(HTTP_NOT_MODIFIED));
+                    }
+                    else
+                    {
+                        p = buf;
+                        p += sprintf(p, "HTTP/1.0 200 OK\r\nContent-Length:%lld\r\nLast-Modified:", 
+                                (long long int)(st.st_size)); 
+                        p += GMTstrdate(st.st_mtime, p);
+                        p += sprintf(p, "%s", "\r\n");//date end
+                        p += sprintf(p, "%s", "\r\n");
+                        conn->push_chunk(conn, buf, (p - buf));
+                        return conn->push_file(conn, file, 0, st.st_size);
+                    }
+                }
+                else
+                {
+                    return conn->push_chunk(conn, HTTP_NOT_FOUND, strlen(HTTP_NOT_FOUND));
+                }
             }
             if((n = ltask->get_stateinfo(ltask, buf)))
             {
@@ -316,6 +351,7 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
             if((n = http_req.headers[HEAD_ENT_CONTENT_LENGTH]) > 0 
                     && (n = atol(http_req.hlines + n)) > 0)
             {
+                DEBUG_LOGGER(hitaskd_logger, "HTTP_POST[%s]", http_req.path);
                 conn->save_cache(conn, &http_req, sizeof(HTTP_REQ));
                 return conn->recv_chunk(conn, n);
             }
@@ -478,7 +514,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                             if((n = hibase->get_pnode_childs(hibase, nodeid, pnodes)) > 0)
                             {
                                 p = buf;
-                                p += sprintf(p, "({id:'%d',nchilds:'%d', chlilds:[", nodeid,n);
+                                p += sprintf(p, "({id:'%d',nchilds:'%d', childs:[", nodeid,n);
                                 for(i = 0; i < n; i++)
                                 {
                                     if(i < (n - 1))
@@ -489,7 +525,6 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                                                 pnodes[i].id, pnodes[i].name, pnodes[i].nchilds);
                                 }
                                 p += sprintf(p, "%s", "]})\r\n");
-                                p = block;
                                 n = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
                                         "Content-Length:%d\r\nConnection:close\r\n\r\n%s",
                                         (p - buf), buf);
@@ -736,6 +771,8 @@ int sbase_initialize(SBASE *sbase, char *conf)
             TRIETAB_ADD(argvmap, e_ops[i], n, dp);
         }
     }
+    /* httpd_home */
+    httpd_home = iniparser_getstr(dict, "HITASKD:httpd_home");
     /* link  task table */
     if((ltask = ltask_init()))
     {

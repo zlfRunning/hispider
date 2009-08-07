@@ -76,6 +76,9 @@
 #define ACCEPT_CHARSET          "gb2312,utf-8;q=0.7,*;q=0.7"
 #define HTTP_RESP_OK            "HTTP/1.0 200 OK"
 #define HTTP_BAD_REQUEST        "HTTP/1.0 400 Bad Request\r\n\r\n"
+#define HTTP_NOT_FOUND          "HTTP/1.0 404 Not Found\r\n\r\n" 
+#define HTTP_NOT_MODIFIED       "HTTP/1.0 304 Not Modified\r\n\r\n"
+#define HTTP_NO_CONTENT         "HTTP/1.0 206 No Content\r\n\r\n"
 //#define HTTP_BAD_REQUEST    "HTTP/1.0 404 Not Found\r\n\r\n"
 /* host/domain */
 typedef struct _LHOST
