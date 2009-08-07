@@ -534,7 +534,7 @@ int hibase_add_pnode(HIBASE *hibase, int parentid, char *name)
         if(FQUEUE_POP(hibase->qpnode, int, px) == 0)
         {
             pnodeid = x;
-            fprintf(stdout, "%d::FQUEUE_POP(%d)\n", __LINE__, pnodeid);
+            //fprintf(stdout, "%d::FQUEUE_POP(%d)\n", __LINE__, pnodeid);
         }
         else
         {
@@ -715,7 +715,7 @@ int hibase_delete_pnode(HIBASE *hibase, int pnodeid, char *pnode_name)
         if(pnode_name && (n = strlen(pnode_name)) > 0) 
             id = hibase_pnode_exists(hibase, pnode_name, n);
         MUTEX_LOCK(hibase->mutex);
-        if(id < 0 && pnodeid >= 0 ) id = pnodeid;
+        if(id < 0 && pnodeid > 0 ) id = pnodeid;
         hibase_reset_pnode(hibase, id);
         MUTEX_UNLOCK(hibase->mutex);
     }

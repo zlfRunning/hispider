@@ -18,9 +18,23 @@
                 color:black;
                 font-size:12pt;
             }
-            .editor
+            .eadd
             {
-                color:blue;
+                color:#5FB404;
+                font-size:13pt;
+                font-weight:bolder;
+                cursor:pointer;
+            }
+            .eupdate
+            {
+                color:#FF8000;
+                font-size:13pt;
+                font-weight:bolder;
+                cursor:pointer;
+            }
+            .edelete
+            {
+                color:#B4045F;
                 font-size:13pt;
                 font-weight:bolder;
                 cursor:pointer;
@@ -28,7 +42,7 @@
             .icon
             {
                 display:inline;
-                color:#A4A4A4;
+                color:#FF8000;
                 font-size:12pt;
                 text-align:center;
                 cursor:pointer;
@@ -97,8 +111,7 @@
                 var ofold = null;
                 if((ofold = document.getElementById('fold_'+pid)))
                 {
-                    if(ofold.innerHTML == '✚' || ofold.innerHTML == '►') Fold(ofold);
-                    //ofold.innerHTML = '▼';
+                    if(nchilds == 0) ofold.innerHTML = '▼'; 
                 }
                 var onchilds = null;
                 if((onchilds = document.getElementById('ch_'+pid)))
@@ -108,7 +121,7 @@
                 oNode.id = "node" + id;
                 oNode.className = 'node';
                 oNode.setAttribute('level', level + 1);
-                oNode.setAttribute('nchilds', count);
+                oNode.setAttribute('nchilds', 0);
                 oNode.setAttribute('parent', pid);
                 oNode.setAttribute('UID', id);
                 oNode.setAttribute('UName', name);
@@ -118,8 +131,7 @@
                 var i = 0;
                 for(i = 0; i < (level-1); i++)
                 {
-                    htmlstr += "&nbsp;&nbsp;&nbsp;";
-                    htmlstr += "┊";
+                    htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
                 }
                 if(level > 0)
                 {
@@ -134,14 +146,14 @@
                 htmlstr += "<span id='nd_"+id+"' class='nd_name'>"+name+"</span>";
                 htmlstr += "[<span id='ch_"+ id +"' class='nchilds' >"+count+"</span>]";
                 htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-                htmlstr += "<span class='editor' title='Add' ";
+                htmlstr += "<span class='eadd' title='Add' ";
                 htmlstr += "onclick='XAdd(event)'>✚</span>";
                 htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
-                htmlstr += "<span class='editor' title='Delete' ";
-                htmlstr += "onclick='XDelete("+id+")'>✘</span>";
-                htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
-                htmlstr += "<span class='editor' title='Rename' ";
+                htmlstr += "<span class='eupdate' title='Rename' ";
                 htmlstr += "onclick='XEdit(event)'>✎</span>";
+                htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
+                htmlstr += "<span class='edelete' title='Delete' ";
+                htmlstr += "onclick='XDelete("+id+")'>✘</span>";
                 htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
                 htmlstr += "</div>\r\n";
                 oNode.innerHTML = htmlstr; 
@@ -175,6 +187,7 @@
                             if(xmlHttp.status == 200)
                             {
                                 var tnode = eval(xmlHttp.responseText);
+                                //alert(xmlHttp.responseText);
                                 if(tnode['id'] == pid)
                                 {
                                     var i = 0;
@@ -208,8 +221,8 @@
                 form['nodename'].value = '';
                 form['pid'].value = element.parentNode.parentNode.getAttribute('UID');
                 var Xdiv =  document.getElementById("txtform");
-                var x = e.clientX;
-                var y = e.clientY;
+                var x = e.clientX + document.body.scrollLeft;
+                var y = e.clientY + document.body.scrollTop;
                 Xdiv.style.left = x - 50;
                 Xdiv.style.top = y + 10;
                 Xdiv.style.display = 'inline';
@@ -310,8 +323,14 @@
                             if(xmlHttp.status == 200)
                             {
                                 var id = trim(xmlHttp.responseText);
+                                var pid = oNode.getAttribute('parent');
                                 if(id == nodeid)
                                 {
+                                    var oParent = document.getElementById('node'+pid);
+                                    var nchilds = oParent.getAttribute('nchilds') - 1;
+                                    oParent.setAttribute('nchilds', nchilds);
+                                    var ochild =  document.getElementById('ch_'+pid);
+                                    ochild.innerHTML = nchilds;
                                     oNode.innerHTML = ""; 
                                 }
                             }
@@ -331,8 +350,8 @@
                 if(element.innerHTML == '✚')
                 {
                     element.parentNode.parentNode.style.height = '';
-                    if(nchilds > 0)element.innerHTML = '▼';
                     ListChilds(uid, url, argv);
+                    if(nchilds > 0)element.innerHTML = '▼';
                 }
                 else if(element.innerHTML == '►')
                 {
