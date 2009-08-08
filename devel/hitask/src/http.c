@@ -119,8 +119,8 @@ int http_argv_parse(char *p, char *end, HTTP_REQ *http_req)
                 argv->v = pp - http_req->line;
                 ++s;
             }
-            else if((*s == '&' || *s == 0x20 || *s == '\t')
-                    && argv->k && argv->v)
+            else if(*s == '&' && argv->k && argv->v)
+                    //|| *s == 0x20 || *s == '\t')
             {
                 argv->nv = pp - http_req->line - argv->v;
                 *pp++ = '\0';

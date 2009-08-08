@@ -419,9 +419,6 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                 DEBUG_LOGGER(hitaskd_logger, "Over parsing(%s) nargvs:%d", p, httpRQ.nargvs);
                 for(i = 0; i < httpRQ.nargvs; i++)
                 {
-                    DEBUG_LOGGER(hitaskd_logger, "argv[%d]:%.*s->%.*s", 
-                                i, httpRQ.argvs[i].nk, httpRQ.line+httpRQ.argvs[i].k, 
-                                httpRQ.argvs[i].nv, httpRQ.line+httpRQ.argvs[i].v);
                     if(httpRQ.argvs[i].nk > 0 && (n = httpRQ.argvs[i].k) > 0 
                             && (p = (httpRQ.line + n)))
                     {
@@ -490,7 +487,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                                 }
                                 p += sprintf(p, "%s", "]})\r\n");
                                 n = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
-                                        "Content-Length:%d\r\nConnection:close\r\n\r\n%s",
+                                        "Content-Length:%ld\r\nConnection:close\r\n\r\n%s",
                                         (p - buf), buf);
                                 conn->push_chunk(conn, block, n);
                                 goto end;
@@ -520,8 +517,8 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                     case E_OP_NODE_DELETE :
                         if(nodeid > 0 || name)
                         {
-                            DEBUG_LOGGER(hitaskd_logger, "op:%d id:%d name:%s", op, nodeid, name);
-                            id = hibase->delete_pnode(hibase, nodeid, name);
+                            DEBUG_LOGGER(hitaskd_logger, "op:%d id:%d", op, nodeid);
+                            id = hibase->delete_pnode(hibase, nodeid);
                             n = sprintf(buf, "%d\r\n", id);
                             n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
                                     "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", n, id);
@@ -548,7 +545,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                                 }
                                 p += sprintf(p, "%s", "]})\r\n");
                                 n = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
-                                        "Content-Length:%d\r\nConnection:close\r\n\r\n%s",
+                                        "Content-Length:%ld\r\nConnection:close\r\n\r\n%s",
                                         (p - buf), buf);
                                 conn->push_chunk(conn, block, n);
                                 goto end;

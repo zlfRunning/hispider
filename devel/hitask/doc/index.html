@@ -215,33 +215,35 @@
             {
                 e = e || window.event;
                 var element = e.target || e.srcElement;
-                var form = document.forms["editorform"];
-                form['op'].value = 'node_add';
-                form['nodeid'].value = '';
-                form['nodename'].value = '';
-                form['pid'].value = element.parentNode.parentNode.getAttribute('UID');
                 var Xdiv =  document.getElementById("txtform");
                 var x = e.clientX + document.body.scrollLeft;
                 var y = e.clientY + document.body.scrollTop;
                 Xdiv.style.left = x - 50;
                 Xdiv.style.top = y + 10;
                 Xdiv.style.display = 'inline';
+                var form = document.forms["editorform"];
+                form['op'].value = 'node_add';
+                form['pid'].value = element.parentNode.parentNode.getAttribute('UID');
+                form['nodeid'].value = '';
+                form['nodename'].focus();
+                form['nodename'].value = '';
             }
             function XEdit(e)
             {
                 e = e || window.event;
                 var element = e.target || e.srcElement;
-                var form = document.forms["editorform"];
-                form['op'].value = 'node_update';
-                form['pid'].value = '';
-                form['nodeid'].value = element.parentNode.parentNode.getAttribute('UID');
-                form['nodename'].value = element.parentNode.parentNode.getAttribute('UName');
                 var Xdiv =  document.getElementById("txtform");
                 var x = e.clientX;
                 var y = e.clientY;
                 Xdiv.style.left = x - 50;
                 Xdiv.style.top = y + 10;
                 Xdiv.style.display = 'inline';
+                var form = document.forms["editorform"];
+                form['op'].value = 'node_update';
+                form['pid'].value = '';
+                form['nodeid'].value = element.parentNode.parentNode.getAttribute('UID');
+                form['nodename'].focus();
+                form['nodename'].value = element.parentNode.parentNode.getAttribute('UName');
             }
 
             function HiddenEditor()
@@ -260,12 +262,12 @@
                 var nodename = form['nodename'].value;
                 if(op == 'node_add' && nodename && pid >= 0)
                 {
-                    argv = "op="+op+"&name="+nodename+"&parentid="+pid;
+                    argv = "op="+op+"&name="+encodeURIComponent(nodename)+"&parentid="+pid;
                 }
                 else if(op == 'node_update' && nodename)
                 {
                     if(nodeid > 0)
-                        argv = "op="+op+"&name="+nodename+"&nodeid="+nodeid;
+                        argv = "op="+op+"&name="+encodeURIComponent(nodename)+"&nodeid="+nodeid;
                     else 
                     {
                         UpdateNode(nodeid, nodename);
@@ -392,6 +394,7 @@
     </div>
     <script language='javascript'>
     AddNode(-1,0,"Root",0);
+    Fold(document.getElementById('fold_0'));
     /*
     var levels = 0;
     function addnodes(pid)

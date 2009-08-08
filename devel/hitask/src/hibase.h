@@ -52,6 +52,7 @@ typedef struct _PNODE
     short status;
     short level;
     int id;
+    int uid;
     int nchilds;
     int parent;
     int first;
@@ -111,6 +112,7 @@ typedef struct _HIBASE
     HIO     pnodeio;
     void    *qpnode;
     int     pnode_childs_max;
+    int     uid_max;
     void    *logger;
     void    *mutex;
     char    basedir[HIBASE_PATH_MAX];
@@ -131,7 +133,7 @@ typedef struct _HIBASE
     int     (*get_pnode)(struct _HIBASE *, int id, PNODE *pnode);
     int     (*get_pnode_childs)(struct _HIBASE *, int id, PNODE *pnodes);
     int     (*update_pnode)(struct _HIBASE *, int id, char *name);
-    int     (*delete_pnode)(struct _HIBASE *, int id, char *name);
+    int     (*delete_pnode)(struct _HIBASE *, int id);
     void 	(*clean)(struct _HIBASE **);	
 }HIBASE;
 /* hibase initialize */
