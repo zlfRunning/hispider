@@ -605,7 +605,7 @@ int hibase_get_pnode(HIBASE *hibase, int pnodeid, PNODE *ppnode)
     return ret;
 }
 
-/* get pnode */
+/* get pnode childs */
 int hibase_get_pnode_childs(HIBASE *hibase, int pnodeid, PNODE *ppnode)
 {
     PNODE *pnode = NULL, *parent = NULL;
@@ -631,6 +631,44 @@ int hibase_get_pnode_childs(HIBASE *hibase, int pnodeid, PNODE *ppnode)
     }
     return i;
 }
+
+/* view pnode childs */
+int hibase_view_pnode_childs(HIBASE *hibase, int pnodeid, char *block)
+{
+    PNODE *pnode = NULL, *parent = NULL;
+    char buf[HI_BUF_SIZE], *p = NULL;
+    int i = 0, x = 0, n = -1;
+
+    if(hibase && hibase->mpnode)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if(pnodeid >= 0 && pnodeid < hibase->pnodeio.total 
+                && (pnode = (PNODE *)(hibase->pnodeio.map)) && pnode != (PNODE *)-1)
+        {
+            parent = &(pnode[pnodeid]);
+            p = buf;
+            p += sprintf(p, "({id:'%d',nchilds:'%d', childs:[", pnodeid, parent->nchilds);
+            x = parent->first;
+            while(i < parent->nchilds && x >= 0 && x < hibase->pnodeio.total)
+            {
+                if(i < (parent->nchilds - 1))
+                    p += sprintf(p, "{id:'%d',name:'%s',nchilds:'%d'},",
+                            pnode[x].id, pnode[x].name, pnode[x].nchilds);
+                else
+                    p += sprintf(p, "{'id':'%d','name':'%s',nchilds:'%d'}",
+                            pnode[x].id, pnode[x].name, pnode[x].nchilds);
+                x = pnode[x].next;
+                i++;
+            }
+            p += sprintf(p, "%s", "]})\r\n");
+            n = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
+                "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (p - buf), buf);
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return n;
+}
+
 
 /* update pnode */
 int hibase_update_pnode(HIBASE *hibase, int pnodeid, char *name)
@@ -811,6 +849,7 @@ HIBASE * hibase_init()
         hibase->add_pnode           = hibase_add_pnode;
         hibase->get_pnode           = hibase_get_pnode;
         hibase->get_pnode_childs    = hibase_get_pnode_childs;
+        hibase->view_pnode_childs   = hibase_view_pnode_childs;
         hibase->update_pnode        = hibase_update_pnode;
         hibase->delete_pnode        = hibase_delete_pnode;
         hibase->clean               = hibase_clean;

@@ -13,6 +13,7 @@ extern "C" {
 #define TABLE_NAME_MAX		    32
 #define TEMPLATE_NAME_MAX	    32
 #define HIBASE_PATH_MAX		    256
+#define HI_BUF_SIZE             65536
 #define REGX_SIZE_MAX		    4096
 #define F_IS_LINK               0x01
 #define F_IS_IMAGE              0x02
@@ -132,6 +133,7 @@ typedef struct _HIBASE
     int     (*add_pnode)(struct _HIBASE *, int parent, char *name);
     int     (*get_pnode)(struct _HIBASE *, int id, PNODE *pnode);
     int     (*get_pnode_childs)(struct _HIBASE *, int id, PNODE *pnodes);
+    int     (*view_pnode_childs)(struct _HIBASE *, int id, char *block);
     int     (*update_pnode)(struct _HIBASE *, int id, char *name);
     int     (*delete_pnode)(struct _HIBASE *, int id);
     void 	(*clean)(struct _HIBASE **);	

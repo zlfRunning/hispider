@@ -73,28 +73,6 @@ do                                                                              
 }while(0)
 #define ISALPHA(p) ((*p >= '0' && *p <= '9') ||(*p >= 'A' && *p <= 'Z')||(*p >= 'a' && *p <= 'z'))
 static const char *running_ops[] = {"running", "stop"};
-static const char *__html__body__  =
-"<HTML><HEAD>\n"
-"<TITLE>Hispider Running Status</TITLE>\n"
-"<meta http-equiv='refresh' content='10; url=/'>\n</HEAD>\n"
-"<meta http-equiv='content-type' content='text/html; charset=UTF-8'>\n"
-"<BODY bgcolor='#000000' align=center >\n""<h1><font color=white >Hispider Running State  [<a href='/%s'>%s</a>]</font>\n</h1>\n"
-"<hr noshade><ul><br><table  align=center width='100%%' >\n"
-"<tr><td align=left ><font color=red size=72 ><li>URL Total:%d </li></font></td></tr>\n"
-"<tr><td align=left ><font color=red size=72 ><li>URL TASKS:%d </li></font></td></tr>\n"
-"<tr><td align=left ><font color=red size=72 ><li>URL OK:%d </li></font></td></tr>\n"
-"<tr><td align=left ><font color=red size=72 ><li>URL ERROR:%d </li></font></td></tr>\n"
-"<tr><td align=left ><font color=red size=72 ><li>Doc Total:%lld/%lld </li></font></td></tr>\n"
-"<tr><td align=left ><font color=red size=72 ><li>DNS Count:%d/%d </li></font></td></tr>\n"
-"<tr><td align=left ><font color=red size=72 ><li>Time Used: %d day(s) [%02d:%02d:%02d +%06d]</li>"
-"</font></td></tr>\n"
-"<tr><td align=left ><font color=red size=72 ><li>Speed:%f (k/s)</li></font></td></tr>\n"
-"</table><br><hr  noshade><em>\n"
-"<form method=post><input name='' type=radio ></form>\n"
-"<font color=white ><a href='http://code.google.com/p/hispider' >"
-"Hispider</a> Powered By <a href='http://code.google.com/p/hispider'>"
-"http://code.google.com/p/hispider</a></font>"
-"</BODY></HTML>\n";
 /* mkdir */
 int ltask_mkdir(char *path, int mode)
 {
@@ -1402,8 +1380,9 @@ int ltask_list_users(LTASK *task, char *block, int *nblock)
 /* get state infomation */
 int ltask_get_stateinfo(LTASK *task, char *block)
 {
-    char buf[HTTP_BUF_SIZE], *p = NULL;
-    int ret = -1, n = 0, interval = 0, day = 0, hour = 0, min = 0, sec = 0, usec = 0;
+    int ret = -1, n = 0, interval = 0, day = 0, hour = 0, 
+        min = 0, sec = 0, usec = 0;
+    char  buf[HTTP_BUF_SIZE], *p = NULL;
 
     if(task && task->state)
     {
@@ -1416,7 +1395,7 @@ int ltask_get_stateinfo(LTASK *task, char *block)
         if((interval = (int)((PT_L_USEC(task->timer) - task->state->last_usec))) > 0)
         {
             task->state->speed = (double)1000000 * (((double)(task->state->doc_total_size 
-                - task->state->last_doc_size)/(double)1024)/(double)interval);
+                            - task->state->last_doc_size)/(double)1024)/(double)interval);
         }
         if(interval  > L_SPEED_INTERVAL)
         {
@@ -1424,12 +1403,16 @@ int ltask_get_stateinfo(LTASK *task, char *block)
             task->state->last_doc_size = task->state->doc_total_size;
         }
         p = (char *)running_ops[task->state->running];
-        n = sprintf(buf, __html__body__, p, p, task->state->url_total, task->state->url_tasks,
+        n = sprintf(buf, "({status:'%s',url_total:'%d',url_tasks:'%d', url_ok:'%d',"
+                "url_error:'%d', doc_total_zsize:'%lld', doc_total_size:'%lld',"
+                "host_current:'%d', host_total:'%d', t_day:'%d', t_hour:'%d',"
+                "t_min:'%d', t_sec:'%d', t_usec:'%d', speed:'%f'})", 
+                p, task->state->url_total, task->state->url_tasks,
                 task->state->url_ok, task->state->url_error, task->state->doc_total_zsize, 
                 task->state->doc_total_size, task->state->host_current, task->state->host_total, 
                 day, hour, min, sec, usec, task->state->speed);
-        ret = sprintf(block, "HTTP/1.0 200 OK \r\nContent-Type: text/html\r\n"
-                "Content-Length: %d\r\n\r\n%s", n, buf);
+        ret = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
+                "Content-Length:%d\r\nConnection:close\r\n\r\n%s", n, buf);
     }
     return ret;
 }

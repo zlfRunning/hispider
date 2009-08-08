@@ -4,8 +4,12 @@
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
         <style>
             body{margin:0px;}
+            #taskinfo{position:absolute;background-color:#000000; color:red;
+                border:1px solid #81BEF7; padding:10px;left:0px;top:0px;height:160px;}
+            .ktask{font-size:12pt;font-weight:bold;}
+            .vtask{font-size:12pt;font-weight:bold;}
             #treebody{position:absolute;background-color:#ffffff;
-                border:1px solid #81BEF7;left:10px;top:10px;}
+                border:1px solid #81BEF7; padding:1px;left:10px;top:200px;}
             .formdiv{position:absolute;width:200px;background-color:#ffffff;
                 border:1px solid #81BEF7;padding:10px;overflow:auto;display:none;}
             .formclose{font-size:14pt;font-weight:100;color:silver;cursor:pointer;display:inline;}
@@ -245,14 +249,12 @@
                 form['nodename'].focus();
                 form['nodename'].value = element.parentNode.parentNode.getAttribute('UName');
             }
-
             function HiddenEditor()
             {
                 var div = document.getElementById('txtform');
                 div.style.display = 'none';
                 return true;
             }
-
             function EditNode(form)
             {
                 var argv = "";
@@ -378,9 +380,71 @@
                     if(nchilds > 0) element.innerHTML = '✚';
                 }
             }
+            function ViewTask(op)
+            {
+                var xmlHttp = null;
+                if((xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    var argv = "op="+op;
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                var taskinfo = eval(xmlHttp.responseText);
+                                if(taskinfo)
+                                {
+                                    var htmlstr = "";
+                                    htmlstr += "<span class='ktask'>Running:&nbsp;</span>";
+                                    htmlstr += "<a href=\"javascript:ViewTask('task_";
+                                    htmlstr += taskinfo['status']+"');\" class='vtask'";
+                                    htmlstr += ">"+taskinfo['status']+"</a><br>";
+                                    htmlstr += "<span class='ktask'>Tasks:&nbsp;</span>";
+                                    htmlstr += "<span class='vtask'>"+taskinfo['url_tasks'];
+                                    htmlstr += "</span><br>";
+                                    htmlstr += "<span class='ktask'>URL Total:&nbsp;</span>";
+                                    htmlstr += "<span class='vtask'>"+taskinfo['url_total'];
+                                    htmlstr += "</span><br>";
+                                    htmlstr += "<span class='ktask'>URL OK:&nbsp;</span>";
+                                    htmlstr += "<span class='vtask'>"+taskinfo['url_ok'];
+                                    htmlstr += "</span><br>";
+                                    htmlstr += "<span class='ktask'>URL Error:&nbsp;</span>";
+                                    htmlstr += "<span class='vtask'>"+taskinfo['url_error'];
+                                    htmlstr += "</span><br>";
+                                    htmlstr += "<span class='ktask'>Doc:&nbsp;</span>";
+                                    htmlstr += "<span class='vtask'>"+taskinfo['doc_total_zsize'];
+                                    htmlstr += "/" + taskinfo['doc_total_size']+"</span><br>";
+                                    htmlstr += "<span class='ktask'>Host:&nbsp;</span>";
+                                    htmlstr += "<span class='vtask'>"+taskinfo['host_current'];
+                                    htmlstr += "/" + taskinfo['host_total']+"</span><br>";
+                                    htmlstr += "<span class='ktask'>Time Used:&nbsp;</span>";
+                                    htmlstr += "<span class='vtask'>["+taskinfo['t_day'];
+                                    htmlstr += "&nbsp;Day(s)&nbsp;&nbsp;"+taskinfo['t_hour'];
+                                    htmlstr += ":"+taskinfo['t_min'];
+                                    htmlstr += ":"+taskinfo['t_sec'];
+                                    htmlstr += "&nbsp;+"+taskinfo['t_usec']+"]";
+                                    htmlstr += "</span><br>";
+                                    htmlstr += "<span class='ktask'>Speed:&nbsp;</span>";
+                                    htmlstr += "<span class='vtask'>"+taskinfo['speed'];
+                                    htmlstr += "(K/s)</span>\n";
+                                    var otaskinfo = document.getElementById('taskinfo');
+                                    if(otaskinfo) otaskinfo.innerHTML = htmlstr;
+                                }
+                            }
+                            
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+            }
         </script>
     </head>
     <body>
+    <div id='taskinfo'></div>
     <div id='treebody' level='0'></div>
     <div id='txtform' class='formdiv'>
         <form name="editorform" action="javascript:void(0)" onsubmit="return EditNode(this);"> 
@@ -395,6 +459,8 @@
     <script language='javascript'>
     AddNode(-1,0,"Root",0);
     Fold(document.getElementById('fold_0'));
+    ViewTask('task_view');
+    window.setInterval("ViewTask('task_view')", 10000);
     /*
     var levels = 0;
     function addnodes(pid)

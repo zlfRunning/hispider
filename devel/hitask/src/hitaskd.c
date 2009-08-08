@@ -62,10 +62,16 @@ static char *e_ops[]=
 #define E_OP_NODE_UPDATE    3
     "node_delete",
 #define E_OP_NODE_DELETE    4
-    "node_childs"       
+    "node_childs",
 #define E_OP_NODE_CHILDS    5
+    "task_stop",
+#define E_OP_TASK_STOP      6
+    "task_running",
+#define E_OP_TASK_RUNNING   7
+    "task_view"
+#define E_OP_TASK_VIEW      8
 };
-#define E_OP_NUM 6
+#define E_OP_NUM 9
 /* dns packet reader */
 int adns_packet_reader(CONN *conn, CB_DATA *buffer)
 {
@@ -291,15 +297,7 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
         }
         if(http_req.reqid == HTTP_GET)
         {
-            if(strncasecmp(http_req.path, "/stop", 5) == 0)
-            {
-                ltask->set_state_running(ltask, 0);
-            }
-            else if(strncasecmp(http_req.path, "/running", 8) == 0)
-            {
-                ltask->set_state_running(ltask, 1);
-            }
-            else
+            if(httpd_home)
             {
                 p = file;
                 if(http_req.path[0] != '/')
@@ -336,10 +334,6 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
                 {
                     return conn->push_chunk(conn, HTTP_NOT_FOUND, strlen(HTTP_NOT_FOUND));
                 }
-            }
-            if((n = ltask->get_stateinfo(ltask, buf)))
-            {
-                return conn->push_chunk(conn, buf, n);
             }
             else
             {
@@ -472,23 +466,8 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         if(parentid >= 0 && name)
                         {
                             if((id = hibase->add_pnode(hibase, parentid, name)) > 0
-                                && (n = hibase->get_pnode_childs(hibase, parentid, pnodes)) > 0)
+                                && (n = hibase->view_pnode_childs(hibase, parentid, block)) > 0)
                             {
-                                p = buf;
-                                p += sprintf(p, "({id:'%d',nchilds:'%d', childs:[", parentid, n);
-                                for(i = 0; i < n; i++)
-                                {
-                                    if(i < (n - 1))
-                                        p += sprintf(p, "{id:'%d',name:'%s',nchilds:'%d'},",
-                                                pnodes[i].id, pnodes[i].name, pnodes[i].nchilds);
-                                    else
-                                        p += sprintf(p, "{'id':'%d','name':'%s',nchilds:'%d'}",
-                                                pnodes[i].id, pnodes[i].name, pnodes[i].nchilds);
-                                }
-                                p += sprintf(p, "%s", "]})\r\n");
-                                n = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
-                                        "Content-Length:%ld\r\nConnection:close\r\n\r\n%s",
-                                        (p - buf), buf);
                                 conn->push_chunk(conn, block, n);
                                 goto end;
                             }else goto err_end;
@@ -530,26 +509,35 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         if(nodeid >= 0)
                         {
                             DEBUG_LOGGER(hitaskd_logger, "op:%d id:%d name:%s", op, nodeid, name);
-                            if((n = hibase->get_pnode_childs(hibase, nodeid, pnodes)) > 0)
+                            if((n = hibase->view_pnode_childs(hibase, nodeid, block)) > 0)
                             {
-                                p = buf;
-                                p += sprintf(p, "({id:'%d',nchilds:'%d', childs:[", nodeid,n);
-                                for(i = 0; i < n; i++)
-                                {
-                                    if(i < (n - 1))
-                                        p += sprintf(p, "{id:'%d',name:'%s',nchilds:'%d'},",
-                                                pnodes[i].id, pnodes[i].name, pnodes[i].nchilds);
-                                    else
-                                        p += sprintf(p, "{'id':'%d','name':'%s',nchilds:'%d'}",
-                                                pnodes[i].id, pnodes[i].name, pnodes[i].nchilds);
-                                }
-                                p += sprintf(p, "%s", "]})\r\n");
-                                n = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
-                                        "Content-Length:%ld\r\nConnection:close\r\n\r\n%s",
-                                        (p - buf), buf);
                                 conn->push_chunk(conn, block, n);
                                 goto end;
                             }else goto err_end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_TASK_VIEW:
+                        if((n = ltask->get_stateinfo(ltask, block)) > 0)
+                        {
+                            conn->push_chunk(conn, block, n);
+                            goto end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_TASK_STOP:
+                        if(ltask->set_state_running(ltask, 0) == 0
+                            && (n = ltask->get_stateinfo(ltask, block)) > 0)
+                        {
+                            conn->push_chunk(conn, block, n);
+                            goto end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_TASK_RUNNING:
+                        if(ltask->set_state_running(ltask, 1) == 0
+                            && (n = ltask->get_stateinfo(ltask, block)) > 0)
+                        {
+
+                            conn->push_chunk(conn, block, n);
+                            goto end;
                         }else goto err_end;
                         break;
                     default:
