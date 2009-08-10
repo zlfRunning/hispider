@@ -46,10 +46,18 @@ static char *e_argvs[] =
 #define E_ARGV_NAME     6
     "parentid",
 #define E_ARGV_PARENTID 7
-    "nodeid"
+    "nodeid",
 #define E_ARGV_NODEID   8
+    "tableid",
+#define E_ARGV_TABLEID  9
+    "fieldid",
+#define E_ARGV_FIELDID  10
+    "type",
+#define E_ARGV_TYPE     11
+    "flag"
+#define E_ARGV_FLAG     12
 };
-#define E_ARGV_NUM      9
+#define E_ARGV_NUM      13
 static char *e_ops[]=
 {
     "host_up",
@@ -68,10 +76,26 @@ static char *e_ops[]=
 #define E_OP_TASK_STOP      6
     "task_running",
 #define E_OP_TASK_RUNNING   7
-    "task_view"
+    "task_view",
 #define E_OP_TASK_VIEW      8
+    "table_add",
+#define E_OP_TABLE_ADD      9
+    "table_view",
+#define E_OP_TABLE_VIEW     10
+    "table_list",
+#define E_OP_TABLE_LIST     11
+    "table_rename",
+#define E_OP_TABLE_RENAME   12
+    "table_delete",
+#define E_OP_TABLE_DELETE   13
+    "field_add",
+#define E_OP_FIELD_ADD      14
+    "field_update",
+#define E_OP_FIELD_UPDATE   15
+    "field_delete"
+#define E_OP_FIELD_DELETE   16
 };
-#define E_OP_NUM 9
+#define E_OP_NUM 17
 /* dns packet reader */
 int adns_packet_reader(CONN *conn, CB_DATA *buffer)
 {
@@ -393,7 +417,8 @@ err_end:
 int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
     int i = 0, id = 0, n = 0, op = -1, nodeid = -1, 
-        parentid = -1, urlid = -1, hostid = -1;
+        parentid = -1, urlid = -1, hostid = -1, tableid = -1, fieldid = -1,
+        type = -1, flag = -1;
     char *p = NULL, *end = NULL, *name = NULL, *host = NULL, *url = NULL, 
          *pattern = NULL, buf[HTTP_BUF_SIZE], block[HTTP_BUF_SIZE];
     HTTP_REQ httpRQ = {0}, *http_req = NULL;
@@ -453,6 +478,18 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                                     break;
                                 case  E_ARGV_URLID :
                                     urlid = atoi(p);
+                                    break;
+                                case E_ARGV_TABLEID:
+                                    tableid = atoi(p);
+                                    break;
+                                case E_ARGV_FIELDID:
+                                    fieldid = atoi(p);
+                                    break;
+                                case E_ARGV_TYPE:
+                                    type = atoi(p);
+                                    break;
+                                case E_ARGV_FLAG:
+                                    flag = atoi(p);
                                     break;
                                 default:
                                     break;
@@ -535,9 +572,51 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         if(ltask->set_state_running(ltask, 1) == 0
                             && (n = ltask->get_stateinfo(ltask, block)) > 0)
                         {
-
                             conn->push_chunk(conn, block, n);
                             goto end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_TABLE_ADD:
+                        if(name)
+                        {
+                            id = hibase->add_table(hibase, name);
+                            n = sprintf(buf, "%d\r\n", id);
+                            n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
+                                    "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", n, id);
+                            conn->push_chunk(conn, buf, n);
+                            goto end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_TABLE_RENAME:
+                        if(tableid >= 0 && name)
+                        {
+                            id = hibase->rename_table(hibase, tableid, name);
+                            n = sprintf(buf, "%d\r\n", id);
+                            n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
+                                    "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", n, id);
+                            conn->push_chunk(conn, buf, n);
+                            goto end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_TABLE_DELETE:
+                        if(tableid >= 0)
+                        {
+                            id = hibase->delete_table(hibase, tableid);
+                            n = sprintf(buf, "%d\r\n", id);
+                            n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
+                                    "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", n, id);
+                            conn->push_chunk(conn, buf, n);
+                            goto end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_TABLE_VIEW:
+                        if(tableid >= 0)
+                        {
+                            if((n = hibase->view_table(hibase, tableid, block)) > 0)
+                            {
+                                conn->push_chunk(conn, block, n);
+                                goto end;
+                            }else goto err_end;
                         }else goto err_end;
                         break;
                     default:

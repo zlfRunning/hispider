@@ -430,7 +430,7 @@
                                     htmlstr += "</span><br>";
                                     htmlstr += "<span class='ktask'>Speed:&nbsp;</span>";
                                     htmlstr += "<span class='vtask'>"+taskinfo['speed'];
-                                    htmlstr += "(K/s)</span>\n";
+                                    htmlstr += " (KB/S) </span>\n";
                                     var otaskinfo = document.getElementById('taskinfo');
                                     if(otaskinfo) otaskinfo.innerHTML = htmlstr;
                                 }
@@ -445,6 +445,9 @@
     </head>
     <body>
     <div id='taskinfo'></div>
+    <div id='database'></div>
+    <div id='proxy'></div>
+    <div id='template'>
     <div id='treebody' level='0'></div>
     <div id='txtform' class='formdiv'>
         <form name="editorform" action="javascript:void(0)" onsubmit="return EditNode(this);"> 
@@ -455,6 +458,7 @@
             <input type=submit value='ok' class='submit' >
             &nbsp;&nbsp;<span class='formclose' onclick="CloseForm(this)">x</span>
         </form>
+    </div>
     </div>
     <script language='javascript'>
     AddNode(-1,0,"Root",0);

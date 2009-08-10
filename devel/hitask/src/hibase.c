@@ -107,7 +107,7 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
     ITABLE *table = NULL;
     PNODE *pnode = NULL;
     struct stat st = {0};
-    int i = 0, n = 0;
+    int i = 0, j = 0, n = 0;
     void *dp = NULL;
 
     if(hibase && dir)
@@ -123,11 +123,22 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
             hibase->tableio.left = 0;
             for(i = 0; i < hibase->tableio.total; i++)
             {
-                if(table[i].status == TAB_STATUS_OK && table[i].nfields > 0 
-                        && (n = strlen(table[i].name)) > 0)
+                if((n = strlen(table[i].name)) > 0)
                 {
-                    dp = (void *)((long)(i + 1));
-                    TRIETAB_ADD(hibase->mtable, table[i].name, n, dp);
+                    if(table[i].uid > hibase->db_uid_max)
+                        hibase->db_uid_max = table[i].uid;
+                    dp = (void *)((long)(table[i].uid));
+                    TRIETAB_ADD(hibase->mdb, table[i].name, n, dp);
+                    for(j = 0; j < table[i].nfields; j++)
+                    {
+                        if((n = strlen(table[i].fields[j].name)) > 0)
+                        {
+                            if(table[i].fields[j].uid > hibase->db_uid_max)
+                                hibase->db_uid_max = table[i].fields[j].uid;
+                            dp = (void *)((long)(table[i].fields[j].uid));
+                            TRIETAB_ADD(hibase->mdb, table[i].fields[j].name, n, dp);
+                        }
+                    }
                     hibase->tableio.current = i;
                 }
                 else hibase->tableio.left++;
@@ -182,31 +193,52 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
 }
 
 /* check table exists */
-int hibase_table_exists(HIBASE *hibase, char *table_name, int len)
+int hibase_db_uid_exists(HIBASE *hibase, int tableid, char *name, int len)
 {
+    ITABLE *tab = NULL;
+    int uid = -1, i = 0;
     void *dp = NULL;
-    int tableid = -1;
 
-    if(hibase && table_name && len > 0 && hibase->mtable)
+    if(hibase && name && len > 0 && hibase->mdb)
     {
         MUTEX_LOCK(hibase->mutex);
-        TRIETAB_GET(hibase->mtable, table_name, len, dp);
-        tableid = ((long)dp - 1);
+        TRIETAB_GET(hibase->mdb, name, len, dp);
+        if(tableid >= 0 && (uid = (int)((long)dp)) <= 0)
+        {
+            uid = ++(hibase->db_uid_max);
+            dp = (void *)((long)uid);
+            TRIETAB_GET(hibase->mdb, name, len, dp);
+        }
+        else
+        {
+            if(tableid >= 0 && hibase->tableio.total
+                    && (tab = (ITABLE *)hibase->tableio.map) && tab != (ITABLE *)-1)
+            {
+                for(i = 0; i < tab[tableid].nfields; i++)
+                {
+                    if(tab[tableid].uid == uid)
+                    {
+                        uid = 0;
+                        break;
+                    }
+                }
+            }
+        }
         MUTEX_UNLOCK(hibase->mutex);
     }
-    return tableid;
+    return uid;
 }
 
 /* add table */
-int hibase_add_table(HIBASE *hibase, ITABLE *table)
+int hibase_add_table(HIBASE *hibase, char *table_name)
 {
-    int tableid = -1, i = 0, n = 0;
+    int tableid = -1, uid = -1, i = 0, n = 0;
     struct stat st = {0};
     ITABLE *tab = NULL;
     void *dp = NULL;
 
-    if(hibase && table && (n = strlen(table->name))  > 0 
-            && (tableid = hibase_table_exists(hibase, table->name, n)) < 0)
+    if(hibase && (n = strlen(table_name))  > 0 
+            && (uid = hibase_db_uid_exists(hibase, -1, table_name, n)) < 0)
     {
         MUTEX_LOCK(hibase->mutex);
         if(hibase->tableio.left == 0){_MMAP_(hibase->tableio, st, ITABLE, TABLE_INCRE_NUM);}        
@@ -215,19 +247,20 @@ int hibase_add_table(HIBASE *hibase, ITABLE *table)
         {
             for(i = 0; i < hibase->tableio.total; i++)
             {
-                if(tab[i].status != TAB_STATUS_OK)
+                if(tab[i].status == TAB_STATUS_INIT)
                 {
-                    table->status = TAB_STATUS_OK;
-                    memcpy(&(tab[i]), table, sizeof(ITABLE));
-                    tableid = i;
-                    dp = (void *)((long)(tableid + 1));
-                    TRIETAB_ADD(hibase->mtable, table->name, n, dp);
+                    memset(&(tab[i]), 0, sizeof(ITABLE));
+                    tab[i].status = TAB_STATUS_OK;
+                    memcpy(tab[i].name, table_name, n);
+                    tab[i].uid = ++(hibase->db_uid_max);
+                    dp = (void *)((long)(tab[i].uid));
+                    TRIETAB_ADD(hibase->mdb, table_name, n, dp);
                     hibase->tableio.left--;
+                    tableid = i;
                     break;
                 }
             }
         }
-        
         MUTEX_UNLOCK(hibase->mutex);
     }
     else tableid = -1;
@@ -235,19 +268,16 @@ int hibase_add_table(HIBASE *hibase, ITABLE *table)
 }
 
 /* get table */
-int hibase_get_table(HIBASE *hibase, int tableid, char *table_name, ITABLE *ptable)
+int hibase_get_table(HIBASE *hibase, int tableid, ITABLE *ptable)
 {
     ITABLE *tab = NULL;
     int id = -1, n = 0;
 
-    if(hibase && hibase->mtable && ptable)
+    if(hibase && tableid >= 0 && tableid < hibase->tableio.total)
     {
-        if(table_name && (n = strlen(table_name)) > 0) 
-            id = hibase_table_exists(hibase, table_name, n);
         MUTEX_LOCK(hibase->mutex);
-        if(id < 0 && tableid >= 0 ) id = tableid;
-        if(id >= 0 && id < hibase->tableio.total 
-                && (tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1)
+        id = tableid;
+        if((tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1)
         {
             memcpy(ptable, &(tab[id]), sizeof(ITABLE)); 
         }
@@ -257,23 +287,44 @@ int hibase_get_table(HIBASE *hibase, int tableid, char *table_name, ITABLE *ptab
     return id;
 }
 
-/* update table */
-int hibase_update_table(HIBASE *hibase, int tableid, ITABLE *ptable)
+/* rename table */
+int hibase_rename_table(HIBASE *hibase, int tableid, char *table_name)
 {
-    char *table_name = NULL;
+    int id = -1, uid =-1, i = 0, n = 0;
     ITABLE *tab = NULL;
-    int id = -1, n = 0;
+    void*dp = NULL;
 
-    if(hibase && hibase->mtable && ptable)
+    if(hibase && hibase->mdb && (n = strlen(table_name)) > 0)
     {
-        if((table_name = ptable->name) && (n = strlen(table_name)) > 0) 
-            id = hibase_table_exists(hibase, table_name, n);
+        uid = hibase_db_uid_exists(hibase, -1, table_name, n);
         MUTEX_LOCK(hibase->mutex);
-        if(id < 0 && tableid >= 0 ) id = tableid;
-        if(id >= 0 && id < hibase->tableio.total 
+        if(tableid >= 0 && tableid < hibase->tableio.total 
                 && (tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1)
         {
-            memcpy(&(tab[id]), ptable, sizeof(ITABLE)); 
+            if(uid > 0)
+            {
+                for(i = 0; i < hibase->tableio.total; i++)
+                {
+                    if(tab[i].uid == uid)
+                    {
+                        uid = 0;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                uid = ++(hibase->db_uid_max);
+                dp = (void *)((long) uid);
+                TRIETAB_ADD(hibase->mdb, table_name, n, dp);
+            }
+            if(uid > 0)
+            {
+                tab[tableid].uid = uid;
+                memcpy(tab[tableid].name, table_name, n);
+                id = tableid;
+                //failed
+            }else id = uid;
         }
         else id = -1;
         MUTEX_UNLOCK(hibase->mutex);
@@ -281,61 +332,222 @@ int hibase_update_table(HIBASE *hibase, int tableid, ITABLE *ptable)
     return id;
 }
 
-
 /* delete table */
-int hibase_delete_table(HIBASE *hibase, int tableid, char *table_name)
+int hibase_delete_table(HIBASE *hibase, int tableid)
 {
     ITABLE *tab = NULL;
-    int id = -1, n = 0;
-    void *dp = NULL;
+    int id = -1;
 
-    if(hibase && hibase->mtable)
+    if(hibase && hibase->mdb && tableid >= 0 && tableid < hibase->tableio.total)
     {
-        if(table_name && (n = strlen(table_name)) > 0) 
-            id = hibase_table_exists(hibase, table_name, n);
         MUTEX_LOCK(hibase->mutex);
-        if(id < 0 && tableid >= 0 ) id = tableid;
-        if(id >= 0 && id < hibase->tableio.total 
-                && (tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1)
+        if((tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1)
         {
-            n = strlen(tab[id].name);
-            TRIETAB_DEL(hibase->mtable, tab[id].name, n, dp);
-            tab[id].status = TAB_STATUS_ERR;
-            hibase->tableio.left--;
+            memset(&(tab[tableid]), 0, sizeof(ITABLE));
+            hibase->tableio.left++;
+            id = tableid;
         }
         else id = -1;
         MUTEX_UNLOCK(hibase->mutex);
     }
     return id;
+}
+
+/* add new field */
+int hibase_add_field(HIBASE *hibase, int tableid, char *name, int type, int flag)
+{
+    int from = 0, to = 0, i = 0, n = 0, id = -1, uid = -1;
+    ITABLE *tab = NULL;
+
+    if(hibase && tableid >= 0 && tableid < hibase->tableio.total 
+            && (n = strlen(name)) > 0 && n < FIELD_NAME_MAX && (type & FTYPE_ALL) 
+            && (uid = hibase_db_uid_exists(hibase, tableid, name, n)) != 0)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if((tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1
+                && tab[tableid].nfields < FIELD_NUM_MAX)
+        {
+            if((flag & F_IS_INDEX) > 0){from = 0; to = FIELD_NUM_MAX;}
+            else {from = HI_INDEX_MAX; to = FIELD_NUM_MAX;}
+            for(i = from; i < to; i++)
+            {
+                if(tab[tableid].fields[i].status == FIELD_STATUS_INIT)
+                {
+                    tab[tableid].fields[i].status = FIELD_STATUS_OK;
+                    tab[tableid].fields[i].type   = type;
+                    tab[tableid].fields[i].flag   |= flag;
+                    tab[tableid].fields[i].uid    = uid;
+                    memcpy(tab[tableid].fields[i].name, name, n);
+                    tab[tableid].nfields++;
+                    break;
+                }
+            }
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return id;
+}
+
+/* update  field */
+int hibase_update_field(HIBASE *hibase, int tableid, int fieldid, 
+        char *name, int type, int flag)
+{
+    int from = 0, to = 0, i = 0, n = 0, id = -1, uid = -1, 
+        isindex = 0, is_need_move = 0;
+    ITABLE *tab = NULL;
+
+    if(hibase && tableid >= 0 && tableid < hibase->tableio.total 
+            && fieldid >= 0 && fieldid < FIELD_NUM_MAX)
+    {
+        if(name && (n = strlen(name)) > 0 && n < FIELD_NAME_MAX 
+                && (uid = hibase_db_uid_exists(hibase, tableid, name, n)) == 0)
+        {
+            return -1;
+        }
+        MUTEX_LOCK(hibase->mutex);
+        if((tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1)
+        {
+            isindex = (flag & F_IS_INDEX);
+            if(isindex > 0 && (tab[tableid].fields[fieldid].flag & F_IS_INDEX) == 0)
+            {
+                is_need_move = 1; from = 0; to = FIELD_NUM_MAX;
+            }
+            else if(isindex == 0 && (tab[tableid].fields[fieldid].flag & F_IS_INDEX) > 0)
+            {
+                is_need_move = 1; from = HI_INDEX_MAX; to = FIELD_NUM_MAX;
+            }
+            if(is_need_move)
+            {
+                for(i = from; i < to; i++)
+                {
+                    if(tab[tableid].fields[i].status == FIELD_STATUS_INIT)
+                    {
+                        memcpy(&(tab[tableid].fields[i]), &(tab[tableid].fields[fieldid]), 
+                                sizeof(IFIELD));
+                        tab[tableid].fields[i].flag = flag;
+                        if(type > 0) tab[tableid].fields[i].type   = type;
+                        if(uid > 0)
+                        {
+                            tab[tableid].fields[i].uid    = uid;
+                            memcpy(tab[tableid].fields[i].name, name, n);
+                        }
+                        memset(&(tab[tableid].fields[fieldid]), 0, sizeof(IFIELD));
+                        id = i;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                if(type & FTYPE_ALL) tab[tableid].fields[fieldid].type = type;
+                if(uid > 0) 
+                {
+                    tab[tableid].fields[fieldid].uid  = uid;
+                    memcpy(tab[tableid].fields[fieldid].name, name, n);
+                }
+                id = fieldid;
+            }
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return id;
+}
+
+/* delete field */
+int hibase_delete_field(HIBASE *hibase, int tableid, int fieldid)
+{
+    ITABLE *tab = NULL;
+    int id = -1;
+
+    if(hibase && tableid >= 0 && tableid < hibase->tableio.total
+            && fieldid >= 0 && fieldid < FIELD_NUM_MAX)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if((tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1)
+        {
+            if(tab[tableid].nfields > 0 && tab[tableid].fields[fieldid].status == FIELD_STATUS_OK)
+            {
+                memset(&(tab[tableid].fields[fieldid]), 0, sizeof(IFIELD));
+                tab[tableid].nfields--;
+                id = fieldid;
+            }
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return id;
+}
+
+/* view  table */
+int hibase_view_table(HIBASE *hibase, int tableid, char *block)
+{
+    int ret = -1, i = 0;
+    ITABLE *tab = NULL;
+    char *p =  NULL;
+
+    if(hibase && tableid >= 0 && tableid < hibase->tableio.total && block)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if((tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1)
+        {
+            p = block;
+            p += sprintf(p, "({name:'%s', nfields:'%d', fields:[", 
+                    tab[tableid].name, tab[tableid].nfields);
+            for(i = 0; i < tab[tableid].nfields; i++)
+            {
+                if(tab[tableid].fields[i].status == FIELD_STATUS_OK)
+                {
+                    if(i < (tab[tableid].nfields - 1))
+                    {
+                        p += sprintf(p, "{name:'%s', type:'%d', flag:'%d'},",
+                                tab[tableid].fields[i].name, tab[tableid].fields[i].type,
+                                tab[tableid].fields[i].flag);
+                    }
+                    else
+                    {
+                        p += sprintf(p, "{name:'%s', type:'%d', flag:'%d'}",
+                                tab[tableid].fields[i].name, tab[tableid].fields[i].type,
+                                tab[tableid].fields[i].flag);
+                    }
+                }
+            }
+            p += sprintf(p, "%s", "]})");
+            ret = (p - block);
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return ret;
 }
 
 /* list tables */
-int hibase_list_table(HIBASE *hibase, FILE *fp)
+int hibase_list_table(HIBASE *hibase, char *block)
 {
+    int ret = -1, i = 0, j = 0;
     ITABLE *tab = NULL;
-    int i = 0, j = 0, x = 0;
+    char *p =  NULL;
 
-    if(hibase && fp && hibase->tableio.total > 0 
-            && (tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)(-1))
+    if(hibase && block)
     {
-        for(i = 0; i < hibase->tableio.total; i++)
+        MUTEX_LOCK(hibase->mutex);
+        if((tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1)
         {
-            if(tab[i].status == TAB_STATUS_OK && tab[i].nfields > 0)
+            p = block;
+            p += sprintf(p, "%s","([");
+            for(i = 0; i < hibase->tableio.total; i++)
             {
-                fprintf(fp, "id[%d] table[%s] nfields[%d]\n{\n", i, tab[i].name, tab[i].nfields);
-                for(j = 0; j < tab[i].nfields; j++)
+                if(tab[i].status == TAB_STATUS_OK)
                 {
-                    if((x = tab[i].fields[j].data_type & FTYPE_ALL))
-                    {
-                        fprintf(fp, "\tname[%s] type[%s],\n", 
-                                tab[i].fields[j].name, table_data_types[x]);
-                    }
+                    if(i < (tab[i].nfields - 1))
+                        p += sprintf(p, "{name:'%s', nfields:'%d'},", tab[i].name, tab[i].nfields);
+                    else
+                        p += sprintf(p, "{name:'%s', nfields:'%d'}", tab[i].name, tab[i].nfields);
                 }
-                fprintf(fp, "};\n");
             }
+            p += sprintf(p, "%s", "])");
+            ret = (p - block);
         }
+        MUTEX_UNLOCK(hibase->mutex);
     }
-    return 0;
+    return ret;
 }
 
 /* check template exists */
@@ -385,7 +597,6 @@ int hibase_add_template(HIBASE *hibase, ITEMPLATE *template)
                 }
             }
         }
-        
         MUTEX_UNLOCK(hibase->mutex);
     }
     else templateid = -1;
@@ -798,7 +1009,7 @@ void hibase_clean(HIBASE **phibase)
 {
     if(phibase && *phibase)
     {
-        if((*phibase)->mtable) {TRIETAB_CLEAN((*phibase)->mtable);}
+        if((*phibase)->mdb) {TRIETAB_CLEAN((*phibase)->mdb);}
         if((*phibase)->mtemplate) {TRIETAB_CLEAN((*phibase)->mtemplate);}
         if((*phibase)->mpnode) {TRIETAB_CLEAN((*phibase)->mpnode);}
         if((*phibase)->tableio.map && (*phibase)->tableio.size > 0)
@@ -831,16 +1042,21 @@ HIBASE * hibase_init()
 
     if((hibase = (HIBASE *)calloc(1, sizeof(HIBASE))))
     {
-        TRIETAB_INIT(hibase->mtable);
+        TRIETAB_INIT(hibase->mdb);
         TRIETAB_INIT(hibase->mtemplate);
         TRIETAB_INIT(hibase->mpnode);
         MUTEX_INIT(hibase->mutex);
         hibase->set_basedir         = hibase_set_basedir;
-        hibase->table_exists        = hibase_table_exists;
+        hibase->db_uid_exists       = hibase_db_uid_exists;
         hibase->add_table           = hibase_add_table;
         hibase->get_table           = hibase_get_table;
-        hibase->update_table        = hibase_update_table;
+        hibase->rename_table        = hibase_rename_table;
         hibase->delete_table        = hibase_delete_table;
+        hibase->view_table          = hibase_view_table;
+        hibase->list_table          = hibase_list_table;
+        hibase->add_field           = hibase_add_field;
+        hibase->update_field        = hibase_update_field;
+        hibase->delete_field        = hibase_delete_field;
         hibase->template_exists     = hibase_template_exists;
         hibase->add_template        = hibase_add_template;
         hibase->get_template        = hibase_get_template;
@@ -864,7 +1080,10 @@ int main(int argc, char **argv)
     HIBASE *hibase = NULL;
     ITABLE *tab = NULL, table = {0};
     ITEMPLATE *temp = NULL, template = {0};
-    int i = 0, j = 0, rand = 0, x = 0, n = 0, table_num = 92;
+    int i = 0, j = 0, rand = 0, x = 0, n = 0, 
+        tabid = 0, fieldid = 0, type = 0, 
+        flag = 0, table_num = 92;
+    char name[TABLE_NAME_MAX], block[HI_BUF_SIZE];
 
     if((hibase = hibase_init()))
     {
@@ -873,55 +1092,26 @@ int main(int argc, char **argv)
         //add table
         for(i = 0; i < table_num; i++)
         {
-            memset(&table, 0, sizeof(ITABLE));
-            sprintf(table.name, "table_%d", i);
-            rand = random() % FIELD_NUM_MAX;
-            for(j = 0; j < rand; j++)
+            sprintf(name, "table_%d", i);
+            if((tabid = hibase_add_table(hibase, name)) > 0)
             {
-                sprintf(table.fields[j].name, "field_%d", j);
-                x = j % 3;
-                if(x == 0 ) table.fields[j].data_type = FTYPE_INT;
-                else if (x == 1) table.fields[j].data_type = FTYPE_FLOAT;
-                else  table.fields[j].data_type = FTYPE_TEXT;
+                rand = random() % FIELD_NUM_MAX;
+                for(j = 0; j < rand; j++)
+                {
+                    sprintf(name, "field_%d", j);
+                    x = j % 3;
+                    if(x == 0 )type = FTYPE_INT;
+                    else if (x == 1) type = FTYPE_FLOAT;
+                    else  type = FTYPE_TEXT;
+                    flag = F_IS_NULL;
+                    if(j % 2) flag |= F_IS_INDEX; 
+                    fieldid = hibase_add_field(hibase, tabid, name, type, flag);
+                    fprintf(stdout, "add field[%d][%s] to table[%d]\n", fieldid, name, tabid);
+                }
             }
-            table.nfields = rand;
-            hibase->add_table(hibase, &table);
         }
-        if(hibase->add_table(hibase, &table) == -1)
-        {
-            fprintf(stdout, "add table[%s] failed\n", table.name);
-        }
-        hibase_list_table(hibase, stdout);
+        hibase_list_table(hibase, block);
         //update
-        x = random() % table_num;
-        hibase->get_table(hibase, x, NULL, &table);
-        n = (random() % FIELD_NUM_MAX) + 1;
-        fprintf(stdout, "updated table[%d] nfields[%d to %d]\n", x, table.nfields, n);
-        table.nfields =  n;
-        hibase->update_table(hibase, x, &table);
-        x = random() % table_num;
-        sprintf(table.name, "table_%d", x);
-        hibase->get_table(hibase, -1, table.name, &table);
-        n = (random() % FIELD_NUM_MAX) + 1;
-        fprintf(stdout, "updated table_%d nfields[%d to %d]\n", x, table.nfields, n);
-        table.nfields =  n;
-        hibase->update_table(hibase, -1, &table);
-        hibase_list_table(hibase, stdout);
-        //delete 
-        x = random() % table_num;
-        hibase->get_table(hibase, x, NULL, &table);
-        n = (random() % FIELD_NUM_MAX) + 1;
-        fprintf(stdout, "deleted table[%d] nfields[%d to %d]\n", x, table.nfields, n);
-        table.nfields =  n;
-        hibase->delete_table(hibase, x, NULL);
-        x = random() % table_num;
-        sprintf(table.name, "table_%d", x);
-        hibase->get_table(hibase, -1, table.name, &table);
-        n = (random() % FIELD_NUM_MAX) + 1;
-        fprintf(stdout, "deleted table_%d nfields[%d to %d]\n", x, table.nfields, n);
-        table.nfields =  n;
-        hibase->delete_table(hibase, -1, table.name);
-        hibase_list_table(hibase, stdout);
 #endif
 #ifdef _DEBUG_PNODE
         //add pnode 

@@ -8,40 +8,42 @@ extern "C" {
 #define FTYPE_TEXT		        0x04
 #define FTYPE_ALL 		        (FTYPE_INT|FTYPE_FLOAT|FTYPE_TEXT)	
 #define FIELD_NUM_MAX		    256
+#define HI_INDEX_MAX		    32
 #define PATTERN_NUM_MAX         8
 #define FIELD_NAME_MAX		    32
 #define TABLE_NAME_MAX		    32
+#define F_IS_INDEX              0x01
+#define F_IS_NULL               0x02
 #define TEMPLATE_NAME_MAX	    32
 #define HIBASE_PATH_MAX		    256
 #define HI_BUF_SIZE             65536
 #define REGX_SIZE_MAX		    4096
-#define F_IS_LINK               0x01
-#define F_IS_IMAGE              0x02
-#define F_IS_MULTI              0x04
-#define F_IS_INDEX              0x08
 #define TABLE_INCRE_NUM         256
 #define TEMPLATE_INCRE_NUM      10000
 #define PNODE_INCRE_NUM         10000
 #define PNODE_CHILDS_MAX        10000
 #define TAB_STATUS_ERR          -1
+#define TAB_STATUS_INIT         0
 #define TAB_STATUS_OK           1
+#define FIELD_STATUS_INIT       0
+#define FIELD_STATUS_OK         1
 #define TEMP_STATUS_ERR         -1
 #define TEMP_STATUS_OK          1
 /* field */
-typedef struct _IFILED
+typedef struct _IFIELD
 {
-    short  data_type;
-    short  template_id;
-    int    flag;
-    int    off;
-    int    len;
-    char   name[FIELD_NAME_MAX];
+    short   status;
+    short   type;
+    int     flag;
+    int     uid;
+    char    name[FIELD_NAME_MAX];
 }IFIELD;
 /* table */
 typedef struct _ITABLE
 {
     short   status;
     short   nfields;
+    int     uid;
     char    name[TABLE_NAME_MAX];
     IFIELD  fields[FIELD_NUM_MAX];
 }ITABLE;
@@ -105,7 +107,8 @@ typedef struct _HIO
 /* hibase */
 typedef struct _HIBASE
 {
-    void    *mtable;
+    void    *mdb;
+    int     db_uid_max;
     void    *mtemplate;
     void    *mpnode;
     HIO     tableio;
@@ -119,17 +122,24 @@ typedef struct _HIBASE
     char    basedir[HIBASE_PATH_MAX];
 
     int 	(*set_basedir)(struct _HIBASE *, char *dir);
-    int     (*table_exists)(struct _HIBASE *, char *name, int len);
-    int 	(*add_table)(struct _HIBASE *, ITABLE *tab);
-    int	    (*get_table)(struct _HIBASE *, int table_id, char *table_name, ITABLE *table);
-    int 	(*update_table)(struct _HIBASE *, int table_id, ITABLE *tab);
-    int 	(*delete_table)(struct _HIBASE *, int table_id, char *table_name);
+    int     (*db_uid_exists)(struct _HIBASE *, int table_id, char *name, int len);
+    int 	(*add_table)(struct _HIBASE *, char *name);
+    int	    (*get_table)(struct _HIBASE *, int table_id, ITABLE *table);
+    int 	(*rename_table)(struct _HIBASE *, int table_id, char *table_name);
+    int 	(*delete_table)(struct _HIBASE *, int table_id);
+    int	    (*view_table)(struct _HIBASE *, int table_id, char *block);
+    int 	(*list_table)(struct _HIBASE *, char *block);
+    int     (*add_field)(struct _HIBASE *, int table_id, 
+            char *name, int type, int flag);
+    int     (*update_field)(struct _HIBASE *, int table_id, int field_id, 
+            char *name, int type, int is_index);
+    int     (*delete_field)(struct _HIBASE *, int table_id, int field_id);
     int     (*template_exists)(struct _HIBASE *, char *name, int len);
     int 	(*add_template)(struct _HIBASE *, ITEMPLATE *);
     int 	(*get_template)(struct _HIBASE *, int template_id, char *template_name, ITEMPLATE *);
     int 	(*update_template)(struct _HIBASE *, int template_id, ITEMPLATE *);
     int 	(*delete_template)(struct _HIBASE *, int template_id, char *template_name);
-    int     (*pnode_exists)(struct _HIBASE *, char *name, int name_len);
+    int     (*pnode_exists)(struct _HIBASE *, int parent, char *name, int name_len);
     int     (*add_pnode)(struct _HIBASE *, int parent, char *name);
     int     (*get_pnode)(struct _HIBASE *, int id, PNODE *pnode);
     int     (*get_pnode_childs)(struct _HIBASE *, int id, PNODE *pnodes);
