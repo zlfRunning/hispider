@@ -379,6 +379,7 @@ int hibase_add_field(HIBASE *hibase, int tableid, char *name, int type, int flag
                     tab[tableid].fields[i].uid    = uid;
                     memcpy(tab[tableid].fields[i].name, name, n);
                     tab[tableid].nfields++;
+                    id = i;
                     break;
                 }
             }
@@ -482,7 +483,7 @@ int hibase_view_table(HIBASE *hibase, int tableid, char *block)
 {
     int ret = -1, i = 0;
     ITABLE *tab = NULL;
-    char *p =  NULL;
+    char *p =  NULL, *pp = NULL;
 
     if(hibase && tableid >= 0 && tableid < hibase->tableio.total && block)
     {
@@ -492,24 +493,17 @@ int hibase_view_table(HIBASE *hibase, int tableid, char *block)
             p = block;
             p += sprintf(p, "({name:'%s', nfields:'%d', fields:[", 
                     tab[tableid].name, tab[tableid].nfields);
-            for(i = 0; i < tab[tableid].nfields; i++)
+            pp = p;
+            for(i = 0; i < FIELD_NUM_MAX; i++)
             {
                 if(tab[tableid].fields[i].status == FIELD_STATUS_OK)
                 {
-                    if(i < (tab[tableid].nfields - 1))
-                    {
-                        p += sprintf(p, "{name:'%s', type:'%d', flag:'%d'},",
-                                tab[tableid].fields[i].name, tab[tableid].fields[i].type,
-                                tab[tableid].fields[i].flag);
-                    }
-                    else
-                    {
-                        p += sprintf(p, "{name:'%s', type:'%d', flag:'%d'}",
-                                tab[tableid].fields[i].name, tab[tableid].fields[i].type,
-                                tab[tableid].fields[i].flag);
-                    }
+                    p += sprintf(p, "{name:'%s', type:'%d', flag:'%d'},",
+                            tab[tableid].fields[i].name, tab[tableid].fields[i].type,
+                            tab[tableid].fields[i].flag);
                 }
             }
+            if(p != pp) --p;
             p += sprintf(p, "%s", "]})");
             ret = (p - block);
         }
@@ -523,7 +517,7 @@ int hibase_list_table(HIBASE *hibase, char *block)
 {
     int ret = -1, i = 0, j = 0;
     ITABLE *tab = NULL;
-    char *p =  NULL;
+    char *p =  NULL, *pp = NULL;
 
     if(hibase && block)
     {
@@ -532,18 +526,19 @@ int hibase_list_table(HIBASE *hibase, char *block)
         {
             p = block;
             p += sprintf(p, "%s","([");
+            pp = p;
             for(i = 0; i < hibase->tableio.total; i++)
             {
                 if(tab[i].status == TAB_STATUS_OK)
-                {
-                    if(i < (tab[i].nfields - 1))
-                        p += sprintf(p, "{name:'%s', nfields:'%d'},", tab[i].name, tab[i].nfields);
-                    else
-                        p += sprintf(p, "{name:'%s', nfields:'%d'}", tab[i].name, tab[i].nfields);
-                }
+                    p += sprintf(p, "{name:'%s', nfields:'%d'},", tab[i].name, tab[i].nfields);
             }
-            p += sprintf(p, "%s", "])");
-            ret = (p - block);
+            if(p == pp) ret = 0;
+            else
+            {
+                --p;
+                p += sprintf(p, "%s", "])");
+                ret = (p - block);
+            }
         }
         MUTEX_UNLOCK(hibase->mutex);
     }
@@ -1082,7 +1077,7 @@ int main(int argc, char **argv)
     ITEMPLATE *temp = NULL, template = {0};
     int i = 0, j = 0, rand = 0, x = 0, n = 0, 
         tabid = 0, fieldid = 0, type = 0, 
-        flag = 0, table_num = 92;
+        flag = 0, table_num = 13;
     char name[TABLE_NAME_MAX], block[HI_BUF_SIZE];
 
     if((hibase = hibase_init()))
@@ -1093,7 +1088,7 @@ int main(int argc, char **argv)
         for(i = 0; i < table_num; i++)
         {
             sprintf(name, "table_%d", i);
-            if((tabid = hibase_add_table(hibase, name)) > 0)
+            if((tabid = hibase_add_table(hibase, name)) >= 0)
             {
                 rand = random() % FIELD_NUM_MAX;
                 for(j = 0; j < rand; j++)
@@ -1105,12 +1100,37 @@ int main(int argc, char **argv)
                     else  type = FTYPE_TEXT;
                     flag = F_IS_NULL;
                     if(j % 2) flag |= F_IS_INDEX; 
-                    fieldid = hibase_add_field(hibase, tabid, name, type, flag);
-                    fprintf(stdout, "add field[%d][%s] to table[%d]\n", fieldid, name, tabid);
+                    if((fieldid = hibase_add_field(hibase, tabid, name, type, flag)) > 0)
+                    {
+                        if((j % 9))
+                        {
+                            if(j % 5)flag = 0;
+                            sprintf(name, "field[%d][%d]", i, j);
+                            fieldid = hibase_update_field(hibase, tabid, fieldid, name, type, flag);
+                        }
+                        if((j % 10))
+                        {
+                            fieldid = hibase_delete_field(hibase, tabid, fieldid);
+                        }
+                    }
+                }
+                if(i % 2)
+                {
+                    sprintf(name, "table[%d]", i);
+                    hibase_rename_table(hibase, tabid, name);
+                }
+                memset(block, 0, HI_BUF_SIZE);
+                hibase_view_table(hibase, tabid, block);
+                fprintf(stdout, "%s\n", block); 
+                if(i % 5)
+                {
+                    hibase_delete_table(hibase, tabid);
                 }
             }
         }
+        memset(block, 0, HI_BUF_SIZE);
         hibase_list_table(hibase, block);
+        fprintf(stdout, "%s\n", block);
         //update
 #endif
 #ifdef _DEBUG_PNODE
