@@ -503,18 +503,11 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         if(parentid >= 0 && name)
                         {
                             if((id = hibase->add_pnode(hibase, parentid, name)) > 0
-                                && (n = hibase->view_pnode_childs(hibase, parentid, block)) > 0)
+                                    && (n = hibase->view_pnode_childs(hibase, parentid, block)) > 0)
                             {
                                 conn->push_chunk(conn, block, n);
                                 goto end;
                             }else goto err_end;
-                            /*
-                            n = sprintf(buf, "%d\r\n", id);
-                            n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
-                                    "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", n, id);
-                            conn->push_chunk(conn, buf, n);
-                            goto end;
-                            */
                         }
                         else goto err_end;
                         break;
@@ -619,6 +612,45 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                             }else goto err_end;
                         }else goto err_end;
                         break;
+                    case E_OP_TABLE_LIST:
+                        if((n = hibase->list_table(hibase, block)) > 0)
+                        {
+                            conn->push_chunk(conn, block, n);
+                            goto end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_FIELD_ADD:
+                        if(tableid >= 0 && name && type > 0 && (id = hibase->add_field(hibase, 
+                                        tableid, name, type, flag)) >= 0)
+                        {
+                            if((n = hibase->view_table(hibase, tableid, block)) > 0)
+                            {
+                                conn->push_chunk(conn, block, n);
+                                goto end;
+                            }else goto err_end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_FIELD_UPDATE:
+                        if(tableid >= 0 && fieldid >= 0 && (name || type > 0 || flag > 0))
+                        {
+                            id = hibase->update_field(hibase, tableid, fieldid, name, type, flag);
+                            n = sprintf(buf, "%d\r\n", id);
+                            n = sprintf(buf, "http/1.0 200\r\ncontent-type:text/html\r\n"
+                                    "content-length:%d\r\nconnection:close\r\n\r\n%d\r\n", n, id);
+                            conn->push_chunk(conn, buf, n);
+                            goto end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_FIELD_DELETE:
+                        if(tableid >= 0 && fieldid >= 0)
+                        {
+                            id = hibase->delete_field(hibase, tableid, fieldid);
+                            n = sprintf(buf, "%d\r\n", id);
+                            n = sprintf(buf, "http/1.0 200\r\ncontent-type:text/html\r\n"
+                                    "content-length:%d\r\nconnection:close\r\n\r\n%d\r\n", n, id);
+                            conn->push_chunk(conn, buf, n);
+                            goto end;
+                        }else goto err_end;
                     default:
                         goto err_end;
                         break;
