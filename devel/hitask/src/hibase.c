@@ -357,7 +357,8 @@ int hibase_delete_table(HIBASE *hibase, int tableid)
     if(hibase && hibase->mdb && tableid >= 0 && tableid < hibase->tableio.total)
     {
         MUTEX_LOCK(hibase->mutex);
-        if((tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1)
+        if((tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1
+                && tab[tableid].status == TAB_STATUS_OK)
         {
             memset(&(tab[tableid]), 0, sizeof(ITABLE));
             hibase->tableio.left++;
@@ -379,7 +380,6 @@ int hibase_add_field(HIBASE *hibase, int tableid, char *name, int type, int flag
             && (n = strlen(name)) > 0 && n < FIELD_NAME_MAX && (type & FTYPE_ALL) 
             && (uid = hibase_db_uid_exists(hibase, tableid, name, n)) > 0)
     {
-        fprintf(stdout, "uid:%d name:%s tabid:%d type:%d flag:%d\n", uid, name, tableid, type, flag);
         MUTEX_LOCK(hibase->mutex);
         if((tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1
                 && tab[tableid].nfields < FIELD_NUM_MAX)
@@ -411,7 +411,7 @@ int hibase_update_field(HIBASE *hibase, int tableid, int fieldid,
         char *name, int type, int flag)
 {
     int from = 0, to = 0, i = 0, n = 0, id = -1, uid = -1, 
-        isindex = 0, is_need_move = 0;
+        isindex = 0, is_need_move = 0, old_is_index = 0;
     ITABLE *tab = NULL;
 
     if(hibase && tableid >= 0 && tableid < hibase->tableio.total 
@@ -423,14 +423,16 @@ int hibase_update_field(HIBASE *hibase, int tableid, int fieldid,
             return -1;
         }
         MUTEX_LOCK(hibase->mutex);
-        if((tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1)
+        if((tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1
+            && tab[tableid].fields[fieldid].status == FIELD_STATUS_OK)
         {
             isindex = (flag & F_IS_INDEX);
-            if(isindex > 0 && (tab[tableid].fields[fieldid].flag & F_IS_INDEX) == 0)
+            old_is_index = (tab[tableid].fields[fieldid].flag & F_IS_INDEX);
+            if(isindex > 0 && old_is_index == 0)
             {
-                is_need_move = 1; from = 0; to = FIELD_NUM_MAX;
+                is_need_move = 1; from = 0; to = HI_INDEX_MAX;
             }
-            else if(isindex == 0 && (tab[tableid].fields[fieldid].flag & F_IS_INDEX) > 0)
+            else if(isindex == 0 && old_is_index > 0)
             {
                 is_need_move = 1; from = HI_INDEX_MAX; to = FIELD_NUM_MAX;
             }
@@ -442,7 +444,9 @@ int hibase_update_field(HIBASE *hibase, int tableid, int fieldid,
                     {
                         memcpy(&(tab[tableid].fields[i]), &(tab[tableid].fields[fieldid]), 
                                 sizeof(IFIELD));
-                        tab[tableid].fields[i].flag = flag;
+                        tab[tableid].fields[i].flag &= ~F_IS_INDEX;
+                        tab[tableid].fields[i].flag |= flag;
+
                         if(type > 0) tab[tableid].fields[i].type   = type;
                         if(uid > 0)
                         {
@@ -500,7 +504,7 @@ int hibase_view_table(HIBASE *hibase, int tableid, char *block)
 {
     int ret = -1, i = 0;
     ITABLE *tab = NULL;
-    char *p =  NULL, *pp = NULL;
+    char buf[HI_BUF_SIZE], *p =  NULL, *pp = NULL;
 
     if(hibase && tableid >= 0 && tableid < hibase->tableio.total && block)
     {
@@ -508,22 +512,23 @@ int hibase_view_table(HIBASE *hibase, int tableid, char *block)
         if((tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1
             && tab[tableid].status == TAB_STATUS_OK)
         {
-            p = block;
-            p += sprintf(p, "({name:'%s', nfields:'%d', fields:[", 
-                    tab[tableid].name, tab[tableid].nfields);
+            p = buf;
+            p += sprintf(p, "({id:'%d', name:'%s', nfields:'%d', fields:[", 
+                    tableid, tab[tableid].name, tab[tableid].nfields);
             pp = p;
             for(i = 0; i < FIELD_NUM_MAX; i++)
             {
                 if(tab[tableid].fields[i].status == FIELD_STATUS_OK)
                 {
-                    p += sprintf(p, "{name:'%s', type:'%d', flag:'%d'},",
-                            tab[tableid].fields[i].name, tab[tableid].fields[i].type,
-                            tab[tableid].fields[i].flag);
+                    p += sprintf(p, "{id:'%d', name:'%s', type:'%d', flag:'%d', status:'%d'},",
+                            i, tab[tableid].fields[i].name, tab[tableid].fields[i].type,
+                            tab[tableid].fields[i].flag, tab[tableid].fields[i].status);
                 }
             }
             if(p != pp) --p;
             p += sprintf(p, "%s", "]})");
-            ret = (p - block);
+            ret = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
+                "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (p - buf), buf);
         }
         MUTEX_UNLOCK(hibase->mutex);
     }
@@ -535,27 +540,29 @@ int hibase_list_table(HIBASE *hibase, char *block)
 {
     int ret = -1, i = 0;
     ITABLE *tab = NULL;
-    char *p =  NULL, *pp = NULL;
+    char buf[HI_BUF_SIZE], *p =  NULL, *pp = NULL;
 
     if(hibase && block)
     {
         MUTEX_LOCK(hibase->mutex);
         if((tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1)
         {
-            p = block;
-            p += sprintf(p, "%s","([");
+            p = buf;
+            p += sprintf(p, "%s","({tables:[");
             pp = p;
             for(i = 0; i < hibase->tableio.total; i++)
             {
                 if(tab[i].status == TAB_STATUS_OK)
-                    p += sprintf(p, "{name:'%s', nfields:'%d'},", tab[i].name, tab[i].nfields);
+                    p += sprintf(p, "{id:'%d', name:'%s', nfields:'%d'},", 
+                            i, tab[i].name, tab[i].nfields);
             }
             if(p == pp) ret = 0;
             else
             {
                 --p;
-                p += sprintf(p, "%s", "])");
-                ret = (p - block);
+                p += sprintf(p, "%s", "]})");
+                ret = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
+                "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (p - buf), buf);
             }
         }
         MUTEX_UNLOCK(hibase->mutex);

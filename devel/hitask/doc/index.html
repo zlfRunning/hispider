@@ -3,12 +3,24 @@
         <title>Hitask Monitor</title>
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
         <style>
-            body{margin:0px;}
-            #taskinfo{position:absolute;background-color:#000000; color:red;
-                border:1px solid #81BEF7; padding:10px;left:0px;top:0px;height:160px;}
+            body{
+                background-color:#ffffff;
+                margin:auto;
+                width:1200px;
+                height:675px;}
+            #itab {height:50px; top:100px;left:100px;}
+            #itab ul{margin:0;padding:0;list-style:none;color:#2F5FA1;}
+            #itab li{float:left;background:#F4FBFF;border-right:1px solid #FFF;
+                padding:3px 8px 3px 8px;cursor: pointer;width:100px;}
+            #itab .tab-selected{background:#D0E9F7;padding:0;margin:0;
+                padding:3px 8px 3px 8px;}
+            #taskinfo{position:absolute;background-color:#000000; color:red;display:none;
+                border:1px solid #81BEF7; padding:10px;left:100px;top:100px;height:160px;}
             .ktask{font-size:12pt;font-weight:bold;}
             .vtask{font-size:12pt;font-weight:bold;}
-            #treebody{position:absolute;background-color:#ffffff;
+            #database{position:absolute;background-color:#ffffff;display:none;
+                border:1px solid #81BEF7; padding:1px;left:100px;top:200px;width:500px;}
+            #treebody{position:absolute;background-color:#ffffff;display:none;
                 border:1px solid #81BEF7; padding:1px;left:10px;top:200px;}
             .formdiv{position:absolute;width:200px;background-color:#ffffff;
                 border:1px solid #81BEF7;padding:10px;overflow:auto;display:none;}
@@ -441,13 +453,196 @@
                     xmlHttp.send(argv);
                 }
             }
+            function ViewDB(txt)
+            {
+                var db = eval(txt);
+                if(db && db['tables'].length > 0)
+                {
+                    var tabid = 0;
+                    var tabname = "";
+                    var htmlstr = "<select name='tab' onchange='ViewTable(this)'>";
+                    htmlstr += "<option value=-1 selected>TableList</option>";
+                    for(i = 0; i < db['tables'].length; i++)
+                    {
+                        tabid = db['tables'][i]['id'];
+                        tabname = db['tables'][i]['name'];
+                        htmlstr += "<option value='"+tabid+"'>"+tabname+"</option>";
+                    }
+                    htmlstr += "</select>";
+                    var odb = document.getElementById('dbselect');
+                    odb.innerHTML = htmlstr;
+                }
+            }
+            function AddTable(form)
+            {
+                var tabname = form['tabname'].value;
+                var xmlHttp = null;
+                if(tabname && (xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    var argv = "op=table_add&name="+tabname;
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                ViewDB(xmlHttp.responseText);
+                                form['tabname'].value = '';
+                            }
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+                return true;
+            }
+            //List Table Fields
+            function ViewFields(txt)
+            {
+                var tab = eval(txt);
+                if(tab)
+                {
+                    var htmlstr = "<form action='javascript:void(0)' ";
+                    htmlstr += " onsubmit='return EditTable(this);'>";
+                    htmlstr += "<input type=hidden name='tabid' value='"+tab['id']+"' >";
+                    htmlstr += "<input type=txt name='tabname' value='"+tab['name']+"' >";
+                    htmlstr += "<input type=submit name='rename' value='rename' >";
+                    htmlstr += "<input type=submit name='delete' value='delete'>";
+                    htmlstr += "</form>";
+                    var odbfields = document.getElementById('dbfields');
+                    odbfields.innerHTML = htmlstr;
+                }
+            }
+            //List/View Fields
+            function ViewTable(oselect)
+            {
+                var tabid = -1;
+                var xmlHttp = null;
+
+                if(oselect && (tabid = oselect.value) >= 0
+                    && (xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    var argv = "op=table_view&tableid="+tabid;
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                ViewFields(xmlHttp.responseText);
+                            }
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+            }
+            //List Tables
+            function ListTables()
+            {
+                var xmlHttp = null;
+                if((xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    var argv = "op=table_list";
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                ViewDB(xmlHttp.responseText);
+                            }
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+            }
+            //database
+            function selectView(div, e)
+            {
+                var elist = new Array('taskinfo','database', 'treebody', 'dns', 'proxy');
+                e = e || window.event;
+                var element = e.target || e.srcElement;
+                var oli = null, ob = null, odiv = null;
+                for(i = 0; i < elist.length; i++)
+                {
+                    if((oli = document.getElementById('tab'+i)))
+                    {
+                        if(oli == element)
+                            oli.className = 'tab-selected';
+                        else 
+                            oli.className = '';
+                    }
+                    if(div == elist[i])
+                    {
+                        ob = document.getElementById(elist[i]);
+                        ob.style.display = 'inline';
+                    }
+                    else
+                    {
+                        odiv = document.getElementById(elist[i]);
+                        odiv.style.display = 'none';
+                    }
+                }
+                if(div == 'database')
+                {
+                    var odb = document.getElementById('dbselect');
+                    if(odb.innerHTML == '')
+                    {
+                        ListTables();
+                    }
+                }
+                else if(div == 'treebody' && ob.innerHTML == '')
+                {
+                        AddNode(-1,0,"Root",0);
+                        Fold(document.getElementById('fold_0'));
+                }
+                else if(div == 'dns' && ob.innerHTML == '')
+                {
+                        
+                }
+                else if(div == 'proxy' && ob.innerHTML == '')
+                {
+                }
+            }
+            function loadInit()
+            {
+                var otaskinfo = document.getElementById('taskinfo');
+                otaskinfo.style.display = 'inline';
+                ViewTask('task_view');
+                window.setInterval("ViewTask('task_view')", 10000);
+            }
         </script>
     </head>
-    <body>
+    <body onload='javascript:loadInit();'>
+    <div id='itab'>
+        <ul>
+        <li class='tab-selected' id='tab0' onclick="selectView('taskinfo',event)" >Task</li>
+        <li id='tab1' onclick="selectView('database',event)" >DataBase</li>
+        <li id='tab2' onclick="selectView('treebody', event)" >TreeNode</li>
+        <li id='tab3' onclick="selectView('dns', event)" >DNS</li>
+        <li id='tab4' onclick="selectView('proxy', event)" >Proxy</li>
+        <div class="cleard"></div>
+        </ul>
+    </div>
     <div id='taskinfo'></div>
-    <div id='database'></div>
+    <div id='database'>
+        <form name='dbform' action='javascript:void(0);' onsubmit="return AddTable(this);">
+        <input name='tabname' type=text size=16 >
+        <input type=submit value='add'>&nbsp;&nbsp;&nbsp;
+        <span id='dbselect'></span>
+        </form>
+        <span id='dbfields'></span>
+    </div>
+    <div id='dns'></div>
     <div id='proxy'></div>
-    <div id='template'>
     <div id='treebody' level='0'></div>
     <div id='txtform' class='formdiv'>
         <form name="editorform" action="javascript:void(0)" onsubmit="return EditNode(this);"> 
@@ -459,12 +654,9 @@
             &nbsp;&nbsp;<span class='formclose' onclick="CloseForm(this)">x</span>
         </form>
     </div>
-    </div>
     <script language='javascript'>
-    AddNode(-1,0,"Root",0);
-    Fold(document.getElementById('fold_0'));
-    ViewTask('task_view');
-    window.setInterval("ViewTask('task_view')", 10000);
+    //ViewTask('task_view');
+    //window.setInterval("ViewTask('task_view')", 10000);
     /*
     var levels = 0;
     function addnodes(pid)
