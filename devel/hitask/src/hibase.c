@@ -444,9 +444,6 @@ int hibase_update_field(HIBASE *hibase, int tableid, int fieldid,
                     {
                         memcpy(&(tab[tableid].fields[i]), &(tab[tableid].fields[fieldid]), 
                                 sizeof(IFIELD));
-                        tab[tableid].fields[i].flag &= ~F_IS_INDEX;
-                        tab[tableid].fields[i].flag |= flag;
-
                         if(type > 0) tab[tableid].fields[i].type   = type;
                         if(uid > 0)
                         {
@@ -468,6 +465,11 @@ int hibase_update_field(HIBASE *hibase, int tableid, int fieldid,
                     memcpy(tab[tableid].fields[fieldid].name, name, n);
                 }
                 id = fieldid;
+            }
+            if(id >= 0 && flag >= 0)
+            {
+                tab[tableid].fields[id].flag = (tab[tableid].fields[id].flag & flag);
+                tab[tableid].fields[id].flag |= flag;
             }
         }
         MUTEX_UNLOCK(hibase->mutex);

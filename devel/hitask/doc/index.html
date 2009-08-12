@@ -19,7 +19,13 @@
             .ktask{font-size:12pt;font-weight:bold;}
             .vtask{font-size:12pt;font-weight:bold;}
             #database{position:absolute;background-color:#ffffff;display:none;
-                border:1px solid #81BEF7; padding:1px;left:100px;top:200px;width:500px;}
+                border:1px solid #81BEF7; padding:1px;left:100px;top:200px;}
+            .ultab{list-style:none;padding:0;margin:0;}
+            .ltabname{cursor: pointer;}
+            .ltab{background:#F4FBFF;cursor: pointer;}
+            .ltab-selected{background:#D0E9F7;cursor: pointer;}
+            #dbfieldform{position:absolute;width:500px;background-color:#ffffff;
+                border:1px solid #81BEF7;padding:10px;overflow:auto;display:none;}
             #treebody{position:absolute;background-color:#ffffff;display:none;
                 border:1px solid #81BEF7; padding:1px;left:10px;top:200px;}
             .formdiv{position:absolute;width:200px;background-color:#ffffff;
@@ -338,7 +344,7 @@
                 var oNode = document.getElementById("node"+nodeid);
                 var name = null;
                 if(nodeid > 0 && oNode != null && (name = oNode.getAttribute('UName'))
-                    && confirm('Really delete node:'+nodeid+' name:'+name+' ?') 
+                    && confirm('Are you sure delete node:'+nodeid+' name:'+name+' ?') 
                     && (xmlHttp = CreateXMLHTTP()) != null)
                 {
                     var argv = "op=node_delete&nodeid="+nodeid;
@@ -453,6 +459,14 @@
                     xmlHttp.send(argv);
                 }
             }
+            function selectTab(element)
+            {
+                element.className = 'ltab-selected';
+            }
+            function outTab(element)
+            {
+                element.className = 'ltab';
+            }
             function ViewDB(txt)
             {
                 var db = eval(txt);
@@ -460,15 +474,24 @@
                 {
                     var tabid = 0;
                     var tabname = "";
-                    var htmlstr = "<select name='tab' onchange='ViewTable(this)'>";
-                    htmlstr += "<option value=-1 selected>TableList</option>";
+                    var htmlstr = "<ul class='ultab'>";
                     for(i = 0; i < db['tables'].length; i++)
                     {
                         tabid = db['tables'][i]['id'];
                         tabname = db['tables'][i]['name'];
-                        htmlstr += "<option value='"+tabid+"'>"+tabname+"</option>";
+                        htmlstr += "<li class='ltab' onmousemove='selectTab(this)' ";
+                        htmlstr += " onmouseout='outTab(this)' >";
+                        htmlstr += "<span class='ltabname' onclick='ViewTable("+tabid+")'>";
+                        htmlstr += tabname+"</span>";
+                        htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
+                        htmlstr += "<span class='eupdate' title='Rename' ";
+                        htmlstr += "onclick=\"DBXEdit(event,"+tabid+", '"+tabname+"')\">✎</span>";
+                        htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
+                        htmlstr += "<span class='edelete' title='Delete' ";
+                        htmlstr += "onclick=\"DeleteTable("+tabid+", '"+tabname+"')\">✘</span>";
+                        htmlstr += "</li>";
                     }
-                    htmlstr += "</select>";
+                    htmlstr += "</ul>";
                     var odb = document.getElementById('dbselect');
                     odb.innerHTML = htmlstr;
                 }
@@ -498,31 +521,73 @@
                 }
                 return true;
             }
+            function DeleteTable(tabid, tabname)
+            {
+                if(confirm("Are you sure delete tabble:"+tabname+" ?") 
+                    && (xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    var argv = "op=table_delete&tableid="+tabid;
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                ViewDB(xmlHttp.responseText);
+                            }
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+                return true;
+            }
             //List Table Fields
             function ViewFields(txt)
             {
                 var tab = eval(txt);
                 if(tab)
                 {
-                    var htmlstr = "<form action='javascript:void(0)' ";
-                    htmlstr += " onsubmit='return EditTable(this);'>";
-                    htmlstr += "<input type=hidden name='tabid' value='"+tab['id']+"' >";
-                    htmlstr += "<input type=txt name='tabname' value='"+tab['name']+"' >";
-                    htmlstr += "<input type=submit name='rename' value='rename' >";
-                    htmlstr += "<input type=submit name='delete' value='delete'>";
-                    htmlstr += "</form>";
+                    var tabid = tab['id'];
+                    var tabname = tab['name'];
+                    var fid = null;
+                    var fname = null;
+                    var ftype = null;
+                    var flag = null;
+                    htmlstr =  "<ul class='ultab' >";
+                    htmlstr += "<span class='ltabname'>"+tabname+"["+tab['nfields']+"]</span>";
+                    htmlstr += "<span class='eadd' title='Click Add New Field' ";
+                    htmlstr += "onclick=\"DBFXAdd(event, '"+tabid+"')\">✚</span>";
+                    for(i = 0; i < tab['nfields']; i++)
+                    {
+                        fid = tab['fields'][i]['id'];
+                        fname = tab['fields'][i]['name'];
+                        ftype = tab['fields'][i]['type'];
+                        flag = tab['fields'][i]['flag'];
+                        htmlstr += "<li><span class='lfield' >"+fname+"</span>";
+                        htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
+                        htmlstr += "<span class='eupdate' title='Change' ";
+                        htmlstr += "onclick=\"DBFXEdit(event, "+tabid+","+fid+",";
+                        htmlstr += "'"+fname+"', "+ftype+", "+flag+")\">✎</span>";
+                        htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
+                        htmlstr += "<span class='edelete' title='Delete' ";
+                        htmlstr += "onclick=\"DeleteField("+tabid+","+fid+",";
+                        htmlstr += "'"+tabname+"', '"+fname+"')\">✘</span>";
+                        htmlstr += "</li>";
+                    }
+                    htmlstr += "</ul>";
                     var odbfields = document.getElementById('dbfields');
                     odbfields.innerHTML = htmlstr;
                 }
             }
             //List/View Fields
-            function ViewTable(oselect)
+            function ViewTable(tabid)
             {
-                var tabid = -1;
                 var xmlHttp = null;
 
-                if(oselect && (tabid = oselect.value) >= 0
-                    && (xmlHttp = CreateXMLHTTP()) != null)
+                if(tabid >= 0 && (xmlHttp = CreateXMLHTTP()) != null)
                 {
                     var argv = "op=table_view&tableid="+tabid;
                     xmlHttp.open('POST', '/', true);
@@ -564,6 +629,217 @@
                     xmlHttp.send(argv);
                 }
             }
+            function HiddenDBform()
+            {
+                var div = document.getElementById('dbform');
+                div.style.display = 'none';
+                return true;
+            }
+            function DBXAdd(e)
+            {
+                e = e || window.event;
+                var element = e.target || e.srcElement;
+                var Xdiv =  document.getElementById("dbform");
+                var x = e.clientX + document.body.scrollLeft;
+                var y = e.clientY + document.body.scrollTop;
+                Xdiv.style.left = x - 50;
+                Xdiv.style.top = y + 10;
+                Xdiv.style.display = 'inline';
+                var form = document.forms["xdbform"];
+                form['op'].value = 'table_add';
+                form['tableid'].value = '';
+                form['name'].focus();
+                form['name'].value = '';
+            }
+            function DBXEdit(e, id, name)
+            {
+                e = e || window.event;
+                var element = e.target || e.srcElement;
+                var Xdiv =  document.getElementById("dbform");
+                var x = e.clientX + document.body.scrollLeft;
+                var y = e.clientY + document.body.scrollTop;
+                Xdiv.style.left = x - 50;
+                Xdiv.style.top = y + 10;
+                Xdiv.style.display = 'inline';
+                var form = document.forms["xdbform"];
+                form['op'].value = 'table_rename';
+                form['tableid'].value = id;
+                form['name'].focus();
+                form['name'].value = name;
+            }
+            function EditDB(form)
+            {
+                if(form == null) return;
+                var argv = null;
+                var op = form['op'].value;
+                var tableid = form['tableid'].value;
+                var name = form['name'].value;
+                if(op == 'table_add' && name)
+                {
+                    argv = "op=table_add&name="+name;
+                }
+                else if(op == 'table_rename' && tableid >= 0 && name)
+                {
+                    argv = "op=table_rename&tableid="+tableid+"&name="+name;
+                }
+                else if(op == 'table_delete' && tableid >= 0)
+                {
+                    argv = "op=table_delete&tableid="+tableid;
+                }
+                var xmlHttp = null;
+                if(argv && (xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                ViewDB(xmlHttp.responseText);
+                            }
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+                return HiddenDBform();
+            }
+            function DBFXAdd(e, tabid)
+            {
+                e = e || window.event;
+                var element = e.target || e.srcElement;
+                var Xdiv =  document.getElementById("dbfieldform");
+                var x = e.clientX + document.body.scrollLeft;
+                var y = e.clientY + document.body.scrollTop;
+                Xdiv.style.left = x - 50;
+                Xdiv.style.top = y + 10;
+                Xdiv.style.display = 'inline';
+                var form = document.forms["dbfieldform"];
+                form['op'].value = 'field_add';
+                form['tableid'].value = tabid;
+                form['fieldid'].value = '';
+                form['oldname'].value = '';
+                form['type'].value = '';
+                form['flag'].value = '';
+                form['is_index'].checked = false;
+                form['is_null'].checked = false;
+                form['name'].focus();
+                form['name'].value = '';
+            }
+            function DBFXEdit(e, tabid, fieldid, fname, ftype, flag)
+            {
+                e = e || window.event;
+                var element = e.target || e.srcElement;
+                var Xdiv =  document.getElementById("dbfieldform");
+                var x = e.clientX + document.body.scrollLeft;
+                var y = e.clientY + document.body.scrollTop;
+                Xdiv.style.left = x - 50;
+                Xdiv.style.top = y + 10;
+                Xdiv.style.display = 'inline';
+                var form = document.forms["dbfieldform"];
+                form['op'].value = 'field_update';
+                form['tableid'].value = tabid;
+                form['fieldid'].value = fieldid;
+                form['oldname'].value = fname;
+                form['type'].value = ftype;
+                form['flag'].value = flag;
+                form['is_index'].checked = false;
+                form['is_null'].checked = false;
+                for(i = 0; i < form['ftype'].options.length; i++)
+                {
+                    if(form['ftype'].options[i].value == ftype)
+                        form['ftype'].options[i].selected = true;
+                    else 
+                        form['ftype'].options[i].selected = false;
+                }
+                if(flag & 1) form['is_index'].checked = true;
+                if(flag & 2) form['is_null'].checked = true;
+                form['name'].focus();
+                form['name'].value = fname;
+            }
+            function HiddenDBFieldform()
+            {
+                var div = document.getElementById('dbfieldform');
+                div.style.display = 'none';
+                return true;
+            }
+            function EditField(form)
+            {
+                if(form == null) return;
+                var argv = null;
+                var op = form['op'].value;
+                var tableid = form['tableid'].value;
+                var fieldid = form['fieldid'].value;
+                var fname = form['name'].value;
+                var ftype = form['ftype'].value;
+                var oldname = form['oldname'].value;
+                var oldtype = form['type'].value;
+                var oldflag = form['flag'].value;
+                var flag = 0;
+                if(op == 'field_add' && tableid >= 0 && fname && ftype > 0)
+                {
+                    argv = "op=field_add&tableid="+tableid+"&name="+fname+"&type="+ftype;
+                    if(form['is_index'].checked == true) flag |= 1;
+                    if(form['is_null'].checked == true) flag |= 2;
+                    if(flag > 0) argv += "&flag="+flag;
+                }
+                else if(op == 'field_update' && tableid >= 0 && fieldid >= 0) 
+                {
+                    var eargv = "";
+                    if(fname != oldname && fname) eargv += "&name="+fname;
+                    if(form['is_index'].checked == true) flag |= 1;
+                    if(form['is_null'].checked == true) flag |= 2;
+                    if(ftype != oldtype) eargv += "&type="+ftype;
+                    if(flag != oldflag) eargv += "&flag="+flag;
+                    if(eargv)
+                        argv = "op=field_update&tableid="+tableid+"&fieldid="+fieldid+eargv;
+                }
+                var xmlHttp = null;
+                if(argv && (xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                ViewFields(xmlHttp.responseText);
+                            }
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+                return HiddenDBFieldform();
+            }
+            function DeleteField(tabid, fieldid, tabname, fieldname)
+            {
+                if(confirm("Are you sure delete Table:"+tabname+" Field:"+fieldname+"?") 
+                    && (xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    var argv = "op=field_delete&tableid="+tabid+"&fieldid="+fieldid;
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                ViewFields(xmlHttp.responseText);
+                            }
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+                return true;
+            }
+
             //database
             function selectView(div, e)
             {
@@ -634,12 +910,9 @@
     </div>
     <div id='taskinfo'></div>
     <div id='database'>
-        <form name='dbform' action='javascript:void(0);' onsubmit="return AddTable(this);">
-        <input name='tabname' type=text size=16 >
-        <input type=submit value='add'>&nbsp;&nbsp;&nbsp;
-        <span id='dbselect'></span>
-        </form>
-        <span id='dbfields'></span>
+        <span class='eadd' title='Add' onclick='DBXAdd(event)'>✚</span>
+        <div id='dbselect'></div>
+        <div id='dbfields'></div>
     </div>
     <div id='dns'></div>
     <div id='proxy'></div>
@@ -654,6 +927,38 @@
             &nbsp;&nbsp;<span class='formclose' onclick="CloseForm(this)">x</span>
         </form>
     </div>
+    <div id='dbform' class='formdiv'>
+        <form name="xdbform" action="javascript:void(0)" onsubmit="return EditDB(this);"> 
+            <input type=hidden name='op' value='table_add' >
+            <input type=hidden name='tableid' value='0' >
+            <input type='text' name='name' class='txtinput' size=16>
+            <input type=submit value='ok' class='submit' >
+            &nbsp;&nbsp;<span class='formclose' onclick="CloseForm(this)">x</span>
+        </form>
+    </div>
+    <div id='dbfieldform' class='formdiv'>
+        <form name="dbfieldform" action="javascript:void(0)" onsubmit="return EditField(this);"> 
+            <input type=hidden name='op' value='table_add' >
+            <input type=hidden name='tableid' value='' >
+            <input type=hidden name='fieldid' value='' >
+            <input type=hidden name='oldname' value='' >
+            <input type=hidden name='type' value='' >
+            <input type=hidden name='flag' value='' >
+            Name:<input type='text' name='name' class='txtinput' size=16>
+            &nbsp;&nbsp;
+            Type:<select name='ftype' >
+                <option value='1'>INT</option>
+                <option value='2'>Double</option>
+                <option value='4' selected>Text</option>
+            </select>
+            &nbsp;&nbsp;
+            <input type=checkbox name='is_index' value=1 >Index
+            <input type=checkbox name='is_null' value=4 >Null
+            <input type=submit value='ok' class='submit' >
+            &nbsp;&nbsp;<span class='formclose' onclick="CloseForm(this)">x</span>
+        </form>
+    </div>
+
     <script language='javascript'>
     //ViewTask('task_view');
     //window.setInterval("ViewTask('task_view')", 10000);
