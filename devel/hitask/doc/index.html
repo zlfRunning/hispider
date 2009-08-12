@@ -4,30 +4,46 @@
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
         <style>
             body{
+                background:#000000;
+                color:#333;
+                font-family:verdana,tahoma;
+                font-size:12pt;
+                margin:auto;
+                width:1000px;
+                height:675px;
+            }
+            #mainframe
+            {
+                position:absolute;
                 background-color:#ffffff;
                 margin:auto;
-                width:1200px;
-                height:675px;}
-            #itab {height:50px; top:100px;left:100px;}
+                width:1000px;
+                height:675px;
+            }
+            #itab {position:absolute;background:#ffffff;height:50px; top:0px;left:0px;}
             #itab ul{margin:0;padding:0;list-style:none;color:#2F5FA1;}
-            #itab li{float:left;background:#F4FBFF;border-right:1px solid #FFF;
-                padding:3px 8px 3px 8px;cursor: pointer;width:100px;}
-            #itab .tab-selected{background:#D0E9F7;padding:0;margin:0;
-                padding:3px 8px 3px 8px;}
+            #itab li{float:left;background-color:#F4FBFF;border-right:1px solid #FFF;
+                padding:3px 8px 3px 8px;cursor: pointer;width:120px;height:30px;}
+            #itab .tab-selected{background-color:#D0E9F7;padding:0;margin:0;
+                padding:3px 8px 3px 8px;height:30px;}
             #taskinfo{position:absolute;background-color:#000000; color:red;display:none;
-                border:1px solid #81BEF7; padding:10px;left:100px;top:100px;height:160px;}
+                border:1px solid #81BEF7; padding:1px;top:36px;width:500px;}
             .ktask{font-size:12pt;font-weight:bold;}
             .vtask{font-size:12pt;font-weight:bold;}
             #database{position:absolute;background-color:#ffffff;display:none;
-                border:1px solid #81BEF7; padding:1px;left:100px;top:200px;}
+                border:1px solid #81BEF7; padding:0px;left:0px;top:36px;width:500px;}
+            #dbtitle{position:absolute;top:0px;left:0px;padding:0px;
+                background-color:#D0E9F7;height:20px;width:100%;}
+            #dbselect{position:absolute;top:20px;width:200px;}
             .ultab{list-style:none;padding:0;margin:0;}
             .ltabname{cursor: pointer;}
             .ltab{background:#F4FBFF;cursor: pointer;}
             .ltab-selected{background:#D0E9F7;cursor: pointer;}
-            #dbfieldform{position:absolute;width:500px;background-color:#ffffff;
-                border:1px solid #81BEF7;padding:10px;overflow:auto;display:none;}
+            #dbfields{position:absolute;left:200px;top:30px;}
+            #dbfieldform{position:absolute;width:450px;background-color:#ffffff;
+                border:1px solid #81BEF7;padding:0px;overflow:auto;display:none;}
             #treebody{position:absolute;background-color:#ffffff;display:none;
-                border:1px solid #81BEF7; padding:1px;left:10px;top:200px;}
+                border:1px solid #81BEF7; padding:1px;left:0px;top:36px;width:100%;}
             .formdiv{position:absolute;width:200px;background-color:#ffffff;
                 border:1px solid #81BEF7;padding:10px;overflow:auto;display:none;}
             .formclose{font-size:14pt;font-weight:100;color:silver;cursor:pointer;display:inline;}
@@ -642,10 +658,10 @@
             {
                 e = e || window.event;
                 var element = e.target || e.srcElement;
-                var Xdiv =  document.getElementById("dbform");
                 var x = e.clientX + document.body.scrollLeft;
                 var y = e.clientY + document.body.scrollTop;
-                Xdiv.style.left = x - 50;
+                var Xdiv =  document.getElementById("dbform");
+                Xdiv.style.left = x;
                 Xdiv.style.top = y + 10;
                 Xdiv.style.display = 'inline';
                 var form = document.forms["xdbform"];
@@ -901,6 +917,7 @@
         </script>
     </head>
     <body onload='javascript:loadInit();'>
+    <div id='mainframe'>
     <div id='itab'>
         <ul>
         <li class='tab-selected' id='tab0' onclick="selectView('taskinfo',event)" >Task</li>
@@ -913,7 +930,7 @@
     </div>
     <div id='taskinfo'></div>
     <div id='database'>
-        <span class='eadd' title='Add' onclick='DBXAdd(event)'>✚</span>
+        <div id='dbtitle'><span class='eadd' title='Add' onclick='DBXAdd(event)'>✚</span></div>
         <div id='dbselect'></div>
         <div id='dbfields'></div>
     </div>
@@ -961,7 +978,7 @@
             &nbsp;&nbsp;<span class='formclose' onclick="CloseForm(this)">x</span>
         </form>
     </div>
-
+    </div>
     <script language='javascript'>
     //ViewTask('task_view');
     //window.setInterval("ViewTask('task_view')", 10000);
