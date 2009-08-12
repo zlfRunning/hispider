@@ -495,7 +495,10 @@
                     var odb = document.getElementById('dbselect');
                     odb.innerHTML = htmlstr;
                 }
+                var odbf = document.getElementById('dbfields');
+                odbf.innerHTML = "";
             }
+
             function AddTable(form)
             {
                 var tabname = form['tabname'].value;
@@ -788,7 +791,7 @@
                 else if(op == 'field_update' && tableid >= 0 && fieldid >= 0) 
                 {
                     var eargv = "";
-                    if(fname != oldname && fname) eargv += "&name="+fname;
+                    if(fname && fname != oldname) eargv += "&name="+fname;
                     if(form['is_index'].checked == true) flag |= 1;
                     if(form['is_null'].checked == true) flag |= 2;
                     if(ftype != oldtype) eargv += "&type="+ftype;

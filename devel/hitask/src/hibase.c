@@ -337,6 +337,7 @@ int hibase_rename_table(HIBASE *hibase, int tableid, char *table_name)
             if(uid > 0)
             {
                 tab[tableid].uid = uid;
+                memset(tab[tableid].name, 0, TABLE_NAME_MAX);
                 memcpy(tab[tableid].name, table_name, n);
                 id = tableid;
                 //failed
@@ -445,11 +446,6 @@ int hibase_update_field(HIBASE *hibase, int tableid, int fieldid,
                         memcpy(&(tab[tableid].fields[i]), &(tab[tableid].fields[fieldid]), 
                                 sizeof(IFIELD));
                         if(type > 0) tab[tableid].fields[i].type   = type;
-                        if(uid > 0)
-                        {
-                            tab[tableid].fields[i].uid    = uid;
-                            memcpy(tab[tableid].fields[i].name, name, n);
-                        }
                         memset(&(tab[tableid].fields[fieldid]), 0, sizeof(IFIELD));
                         id = i;
                         break;
@@ -459,12 +455,13 @@ int hibase_update_field(HIBASE *hibase, int tableid, int fieldid,
             else
             {
                 if(type & FTYPE_ALL) tab[tableid].fields[fieldid].type = type;
-                if(uid > 0) 
-                {
-                    tab[tableid].fields[fieldid].uid  = uid;
-                    memcpy(tab[tableid].fields[fieldid].name, name, n);
-                }
                 id = fieldid;
+            }
+            if(id >= 0 && uid > 0)
+            {
+                tab[tableid].fields[id].uid    = uid;
+                memset(tab[tableid].fields[id].name, 0, FIELD_NAME_MAX);
+                memcpy(tab[tableid].fields[id].name, name, n);
             }
             if(id >= 0 && flag >= 0)
             {
