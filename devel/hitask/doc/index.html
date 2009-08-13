@@ -26,30 +26,40 @@
                 padding:3px 8px 3px 8px;cursor: pointer;width:120px;height:30px;}
             #itab .tab-selected{background-color:#D0E9F7;padding:0;margin:0;
                 padding:3px 8px 3px 8px;height:30px;}
-            #taskinfo{position:absolute;background-color:#000000; color:red;display:none;
-                border:1px solid #81BEF7; padding:1px;top:36px;width:500px;}
+            #taskinfo{position:absolute;background-color:#F4FBFF; color:#2F5FA1;display:none;
+                border:1px solid #81BEF7; padding:0px;top:36px;height:220px;width:998px;}
             .ktask{font-size:12pt;font-weight:bold;}
             .vtask{font-size:12pt;font-weight:bold;}
             #database{position:absolute;background-color:#ffffff;display:none;
-                border:1px solid #81BEF7; padding:0px;left:0px;top:36px;width:500px;}
+                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:100%;}
             #dbtitle{position:absolute;top:0px;left:0px;padding:0px;
-                background-color:#D0E9F7;height:20px;width:100%;}
-            #dbselect{position:absolute;top:20px;width:200px;}
+                background-color:#D0E9F7;height:20px;width:200px;color:#2F5FA1;}
+            #dbselect{position:absolute;top:20px;width:200px;height:613px;
+                background-color:#D0E9F7;border:0px solid #ffffff;color:#2F5FA1;}
             .ultab{list-style:none;padding:0;margin:0;}
-            .ltabname{cursor: pointer;}
-            .ltab{background:#F4FBFF;cursor: pointer;}
-            .ltab-selected{background:#D0E9F7;cursor: pointer;}
-            #dbfields{position:absolute;left:200px;top:30px;}
-            #dbfieldform{position:absolute;width:450px;background-color:#ffffff;
-                border:1px solid #81BEF7;padding:0px;overflow:auto;display:none;}
-            #treebody{position:absolute;background-color:#ffffff;display:none;
-                border:1px solid #81BEF7; padding:1px;left:0px;top:36px;width:100%;}
-            .formdiv{position:absolute;width:200px;background-color:#ffffff;
-                border:1px solid #81BEF7;padding:10px;overflow:auto;display:none;}
-            .formclose{font-size:14pt;font-weight:100;color:silver;cursor:pointer;display:inline;}
+            .ltabname{cursor: pointer;font-size:12pt; }
+            .ltab{background-color:#D0E9F7;cursor: pointer;}
+            .ltab-selected{background-color:#F4FBFF;cursor: pointer;}
+            #dbfields{position:absolute;background-color:#D0E9F7;color:#2F5FA1;
+                left:200px;top:0px;width:798px;}
+            .lfname{cursor: pointer;}
+            .lfield{background-color:#F4FBFF;cursor: pointer;}
+            .lfield-selected{background-color:#D0E9F7;cursor: pointer;}
+            #dbfieldform{position:absolute;width:600px;background-color:#ffffff;
+                border:1px solid #81BEF7;padding:0px;font-size:12pt;color:#2F5FA1;
+                overflow:auto;display:none;}
+            #template{position:absolute;top:36px;left:0px;}
+            #treebody{position:absolute;background-color:#ffffff;display:none;width:998px;
+                border:1px solid #81BEF7; padding:0px;left:0px;top:0px;color:#2F5FA1;}
             .treeline{border:0px;font-size:12pt;font-weight:bold;color:#BDBDBD;}
             .title{border:0px;font-size:12pt;background-color:#ffffff;color:#000000;}
             .btitle{border:0px;font-size:12pt;background-color:#F2F2F2;}
+            .formdiv{position:absolute;width:200px;background-color:#ffffff;
+                border:1px solid #81BEF7;padding:10px;overflow:auto;display:none;}
+            #templateform{position:absolute;width:600px;height:500px;background-color:#ffffff;
+                border:1px solid #81BEF7;padding:0px;font-size:12pt;color:#2F5FA1;
+                overflow:auto;display:none;}
+            .formclose{font-size:14pt;font-weight:100;color:silver;cursor:pointer;display:inline;}
             .node
             {
                 overflow:hidden;
@@ -196,6 +206,7 @@
                 htmlstr += "</div>\r\n";
                 oNode.innerHTML = htmlstr; 
                 oParent.appendChild(oNode);
+                return HiddenEditor();
             }
             function UpdateNode(id, name)
             {
@@ -209,6 +220,7 @@
                         oName.innerHTML = name;
                     }
                 }
+                return HiddenEditor();
             }
             function ListChilds(pid, url, argv)
             {
@@ -241,6 +253,7 @@
                     }
                     xmlHttp.send(argv);
                 }
+                return HiddenEditor();
             }
             //close form
             function CloseForm(element)
@@ -256,7 +269,7 @@
                 var Xdiv =  document.getElementById("txtform");
                 var x = e.clientX + document.body.scrollLeft;
                 var y = e.clientY + document.body.scrollTop;
-                Xdiv.style.left = x - 50;
+                Xdiv.style.left = x;
                 Xdiv.style.top = y + 10;
                 Xdiv.style.display = 'inline';
                 var form = document.forms["editorform"];
@@ -273,7 +286,7 @@
                 var Xdiv =  document.getElementById("txtform");
                 var x = e.clientX;
                 var y = e.clientY;
-                Xdiv.style.left = x - 50;
+                Xdiv.style.left = x;
                 Xdiv.style.top = y + 10;
                 Xdiv.style.display = 'inline';
                 var form = document.forms["editorform"];
@@ -390,6 +403,7 @@
                     }
                     xmlHttp.send(argv);
                 }
+                return HiddenEditor();
             }
             //fold node
             function Fold(element)
@@ -413,6 +427,7 @@
                     element.parentNode.parentNode.style.height = element.parentNode.offsetHeight;
                     if(nchilds > 0) element.innerHTML = '✚';
                 }
+                return HiddenEditor();
             }
             function ViewTask(op)
             {
@@ -482,6 +497,14 @@
             function outTab(element)
             {
                 element.className = 'ltab';
+            }
+            function selectField(element)
+            {
+                element.className = 'lfield-selected';
+            }
+            function outField(element)
+            {
+                element.className = 'lfield';
             }
             function ViewDB(txt)
             {
@@ -576,16 +599,25 @@
                     var ftype = null;
                     var flag = null;
                     htmlstr =  "<ul class='ultab' >";
-                    htmlstr += "<span class='ltabname'>"+tabname+"["+tab['nfields']+"]</span>";
-                    htmlstr += "<span class='eadd' title='Click Add New Field' ";
-                    htmlstr += "onclick=\"DBFXAdd(event, '"+tabid+"')\">✚</span>";
+                    htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
+                    htmlstr += "点击&nbsp;<span class='eadd' title='Click Add New Field' ";
+                    htmlstr += "onclick=\"DBFXAdd(event, '"+tabid+"')\">✚</span>&nbsp;添加字段";
+                    htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
+                    htmlstr += "<span class='ltabname'>"+tabname+"[";
+                    htmlstr += "<span class='nchilds'>"+tab['nfields']+"</span>";
+                    htmlstr += "]</span>";
                     for(i = 0; i < tab['nfields']; i++)
                     {
                         fid = tab['fields'][i]['id'];
                         fname = tab['fields'][i]['name'];
                         ftype = tab['fields'][i]['type'];
                         flag = tab['fields'][i]['flag'];
-                        htmlstr += "<li><span class='lfield' >"+fname+"</span>";
+                        htmlstr += "<li class='lfield' onmousemove='selectField(this)' "
+                        htmlstr += " onmouseout='outField(this);' >";
+                        htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
+                        htmlstr += "<span class='lfname' ";
+                        htmlstr += "onclick=\"DBFXEdit(event, "+tabid+","+fid+",";
+                        htmlstr += "'"+fname+"', "+ftype+", "+flag+")\">"+fname+"</span>";
                         htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
                         htmlstr += "<span class='eupdate' title='Change' ";
                         htmlstr += "onclick=\"DBFXEdit(event, "+tabid+","+fid+",";
@@ -677,7 +709,7 @@
                 var Xdiv =  document.getElementById("dbform");
                 var x = e.clientX + document.body.scrollLeft;
                 var y = e.clientY + document.body.scrollTop;
-                Xdiv.style.left = x - 50;
+                Xdiv.style.left = x;
                 Xdiv.style.top = y + 10;
                 Xdiv.style.display = 'inline';
                 var form = document.forms["xdbform"];
@@ -732,7 +764,7 @@
                 var Xdiv =  document.getElementById("dbfieldform");
                 var x = e.clientX + document.body.scrollLeft;
                 var y = e.clientY + document.body.scrollTop;
-                Xdiv.style.left = x - 50;
+                Xdiv.style.left = x;
                 Xdiv.style.top = y + 10;
                 Xdiv.style.display = 'inline';
                 var form = document.forms["dbfieldform"];
@@ -754,7 +786,7 @@
                 var Xdiv =  document.getElementById("dbfieldform");
                 var x = e.clientX + document.body.scrollLeft;
                 var y = e.clientY + document.body.scrollTop;
-                Xdiv.style.left = x - 50;
+                Xdiv.style.left = x;
                 Xdiv.style.top = y + 10;
                 Xdiv.style.display = 'inline';
                 var form = document.forms["dbfieldform"];
@@ -916,27 +948,35 @@
             }
         </script>
     </head>
-    <body onload='javascript:loadInit();'>
-    <div id='mainframe'>
+<body onload='javascript:loadInit();'>
+<div id='mainframe'>
+    <!--
+    !-->
     <div id='itab'>
         <ul>
-        <li class='tab-selected' id='tab0' onclick="selectView('taskinfo',event)" >Task</li>
-        <li id='tab1' onclick="selectView('database',event)" >DataBase</li>
-        <li id='tab2' onclick="selectView('treebody', event)" >TreeNode</li>
+        <li class='tab-selected' id='tab0' onclick="selectView('taskinfo',event)" >下载任务</li>
+        <li id='tab1' onclick="selectView('database',event)" >数据表</li>
+        <li id='tab2' onclick="selectView('treebody', event)" >抓取树</li>
         <li id='tab3' onclick="selectView('dns', event)" >DNS</li>
-        <li id='tab4' onclick="selectView('proxy', event)" >Proxy</li>
+        <li id='tab4' onclick="selectView('proxy', event)" >代理</li>
         <div class="cleard"></div>
         </ul>
     </div>
     <div id='taskinfo'></div>
     <div id='database'>
-        <div id='dbtitle'><span class='eadd' title='Add' onclick='DBXAdd(event)'>✚</span></div>
+        <div id='dbtitle'>点击
+            <span class='eadd' title='Add' onclick='DBXAdd(event)'>✚</span>
+        添加数据表
+        </div>
         <div id='dbselect'></div>
         <div id='dbfields'></div>
     </div>
     <div id='dns'></div>
     <div id='proxy'></div>
-    <div id='treebody' level='0'></div>
+    <div id='template'>
+        <div id='treebody' level='0'></div>
+    </div>
+</div>
     <div id='txtform' class='formdiv'>
         <form name="editorform" action="javascript:void(0)" onsubmit="return EditNode(this);"> 
             <input type=hidden name='op' value='node_add' >
@@ -956,7 +996,7 @@
             &nbsp;&nbsp;<span class='formclose' onclick="CloseForm(this)">x</span>
         </form>
     </div>
-    <div id='dbfieldform' class='formdiv'>
+    <div id='dbfieldform'>
         <form name="dbfieldform" action="javascript:void(0)" onsubmit="return EditField(this);"> 
             <input type=hidden name='op' value='table_add' >
             <input type=hidden name='tableid' value='' >
@@ -964,20 +1004,27 @@
             <input type=hidden name='oldname' value='' >
             <input type=hidden name='type' value='' >
             <input type=hidden name='flag' value='' >
-            Name:<input type='text' name='name' class='txtinput' size=16>
+            字段名:<input type='text' name='name' class='txtinput' size=16>
             &nbsp;&nbsp;
-            Type:<select name='ftype' >
+            类型:<select name='ftype' >
                 <option value='1'>INT</option>
                 <option value='2'>Double</option>
                 <option value='4' selected>Text</option>
             </select>
             &nbsp;&nbsp;
-            <input type=checkbox name='is_index' value=1 >Index
-            <input type=checkbox name='is_null' value=4 >Null
+            <input type=checkbox name='is_index' value=1 >是否索引
+            <input type=checkbox name='is_null' value=4 >是否为空
             <input type=submit value='ok' class='submit' >
             &nbsp;&nbsp;<span class='formclose' onclick="CloseForm(this)">x</span>
         </form>
     </div>
+    <div id='templateform'>
+        <form name="templateform" action="javascript:void(0)" onsubmit="return EditTemplate(this);"> 
+            <input type=hidden name='op' value='template_add' >
+            <input type=hidden name='nodeid' value='' >
+            <input type=hidden name='templateid' value='' >
+            <input type=hidden name='oldname' value='' >
+        </form>
     </div>
     <script language='javascript'>
     //ViewTask('task_view');
