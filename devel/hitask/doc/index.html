@@ -51,6 +51,8 @@
             #template{position:absolute;top:36px;left:0px;}
             #treebody{position:absolute;background-color:#ffffff;display:none;width:998px;
                 border:1px solid #81BEF7; padding:0px;left:0px;top:0px;color:#2F5FA1;}
+            #tempnode{position:absolute;background-color:#ffffff;display:inline;
+                border:1px solid #81BEF7;padding:0px;left:0px;top:400px;color:#2F5FA1;};
             .treeline{border:0px;font-size:12pt;font-weight:bold;color:#BDBDBD;}
             .title{border:0px;font-size:12pt;background-color:#ffffff;color:#000000;}
             .btitle{border:0px;font-size:12pt;background-color:#F2F2F2;}
@@ -946,7 +948,82 @@
                 ViewTask('task_view');
                 window.setInterval("ViewTask('task_view')", 10000);
             }
-        </script>
+            function GetContent(url)
+            {
+                var xmlHttp = null;
+                if(argv && (xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    xmlHttp.open('GET', url, true);
+                    //xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    //xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                alert(xmlHttp.responseText);
+                            }
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+                return HiddenDBFieldform();
+            }
+    function getFrameDocument(id)
+    {
+        var iframe = document.getElementById(id);
+        var Doc = null;
+        if(iframe.document)
+        {
+            Doc = iframe.document;
+        }
+        else if(iframe.contentDocument) // For NS6
+        {
+            Doc = iframe.contentDocument;
+        }
+        else if(iframe.contentWindow)
+        {
+            Doc = iframe.contentWindow.document;
+        }
+        if(Doc)
+        {
+            if(Doc.designMode) Doc.designMode = 'On';
+            if(Doc.contentEditable) Doc.contentEditable = true;
+        }
+        return Doc;
+    }
+    function getSource(id)
+    {
+        var Doc = getFrameDocument(id);
+        if(Doc)
+        {
+            var html = Doc.getElementsByTagName('html');
+            if(html)
+            alert(html[0].innerHTML);
+        }
+    }
+    function getSelectContent(id)
+    {
+        var Doc = getFrameDocument(id);
+        if(Doc)
+        {
+            alert(Doc.getSelection());
+        }
+    }
+    function LoadURL(form)
+    {
+        var url = form['url'].value;
+        var frame = document.getElementById('source_win');
+        var doc = null;
+        if(url && frame)
+        {
+            frame.top = frame;
+            frame.parent = frame;
+            frame.src = url;
+        }
+    }
+    </script>
     </head>
 <body onload='javascript:loadInit();'>
 <div id='mainframe'>
@@ -974,7 +1051,17 @@
     <div id='dns'></div>
     <div id='proxy'></div>
     <div id='template'>
-        <div id='treebody' level='0'></div>
+    <div id='treebody' level='0'></div>
+    <div id='tempnode'>
+    <form action='javascript:void(0);' onsubmit='return LoadURL(this);'>
+        URL:<input type=text size='18' name='url'>
+        <input type=submit value='ok'>
+    </form>
+    <iframe id='source_win' name='source_win' src='about:blank' width=800 height=500 ></iframe>
+    <br>
+    <a  href ="javascript:getSelectContent('source_win');">select</a>
+    <a  href ="javascript:getSource('source_win');">view</a>
+    </div>
     </div>
 </div>
     <div id='txtform' class='formdiv'>
