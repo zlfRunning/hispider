@@ -10,9 +10,10 @@
 #include "timer.h"
 #include "logger.h"
 #define  HIBASE_TABLE_NAME   		"hibase.table"
-#define  HIBASE_TEMPLATE_NAME 		"hibase.temp"
+#define  HIBASE_TEMPLATE_NAME 		"hibase.template"
 #define  HIBASE_PNODE_NAME 		    "hibase.pnode"
 #define  HIBASE_QPNODE_NAME 		"hibase.qpnode"
+#define  HIBASE_QTEMPLATE_NAME 		"hibase.qtemplate"
 #define _EXIT_(format...)                                                               \
 do                                                                                      \
 {                                                                                       \
@@ -145,19 +146,19 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
             }
         }
         //resume template 
+        sprintf(path, "%s%s", hibase->basedir, HIBASE_QTEMPLATE_NAME);
+        p = path;
+        FQUEUE_INIT(hibase->qtemplate, p, int);
         sprintf(path, "%s%s", hibase->basedir, HIBASE_TEMPLATE_NAME);	
         if((hibase->templateio.fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
         {
             _MMAP_(hibase->templateio, st, ITEMPLATE, TEMPLATE_INCRE_NUM); 
             template = (ITEMPLATE *)hibase->templateio.map;
             hibase->templateio.left = 0;
-            for(i = 0; i < hibase->templateio.total; i++)
+            for(i = 1; i < hibase->templateio.total; i++)
             {
-                if(template[i].status == TEMP_STATUS_OK && template[i].npatterns > 0 
-                        && (n = strlen(template[i].name)) > 0)
+                if(template[i].status == TEMPLATE_STATUS_OK)
                 {
-                    dp = (void *)((long)(i + 1));
-                    TRIETAB_ADD(hibase->mtemplate, template[i].name, n, dp);
                     hibase->templateio.current = i;
                 }
                 else hibase->templateio.left++;
@@ -569,169 +570,6 @@ int hibase_list_table(HIBASE *hibase, char *block)
     return ret;
 }
 
-/* check template exists */
-int hibase_template_exists(HIBASE *hibase, char *template_name, int len)
-{
-    void *dp = NULL;
-    int templateid = -1;
-
-    if(hibase && template_name && len > 0 && hibase->mtemplate)
-    {
-        MUTEX_LOCK(hibase->mutex);
-        TRIETAB_GET(hibase->mtemplate, template_name, len, dp);
-        templateid = ((long)dp - 1);
-        MUTEX_UNLOCK(hibase->mutex);
-    }
-    return templateid;
-}
-
-/* add template */
-int hibase_add_template(HIBASE *hibase, ITEMPLATE *template)
-{
-    int templateid = -1, i = 0, n = 0;
-    struct stat st = {0};
-    ITEMPLATE *temp = NULL;
-    void *dp = NULL;
-
-    if(hibase && template && (n = strlen(template->name))  > 0 
-            && (templateid = hibase_template_exists(hibase, template->name, n)) < 0)
-    {
-        MUTEX_LOCK(hibase->mutex);
-        if(hibase->templateio.left == 0)
-        {_MMAP_(hibase->templateio, st, ITEMPLATE, TEMPLATE_INCRE_NUM);}        
-        if(hibase->templateio.left > 0 && (temp = (ITEMPLATE *)hibase->templateio.map) 
-                && temp != (ITEMPLATE *)-1)
-        {
-            for(i = 0; i < hibase->templateio.total; i++)
-            {
-                if(temp[i].status != TEMP_STATUS_OK)
-                {
-                    template->status = TEMP_STATUS_OK;
-                    memcpy(&(temp[i]), template, sizeof(ITEMPLATE));
-                    templateid = i;
-                    dp = (void *)((long)(templateid + 1));
-                    TRIETAB_ADD(hibase->mtemplate, template->name, n, dp);
-                    hibase->templateio.left--;
-                    break;
-                }
-            }
-        }
-        MUTEX_UNLOCK(hibase->mutex);
-    }
-    else templateid = -1;
-    return templateid;
-}
-
-/* get template */
-int hibase_get_template(HIBASE *hibase, int templateid, char *template_name, ITEMPLATE *ptemplate)
-{
-    ITEMPLATE *temp = NULL;
-    int id = -1, n = 0;
-
-    if(hibase && hibase->mtemplate && ptemplate)
-    {
-        if(template_name && (n = strlen(template_name)) > 0) 
-            id = hibase_template_exists(hibase, template_name, n);
-        MUTEX_LOCK(hibase->mutex);
-        if(id < 0 && templateid >= 0 ) id = templateid;
-        if(id >= 0 && id < hibase->templateio.total 
-                && (temp = (ITEMPLATE *)(hibase->templateio.map)) 
-                && temp != (ITEMPLATE *)-1)
-        {
-            memcpy(ptemplate, &(temp[id]), sizeof(ITEMPLATE)); 
-        }
-        else id = -1;
-        MUTEX_UNLOCK(hibase->mutex);
-    }
-    return id;
-}
-
-/* update template */
-int hibase_update_template(HIBASE *hibase, int templateid, ITEMPLATE *ptemplate)
-{
-    char *template_name = NULL;
-    ITEMPLATE *temp = NULL;
-    int id = -1, n = 0;
-
-    if(hibase && hibase->mtemplate && ptemplate)
-    {
-        if((template_name = ptemplate->name) && (n = strlen(template_name)) > 0) 
-            id = hibase_template_exists(hibase, template_name, n);
-        MUTEX_LOCK(hibase->mutex);
-        if(id < 0 && templateid >= 0 ) id = templateid;
-        if(id >= 0 && id < hibase->templateio.total 
-                && (temp = (ITEMPLATE *)(hibase->templateio.map)) 
-                && temp != (ITEMPLATE *)-1)
-        {
-            memcpy(&(temp[id]), ptemplate, sizeof(ITEMPLATE)); 
-        }
-        else id = -1;
-        MUTEX_UNLOCK(hibase->mutex);
-    }
-    return id;
-}
-
-/* delete template */
-int hibase_delete_template(HIBASE *hibase, int templateid, char *template_name)
-{
-    ITEMPLATE *temp = NULL;
-    int id = -1, n = 0;
-    void *dp = NULL;
-
-    if(hibase && hibase->mtemplate)
-    {
-        if(template_name && (n = strlen(template_name)) > 0) 
-            id = hibase_template_exists(hibase, template_name, n);
-        MUTEX_LOCK(hibase->mutex);
-        if(id < 0 && templateid >= 0 ) id = templateid;
-        if(id >= 0 && id < hibase->templateio.total 
-                && (temp = (ITEMPLATE *)(hibase->templateio.map)) 
-                && temp != (ITEMPLATE *)-1)
-        {
-            n = strlen(temp[id].name);
-            TRIETAB_DEL(hibase->mtemplate, temp[id].name, n, dp);
-            temp[id].status = TEMP_STATUS_ERR;
-            hibase->templateio.left--;
-        }
-        else id = -1;
-        MUTEX_UNLOCK(hibase->mutex);
-    }
-    return id;
-}
-
-/* list templates */
-int hibase_list_template(HIBASE *hibase, FILE *fp)
-{
-    ITEMPLATE *temp = NULL;
-    int i = 0, j = 0, x = 0;
-
-    if(hibase && fp && hibase->templateio.total > 0 
-            && (temp = (ITEMPLATE *)(hibase->templateio.map)) 
-            && temp != (ITEMPLATE *)(-1))
-    {
-        for(i = 0; i < hibase->templateio.total; i++)
-        {
-            if(temp[i].status == TEMP_STATUS_OK && temp[i].npatterns > 0)
-            {
-                fprintf(fp, "id[%d] template[%s] npatterns[%d] \n{\n", 
-                        i, temp[i].name, temp[i].npatterns);
-                for(j = 0; j < temp[i].npatterns; j++)
-                {
-                    fprintf(fp, "\t/%s/",temp[i].patterns[j].text);
-                    x = 0;
-                    while(x < temp[i].patterns[j].nfields)  
-                        fprintf(fp, "table[%d] field[%d]; ", 
-                                temp[i].patterns[j].map[x].table_id, 
-                                temp[i].patterns[j].map[x].field_id);
-                    fprintf(fp, "\n");
-                }
-                fprintf(fp, "};\n");
-            }
-        }
-    }
-    return 0;
-}
-
 /* check pnode exists */
 int hibase_pnode_exists(HIBASE *hibase, int parentid, char *name, int len)
 {
@@ -1023,19 +861,190 @@ int hibase_list_pnode(HIBASE *hibase, int pnodeid, FILE *fp)
     return -1;
 }
 
+/* add template */
+int hibase_add_template(HIBASE *hibase, int pnodeid, ITEMPLATE *template)
+{
+    int templateid = -1, x = 0, *px = NULL;
+    ITEMPLATE *ptemplate = NULL;
+    struct stat st = {0};
+    PNODE *pnode = NULL;
+
+    if(hibase && pnodeid >= 0 && pnodeid < hibase->pnodeio.total)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if(hibase->templateio.left == 0)
+        {_MMAP_(hibase->templateio, st, ITEMPLATE, TEMPLATE_INCRE_NUM);}
+        px = &x;
+        if(FQUEUE_POP(hibase->qtemplate, int, px) == 0)
+            templateid = x;
+        else
+            templateid = ++(hibase->templateio.current);
+        if((pnode = (PNODE *)(hibase->pnodeio.map)) && pnode != (PNODE *)-1
+            && templateid >= 0 && templateid < hibase->templateio.total
+            && (ptemplate = (ITEMPLATE *)(hibase->templateio.map)) && ptemplate != (ITEMPLATE *)-1)
+        {
+            memcpy(&(ptemplate[templateid]), template, sizeof(ITEMPLATE));
+            ptemplate[templateid].status = TEMPLATE_STATUS_OK;
+            if(pnode[pnodeid].ntemplates == 0)
+            {
+                pnode[pnodeid].template_first = pnode[pnodeid].template_last = templateid;
+            }
+            else
+            {
+               x =  pnode[pnodeid].template_last;
+               ptemplate[x].next = templateid;
+               ptemplate[templateid].prev = x;
+            }
+            pnode[pnodeid].ntemplates++;
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return templateid;
+}
+
+/* get template */
+int hibase_get_template(HIBASE *hibase, int templateid, ITEMPLATE *template)
+{
+    ITEMPLATE *ptemplate = NULL;
+    int ret = -1;
+
+    if(hibase && templateid >= 0 && templateid < hibase->templateio.total)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if((ptemplate = (ITEMPLATE *)(hibase->templateio.map)) && ptemplate != (ITEMPLATE *)-1)
+        {
+            memcpy(template, &(ptemplate[templateid]), sizeof(ITEMPLATE));
+            ret = templateid;
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return ret;
+}
+
+/* update template */
+int hibase_update_template(HIBASE *hibase, int templateid, ITEMPLATE *template)
+{
+    ITEMPLATE *ptemplate = NULL;
+    int ret = -1;
+
+    if(hibase && templateid >= 0 && templateid < hibase->templateio.total)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if((ptemplate = (ITEMPLATE *)(hibase->templateio.map)) && ptemplate != (ITEMPLATE *)-1)
+        {
+            memcpy(&(ptemplate[templateid]), template, sizeof(ITEMPLATE));
+            ptemplate[templateid].status = TEMPLATE_STATUS_OK;
+            ret = templateid;
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return ret;
+}
+
+/* delete template */
+int hibase_delete_template(HIBASE *hibase, int pnodeid, int templateid)
+{
+    int ret = -1, x = 0, *px = NULL;
+    ITEMPLATE *ptemplate = NULL;
+    PNODE *pnode = NULL;
+
+    if(hibase && pnodeid >= 0 && pnodeid < hibase->pnodeio.total)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if((pnode = (PNODE *)(hibase->pnodeio.map)) && pnode != (PNODE *)-1
+            && templateid >= 0 && templateid < hibase->templateio.total
+            && (ptemplate = (ITEMPLATE *)(hibase->templateio.map)) && ptemplate != (ITEMPLATE *)-1)
+        {
+            if(ptemplate[templateid].prev > 0)
+            {
+                x = ptemplate[templateid].prev;
+                ptemplate[x].next = ptemplate[templateid].next;
+            }
+            if(ptemplate[templateid].next > 0)
+            {
+                x = ptemplate[templateid].next;
+                ptemplate[x].prev = ptemplate[templateid].prev;
+            }
+            if(pnode[pnodeid].template_first == templateid)
+                pnode[pnodeid].template_first = ptemplate[templateid].next;
+            if(pnode[pnodeid].template_last == templateid)
+                pnode[pnodeid].template_last = ptemplate[templateid].prev;
+            memset(&(ptemplate[templateid]), 0, sizeof(ITEMPLATE));
+            px = &templateid;
+            FQUEUE_PUSH(hibase->qtemplate, int, px);
+            pnode[pnodeid].ntemplates--;
+            ret = templateid;
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return ret;
+}
+
+/* view templates */
+int hibase_view_template(HIBASE *hibase, int pnodeid, char *block)
+{
+    ITEMPLATE *ptemplate = NULL;
+    PNODE *pnode = NULL;
+    int n = -1, x = 0, i = 0;
+    char *p = NULL, buf[HI_BUF_SIZE];
+
+    if(hibase && pnodeid >= 0 && pnodeid < hibase->pnodeio.total && block)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if((pnode = (PNODE *)(hibase->pnodeio.map)) && pnode != (PNODE *)-1
+            && pnode[pnodeid].ntemplates > 0
+            && (ptemplate = (ITEMPLATE *)(hibase->templateio.map)) 
+            && ptemplate != (ITEMPLATE *)-1)
+        {
+            p = buf;
+            p += sprintf(p, "({id:'%d', ntemplates:'%d', templates:[", 
+                    pnodeid, pnode[pnodeid].ntemplates);
+            if(pnode[pnodeid].ntemplates > 0)
+            {
+                x = pnode[pnodeid].template_first;
+                while(x > 0)
+                {
+                    p += sprintf(p, "{id:'%d', flags:'%d', pattern:'%s', nfields:'%d', map:[",
+                            x, ptemplate[x].flags, ptemplate[x].pattern, ptemplate[x].nfields);
+                    if(ptemplate[x].nfields > 0)
+                    {
+                        i = 0;
+                        while(i < ptemplate[x].nfields && ptemplate[x].nfields < FIELD_NUM_MAX)
+                        {
+                            p += sprintf(p, "{tableid:%d, fieldid:%d},", 
+                                    ptemplate[x].map[i].tableid, ptemplate[x].map[i].fieldid);
+                            i++;
+                        }
+                        --p;
+                    }
+                    p += sprintf(p, "%s","]},");
+                    x = ptemplate[x].next;
+                }
+                *--p = '\0';
+            }
+            p += sprintf(p, "%s", "]})");
+            n = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
+                "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (p - buf), buf);
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return n;
+}
+
+
+
 /* clean */
 void hibase_clean(HIBASE **phibase)
 {
     if(phibase && *phibase)
     {
         if((*phibase)->mdb) {TRIETAB_CLEAN((*phibase)->mdb);}
-        if((*phibase)->mtemplate) {TRIETAB_CLEAN((*phibase)->mtemplate);}
         if((*phibase)->mpnode) {TRIETAB_CLEAN((*phibase)->mpnode);}
         if((*phibase)->tableio.map && (*phibase)->tableio.size > 0)
         {
             _MUNMAP_((*phibase)->tableio.map, (*phibase)->tableio.size);
         }
-        if((*phibase)->tableio.map && (*phibase)->tableio.size > 0)
+        if((*phibase)->templateio.map && (*phibase)->templateio.size > 0)
         {
             _MUNMAP_((*phibase)->templateio.map, (*phibase)->templateio.size);
         }
@@ -1047,6 +1056,7 @@ void hibase_clean(HIBASE **phibase)
         if((*phibase)->templateio.fd > 0) close((*phibase)->templateio.fd);
         if((*phibase)->pnodeio.fd > 0) close((*phibase)->pnodeio.fd);
         if((*phibase)->qpnode){FQUEUE_CLEAN((*phibase)->qpnode);}
+        if((*phibase)->qtemplate){FQUEUE_CLEAN((*phibase)->qtemplate);}
         if((*phibase)->mutex){MUTEX_DESTROY((*phibase)->mutex);}
         free(*phibase);
         *phibase = NULL;
@@ -1062,7 +1072,6 @@ HIBASE * hibase_init()
     if((hibase = (HIBASE *)calloc(1, sizeof(HIBASE))))
     {
         TRIETAB_INIT(hibase->mdb);
-        TRIETAB_INIT(hibase->mtemplate);
         TRIETAB_INIT(hibase->mpnode);
         MUTEX_INIT(hibase->mutex);
         hibase->set_basedir         = hibase_set_basedir;
@@ -1076,17 +1085,17 @@ HIBASE * hibase_init()
         hibase->add_field           = hibase_add_field;
         hibase->update_field        = hibase_update_field;
         hibase->delete_field        = hibase_delete_field;
-        hibase->template_exists     = hibase_template_exists;
-        hibase->add_template        = hibase_add_template;
-        hibase->get_template        = hibase_get_template;
-        hibase->update_template     = hibase_update_template;
-        hibase->delete_template     = hibase_delete_template;
         hibase->add_pnode           = hibase_add_pnode;
         hibase->get_pnode           = hibase_get_pnode;
         hibase->get_pnode_childs    = hibase_get_pnode_childs;
         hibase->view_pnode_childs   = hibase_view_pnode_childs;
         hibase->update_pnode        = hibase_update_pnode;
         hibase->delete_pnode        = hibase_delete_pnode;
+        hibase->add_template       = hibase_add_template;
+        hibase->get_template        = hibase_get_template;
+        hibase->update_template     = hibase_update_template;
+        hibase->delete_template     = hibase_delete_template;
+        hibase->view_templates      = hibase_view_template;
         hibase->clean               = hibase_clean;
     }
     return hibase;

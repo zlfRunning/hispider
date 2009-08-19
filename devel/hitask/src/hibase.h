@@ -27,8 +27,8 @@ extern "C" {
 #define TAB_STATUS_OK           1
 #define FIELD_STATUS_INIT       0
 #define FIELD_STATUS_OK         1
-#define TEMP_STATUS_ERR         -1
-#define TEMP_STATUS_OK          1
+#define TEMPLATE_STATUS_ERR     -1
+#define TEMPLATE_STATUS_OK      1
 /* field */
 typedef struct _IFIELD
 {
@@ -62,36 +62,31 @@ typedef struct _PNODE
     int last;
     int prev;
     int next;
+    int ntemplates;
+    int template_first;
+    int template_last;
     char name[PNODE_NAME_MAX];
 }PNODE;
 typedef struct _IREGX
 {
-    short table_id;
-    short field_id;
-    short page_id;
-    short flag;
+    short tableid;
+    short fieldid;
 }IREGX;
 #define RP_IS_PUBLIC 0x01
 #define RP_IS_MULTI  0x02
 #define RP_IS_HTML   0x04
 #define RP_IS_IMAGE  0x08
 #define RP_IS_LINK   0x10
-/* regular expression */
-typedef struct _IPATTERN
-{
-    int   flags;
-    short status;
-    short nfields;
-    IREGX map[FIELD_NUM_MAX];
-    char  text[REGX_SIZE_MAX];
-}IPATTERN;
-/* template */
+/* template regular expression */
 typedef struct _ITEMPLATE
 {
     short status;
-    short npatterns;
-    IPATTERN patterns[PATTERN_NUM_MAX];
-    char  name[TEMPLATE_NAME_MAX];
+    short nfields;
+    IREGX map[FIELD_NUM_MAX];
+    char  pattern[REGX_SIZE_MAX];
+    int   flags;
+    int prev;
+    int next;
 }ITEMPLATE;
 /* hibase io/map */
 typedef struct _HIO
@@ -109,14 +104,15 @@ typedef struct _HIBASE
 {
     void    *mdb;
     int     db_uid_max;
-    void    *mtemplate;
     void    *mpnode;
     HIO     tableio;
-    HIO     templateio;
     HIO     pnodeio;
     void    *qpnode;
     int     pnode_childs_max;
     int     uid_max;
+    HIO     templateio;
+    void    *qtemplate;
+    int     template_id_max;
     void    *logger;
     void    *mutex;
     char    basedir[HIBASE_PATH_MAX];
@@ -134,11 +130,18 @@ typedef struct _HIBASE
     int     (*update_field)(struct _HIBASE *, int table_id, int field_id, 
             char *name, int type, int is_index);
     int     (*delete_field)(struct _HIBASE *, int table_id, int field_id);
+    int     (*add_template)(struct _HIBASE *, int pnodeid, ITEMPLATE *ptemplate);
+    int     (*get_template)(struct _HIBASE *, int templateid, ITEMPLATE *ptemplate);
+    int     (*update_template)(struct _HIBASE *, int templateid, ITEMPLATE *ptemplate);
+    int     (*delete_template)(struct _HIBASE *, int pnodeid, int templateid);
+    int     (*view_templates)(struct _HIBASE *, int pnodeid, char *block);
+    /*
     int     (*template_exists)(struct _HIBASE *, char *name, int len);
     int 	(*add_template)(struct _HIBASE *, ITEMPLATE *);
     int 	(*get_template)(struct _HIBASE *, int template_id, char *template_name, ITEMPLATE *);
     int 	(*update_template)(struct _HIBASE *, int template_id, ITEMPLATE *);
     int 	(*delete_template)(struct _HIBASE *, int template_id, char *template_name);
+    */
     int     (*pnode_exists)(struct _HIBASE *, int parent, char *name, int name_len);
     int     (*add_pnode)(struct _HIBASE *, int parent, char *name);
     int     (*get_pnode)(struct _HIBASE *, int id, PNODE *pnode);

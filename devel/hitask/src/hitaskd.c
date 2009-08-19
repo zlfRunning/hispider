@@ -92,10 +92,16 @@ static char *e_ops[]=
 #define E_OP_FIELD_ADD      14
     "field_update",
 #define E_OP_FIELD_UPDATE   15
-    "field_delete"
+    "field_delete",
 #define E_OP_FIELD_DELETE   16
+    "template_add",
+#define E_OP_TEMPLATE_ADD   17
+    "template_update",
+#define E_OP_TEMPLATE_UPDATE    18
+    "template_delete"
+#define E_OP_TEMPLATE_DELETE    19
 };
-#define E_OP_NUM 17
+#define E_OP_NUM 20
 /* dns packet reader */
 int adns_packet_reader(CONN *conn, CB_DATA *buffer)
 {
