@@ -58,7 +58,7 @@
             .btitle{border:0px;font-size:12pt;background-color:#F2F2F2;}
             .formdiv{position:absolute;width:200px;background-color:#ffffff;
                 border:1px solid #81BEF7;padding:10px;overflow:auto;display:none;}
-            #templateform{position:absolute;width:600px;height:500px;background-color:#ffffff;
+            #xtemplateform{position:absolute;width:600px;height:600px;background-color:#ffffff;
                 border:1px solid #81BEF7;padding:0px;font-size:12pt;color:#2F5FA1;
                 overflow:auto;display:none;}
             .formclose{font-size:14pt;font-weight:100;color:silver;cursor:pointer;display:inline;}
@@ -68,6 +68,14 @@
                 color:black;
                 font-size:12pt;
             }
+            .nodename
+            {
+                overflow:hidden;
+                color:black;
+                font-size:12pt;
+                cursor:pointer;
+            }
+
             .eadd
             {
                 color:#5FB404;
@@ -193,7 +201,8 @@
                 else
                     htmlstr += "<span id='fold_"+ id +"' class='icon' onclick='Fold(this)'>►</span>";
                 htmlstr += "&nbsp;&nbsp;";
-                htmlstr += "<span id='nd_"+id+"' class='nd_name'>"+name+"</span>";
+                htmlstr += "<span id='nd_"+id+"' class='nodename' ";
+                htmlstr += " onclick='ViewNodeTemplate(event, "+id+")' >"+name+"</span>";
                 htmlstr += "[<span id='ch_"+ id +"' class='nchilds' >"+count+"</span>]";
                 htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
                 htmlstr += "<span class='eadd' title='Add' ";
@@ -567,6 +576,7 @@
             }
             function DeleteTable(tabid, tabname)
             {
+                var xmlHttp = null;
                 if(confirm("Are you sure delete tabble:"+tabname+" ?") 
                     && (xmlHttp = CreateXMLHTTP()) != null)
                 {
@@ -580,6 +590,7 @@
                         {
                             if(xmlHttp.status == 200)
                             {
+                                //alert(xmlHttp.responseText);
                                 ViewDB(xmlHttp.responseText);
                             }
                         }
@@ -892,7 +903,52 @@
                 }
                 return true;
             }
+            //view node template
+            function ViewNodeTemplate(e, id)
+            {
+                e = e || window.event;
+                var element = e.target || e.srcElement;
+                var Xdiv =  document.getElementById("xtemplateform");
+                var x = e.clientX + document.body.scrollLeft;
+                var y = e.clientY + document.body.scrollTop;
+                Xdiv.style.left = x;
+                Xdiv.style.top = y + 10;
+                Xdiv.style.display = 'inline';
+                var form = document.forms["templateform"];
+                form['nodeid'].value = id;
+            }
+            //add template
+            function AddTemplate(form)
+            {
+                var pattern = form['pattern'].value;
+                var flag = 0;
+                if(form['is_public'].checked == true) flag |= 1;
+                var nfields = form['nfields'].value;
+                var map = null;
+                for(i = 0; i < nfields; i++)
+                {
 
+                }
+                var xmlHttp = null;
+                if(tabid >= 0 && (xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    var argv = "op=table_view&tableid="+tabid;
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                ViewFields(xmlHttp.responseText);
+                            }
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+            }
             //database
             function selectView(div, e)
             {
@@ -1052,16 +1108,6 @@
     <div id='proxy'></div>
     <div id='template'>
     <div id='treebody' level='0'></div>
-    <div id='tempnode'>
-    <form action='javascript:void(0);' onsubmit='return LoadURL(this);'>
-        URL:<input type=text size='18' name='url'>
-        <input type=submit value='ok'>
-    </form>
-    <iframe id='source_win' name='source_win' src='about:blank' width=800 height=500 ></iframe>
-    <br>
-    <a  href ="javascript:getSelectContent('source_win');">select</a>
-    <a  href ="javascript:getSource('source_win');">view</a>
-    </div>
     </div>
 </div>
     <div id='txtform' class='formdiv'>
@@ -1105,12 +1151,20 @@
             &nbsp;&nbsp;<span class='formclose' onclick="CloseForm(this)">x</span>
         </form>
     </div>
-    <div id='templateform'>
-        <form name="templateform" action="javascript:void(0)" onsubmit="return EditTemplate(this);"> 
-            <input type=hidden name='op' value='template_add' >
-            <input type=hidden name='nodeid' value='' >
-            <input type=hidden name='templateid' value='' >
-            <input type=hidden name='oldname' value='' >
+    <div id='xtemplateform'>
+    <form action='javascript:void(0);' onsubmit='return LoadURL(this);'>
+        URL:<input type=text size='32' name='url'>
+        <input type=submit value='ok'>
+    </form>
+    <iframe id='source_win' name='source_win' src='about:blank' width=400 height=400 ></iframe>
+    <br>
+    <a  href ="javascript:getSelectContent('source_win');">select</a>
+    <a  href ="javascript:getSource('source_win');">view</a>
+    <form name="templateform" action="javascript:void(0)" onsubmit="return EditTemplate(this);"> 
+        <input type=hidden name='op' value='template_add' >
+        <input type=hidden name='nodeid' value='' >
+        <input type=hidden name='templateid' value='' >
+    摸版:<textarea name='pattern'> </textarea>
         </form>
     </div>
     <script language='javascript'>
