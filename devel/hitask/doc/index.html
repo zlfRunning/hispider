@@ -58,7 +58,7 @@
             .btitle{border:0px;font-size:12pt;background-color:#F2F2F2;}
             .formdiv{position:absolute;width:200px;background-color:#ffffff;
                 border:1px solid #81BEF7;padding:10px;overflow:auto;display:none;}
-            #xtemplateform{position:absolute;width:600px;height:600px;background-color:#ffffff;
+            #xtemplateform{position:absolute;width:100%;height:600px;background-color:#ffffff;
                 border:1px solid #81BEF7;padding:0px;font-size:12pt;color:#2F5FA1;
                 overflow:auto;display:none;}
             .formclose{font-size:14pt;font-weight:100;color:silver;cursor:pointer;display:inline;}
@@ -916,6 +916,10 @@
                 Xdiv.style.display = 'inline';
                 var form = document.forms["templateform"];
                 form['nodeid'].value = id;
+                form['code'].value = '';
+                form['pattern'].value = '';
+                form = document.forms["urlform"];
+                form['url'].value = '';
             }
             //add template
             function AddTemplate(form)
@@ -1087,8 +1091,21 @@
                         {
                             if(xmlHttp.status == 200)
                             {
-                                doc.write(xmlHttp.responseText);
-                                //alert(xmlHttp.responseText);
+                                var str = xmlHttp.responseText;
+                                //var htmlhead = "<base href='"+url+"'></head>";
+                                //var htmlstr = str.replace(/<.*?\/head.*?>/ig,  htmlhead);
+                                //doc.write(htmlstr);
+                                doc.open();
+                                doc.write(str);
+                                doc.close();
+                                document.forms['templateform']['code'].value = str;
+                                // Create a new script node
+                                var element = document.createElement('base');
+                                // set the 'src' attribute of the element
+                                element.setAttribute('href', url);
+                                // insert the new node into the current document
+                                document.head.appendChild(element);
+                                //doc.innerHTML = str;
                             }
                         }
                     }
@@ -1170,11 +1187,11 @@
         </form>
     </div>
     <div id='xtemplateform'>
-    <form action='javascript:void(0);' onsubmit='return LoadURL(this);'>
+    <form action='javascript:void(0);' name='urlform' onsubmit='return LoadURL(this);'>
         URL:<input type=text size='32' name='url'>
         <input type=submit value='ok'>
     </form>
-    <iframe id='source_win' name='source_win' src='about:blank' width=400 height=400 ></iframe>
+    <iframe id='source_win' name='source_win' src='about:blank' width=600 height=400 ></iframe>
     <br>
     <a  href ="javascript:getSelectContent('source_win');">select</a>
     <a  href ="javascript:getSource('source_win');">view</a>
@@ -1182,7 +1199,8 @@
         <input type=hidden name='op' value='template_add' >
         <input type=hidden name='nodeid' value='' >
         <input type=hidden name='templateid' value='' >
-    摸版:<textarea name='pattern'> </textarea>
+        代码:<textarea name='code' rows=20 cols=80 > </textarea><br>
+    摸版:<textarea name='pattern' rows=10 cols=80> </textarea>
         </form>
     </div>
     <script language='javascript'>

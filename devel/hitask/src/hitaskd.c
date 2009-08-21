@@ -337,10 +337,10 @@ int http_proxy_handler(CONN *conn,  HTTP_REQ *http_req)
         {
             p = buf;
             p += sprintf(p, "GET /%s HTTP/1.0\r\n", path);
-            if((n = http_req->headers[HEAD_REQ_HOST]) == 0)
-                p += sprintf(p, "Host: %s\r\n", host);
+            if(host) p += sprintf(p, "Host: %s\r\n", host);
             for(i = 0; i < HTTP_HEADER_NUM; i++)
             {
+                if(HEAD_REQ_HOST == i && host) continue;
                 if((n = http_req->headers[i]) > 0 && (s = (http_req->hlines + n)))
                 {
                     p += sprintf(p, "%s %s\r\n", http_headers[i].e, s);
@@ -354,10 +354,10 @@ int http_proxy_handler(CONN *conn,  HTTP_REQ *http_req)
         {
             p = buf;
             p += sprintf(p, "POST /%s HTTP/1.0\r\n", path);
-            if((n = http_req->headers[HEAD_REQ_HOST]) == 0)
-                p += sprintf(p, "Host: %s\r\n", host);
+            if(host) p += sprintf(p, "Host: %s\r\n", host);
             for(i = 0; i < HTTP_HEADER_NUM; i++)
             {
+                if(HEAD_REQ_HOST == i && host) continue;
                 if((n = http_req->headers[i]) > 0 && (s = http_req->hlines + n))
                 {
                     p += sprintf(p, "%s %s\r\n", http_headers[i].e, s);
