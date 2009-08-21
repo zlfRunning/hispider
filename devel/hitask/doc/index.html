@@ -126,6 +126,13 @@
             {
                 obj.className = "title";
             }
+            function removeElement(_element)
+            {
+                var _parentElement = _element.parentNode;
+                if(_parentElement){
+                    _parentElement.removeChild(_element);  
+                }
+            }
             function CreateXMLHTTP()
             {
                 var xmlhttp = null;
@@ -914,6 +921,8 @@
                 Xdiv.style.left = x;
                 Xdiv.style.top = y + 10;
                 Xdiv.style.display = 'inline';
+                var doc = getFrameDocument('source_win');
+                if(doc) doc.removeChild(doc.firstChild);
                 var form = document.forms["templateform"];
                 form['nodeid'].value = id;
                 form['code'].value = '';
@@ -1079,6 +1088,7 @@
         var doc = getFrameDocument('source_win');
         if(url && frame && doc)
         {
+                doc.removeChild(doc.firstChild);
                 frame.top = frame;
                 frame.parent = frame;
                 var xmlHttp = null;
@@ -1093,19 +1103,16 @@
                             if(xmlHttp.status == 200)
                             {
                                 var str = xmlHttp.responseText;
-                                //var htmlhead = "<base href='"+url+"'></head>";
-                                //var htmlstr = str.replace(/<.*?\/head.*?>/ig,  htmlhead);
-                                //doc.write(htmlstr);
                                 doc.open();
                                 doc.write(str);
                                 doc.close();
                                 document.forms['templateform']['code'].value = str;
-                                // Create a new script node
-                                //var element = document.createElement('base');
-                                // set the 'src' attribute of the element
-                                //element.setAttribute('href', url);
-                                // insert the new node into the current document
-                                //document.head.appendChild(element);
+                                var baselink = document.getElementById('baselink');
+                                if(baselink) doc.removeChild(baselink);
+                                baselink = document.createElement("base");
+                                baselink.setAttribute("id", 'baselink');
+                                baselink.setAttribute("href", url);
+                                doc.appendChild(baselink);
                             }
                         }
                     }
