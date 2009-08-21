@@ -1071,17 +1071,35 @@
     {
         var url = form['url'].value;
         var frame = document.getElementById('source_win');
-        var doc = null;
-        if(url && frame)
+        var doc = getFrameDocument('source_win');
+        if(url && frame && doc)
         {
-            frame.top = frame;
-            frame.parent = frame;
-            frame.src = url;
+                frame.top = frame;
+                frame.parent = frame;
+                var xmlHttp = null;
+                if((xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    var requestURL = '/proxy/'+url;
+                    xmlHttp.open('GET', requestURL, true);
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                doc.write(xmlHttp.responseText);
+                                //alert(xmlHttp.responseText);
+                            }
+                        }
+                    }
+                    xmlHttp.send();
+                }
         }
     }
     </script>
     </head>
-<body onload='javascript:loadInit();'>
+    <!-- <body onload='javascript:loadInit();'> -->
+    <body>
 <div id='mainframe'>
     <!--
     !-->

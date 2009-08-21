@@ -22,17 +22,15 @@
 #define PROXY_TIMEOUT 1000000
 static char *httpd_home = NULL;
 static SBASE *sbase = NULL;
-static SERVICE *hitaskd = NULL, *histore = NULL, *adns = NULL, *hiproxy = NULL;
+static SERVICE *hitaskd = NULL, *histore = NULL, *adns = NULL;
 static dictionary *dict = NULL;
 static LTASK *ltask = NULL;
 static HIBASE *hibase = NULL;
-static void *hitaskd_logger = NULL, *histore_logger = NULL, 
-            *adns_logger = NULL, *hiproxy_logger = NULL;
+static void *hitaskd_logger = NULL, *histore_logger = NULL, *adns_logger = NULL;
 static int is_need_authorization = 0;
 static char *authorization_name = "Hitask Administration System";
 static void *argvmap = NULL;
-static SESSION hiproxy_session = {0};
-static int hiproxy_timeout = 20000000;
+static int proxy_timeout = 20000000;
 static char *e_argvs[] = 
 {
     "op", 
@@ -255,31 +253,8 @@ void adns_heartbeat_handler(void *arg)
     }
 }
 
-/* hiproxy packet reader */
-int hiproxy_proxy_handler(CONN *conn, CB_DATA *buffer)
-{
-    CONN *parent = NULL;
-    if(conn && buffer && (parent = hiproxy->findconn(hiproxy, conn->session.parentid))
-            && parent == conn->session.parent)
-    {
-        parent->push_chunk(parent, buffer->data, buffer->ndata);
-        return buffer->ndata;
-    }
-    return -1;
-}
-
-/* hiproxy packet reader */
-int hiproxy_packet_reader(CONN *conn, CB_DATA *buffer)
-{
-    if(conn)
-    {
-        return 0;
-    }
-    return -1;
-}
-
-/* hiproxy http handler */
-int hiproxy_http_handler(CONN *conn, char *host, int port) 
+/* bind proxy  */
+int hitaskd_bind_proxy(CONN *conn, char *host, int port) 
 {
     struct hostent *hp = NULL;
     CONN *new_conn = NULL;
@@ -308,14 +283,11 @@ int hiproxy_http_handler(CONN *conn, char *host, int port)
         }
         if(ip)
         {
-            memcpy(&session, &hiproxy_session, sizeof(SESSION));
             session.packet_type = PACKET_PROXY;
-            session.parent = conn;
-            session.parentid = conn->index;
-            conn->start_cstate(conn);
-            if((new_conn = hiproxy->newconn(hiproxy, -1, -1, ip, port, &session)))
+            session.timeout = proxy_timeout;
+            if((new_conn = hitaskd->newproxy(hitaskd, conn, -1, -1, ip, port, &session)))
             {
-                return hiproxy->newtransaction(hiproxy, new_conn, -1);
+                return 0;
             }
         }
     }
@@ -323,22 +295,16 @@ int hiproxy_http_handler(CONN *conn, char *host, int port)
 }
 
  
-/* hiproxy packet handler */
-int hiproxy_packet_handler(CONN *conn, CB_DATA *packet)
+/* http proxy packet handler */
+int http_proxy_handler(CONN *conn,  HTTP_REQ *http_req)
 {
     char buf[HTTP_BUF_SIZE], *host = NULL, *path = NULL, 
-         *s = NULL, *p = NULL, *end = NULL;
+         *s = NULL, *p = NULL;
     int n = 0, i = 0, port = 80;
-    HTTP_REQ http_req = {0};
 
-    if(conn && packet->ndata < HTTP_BUF_SIZE)
+    if(conn && http_req)
     {
-        p = packet->data;
-        end = packet->data + packet->ndata;
-        //*end = '\0';
-        //memcpy(buf, p, packet->ndata);
-        if(http_request_parse(p, end, &http_req) == -1) goto err_end;
-        p = http_req.path;
+        p = http_req->path;
         if(strncasecmp(p, "http://", 7) == 0)
         {
             p += 7;
@@ -357,171 +323,61 @@ int hiproxy_packet_handler(CONN *conn, CB_DATA *packet)
         }
         else
         {
-            if((n = http_req.headers[HEAD_REQ_HOST]) > 0 )
+            if((n = http_req->headers[HEAD_REQ_HOST]) > 0 )
             {
                 path = p;
-                host = (http_req.hlines + n);
+                host = (http_req->hlines + n);
             }
             else goto err_end;
         }
         if(path && *path == '/') ++path;
         if(path == NULL) path = "";
-        if(hiproxy_http_handler(conn, host, port) == -1) goto err_end;
         //authorized 
-        if(http_req.reqid == HTTP_GET)
+        if(http_req->reqid == HTTP_GET)
         {
             p = buf;
             p += sprintf(p, "GET /%s HTTP/1.0\r\n", path);
-            if((n = http_req.headers[HEAD_REQ_HOST]) == 0)
+            if((n = http_req->headers[HEAD_REQ_HOST]) == 0)
                 p += sprintf(p, "Host: %s\r\n", host);
             for(i = 0; i < HTTP_HEADER_NUM; i++)
             {
-                if((n = http_req.headers[i]) > 0 && (s = (http_req.hlines + n)))
+                if((n = http_req->headers[i]) > 0 && (s = (http_req->hlines + n)))
                 {
                     p += sprintf(p, "%s %s\r\n", http_headers[i].e, s);
                 }
             }
             p += sprintf(p, "%s", "\r\n");
             //fprintf(stdout, "%s", buf);
-            conn->save_cache(conn, buf, (p - buf));
+            conn->push_exchange(conn, buf, (p - buf));
         }
-        else if(http_req.reqid == HTTP_POST)
+        else if(http_req->reqid == HTTP_POST)
         {
             p = buf;
             p += sprintf(p, "POST /%s HTTP/1.0\r\n", path);
-            if((n = http_req.headers[HEAD_REQ_HOST]) == 0)
+            if((n = http_req->headers[HEAD_REQ_HOST]) == 0)
                 p += sprintf(p, "Host: %s\r\n", host);
             for(i = 0; i < HTTP_HEADER_NUM; i++)
             {
-                if((n = http_req.headers[i]) > 0 && (s = http_req.hlines + n))
+                if((n = http_req->headers[i]) > 0 && (s = http_req->hlines + n))
                 {
                     p += sprintf(p, "%s %s\r\n", http_headers[i].e, s);
                 }
             }
             p += sprintf(p, "%s", "\r\n");
             //fprintf(stdout, "%s", buf);
-            conn->save_cache(conn, buf, (p - buf));
-            if((n = http_req.headers[HEAD_ENT_CONTENT_LENGTH]) > 0 
-                    && (n = atol(http_req.hlines + n)) > 0)
+            conn->push_exchange(conn, buf, (p - buf));
+            if((n = http_req->headers[HEAD_ENT_CONTENT_LENGTH]) > 0 
+                    && (n = atol(http_req->hlines + n)) > 0)
             {
                 conn->recv_chunk(conn, n);
             }
         }
         else goto err_end;
+        if(hitaskd_bind_proxy(conn, host, port) == -1) goto err_end;
         return 0;
     }
 err_end:
     conn->push_chunk(conn, HTTP_BAD_REQUEST, strlen(HTTP_BAD_REQUEST));
-    return -1;
-}
-
-/* hiproxy data handler */
-int hiproxy_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
-{
-    CONN *child = NULL;
-    if(conn)
-    {
-        if((child = hiproxy->findconn(hiproxy,  conn->session.childid))
-                && child == conn->session.child)
-        {
-                return child->push_chunk(child, chunk->data, chunk->ndata);
-        }
-        else
-                return conn->set_timeout(conn, PROXY_TIMEOUT);
-    }
-    return -1;
-}
-
-/* hiproxy timeout handler */
-int hiproxy_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
-{
-    CONN *parent = NULL, *child = NULL;
-
-    if(conn)
-    {
-        if((parent = hiproxy->findconn(hiproxy,  conn->session.parentid))
-                && parent == conn->session.parent)
-        {
-            conn->over(conn);
-        }
-        else if((child = hiproxy->findconn(hiproxy,  conn->session.childid))
-                && child == conn->session.child)
-        {
-            hiproxy->newtransaction(hiproxy, conn, conn->index);
-        }
-        return 0;
-    }
-    return -1;
-}
-
-/* hiproxy transaction handler */
-int hiproxy_trans_handler(CONN *conn, int tid)
-{
-    CB_DATA *cache = NULL, *chunk = NULL;
-    CONN *parent = NULL, *child = NULL;
-
-    if(conn)
-    {
-        if((parent = hiproxy->findconn(hiproxy,  conn->session.parentid))
-                && parent == conn->session.parent)
-        {
-            parent->session.childid = conn->index;
-            parent->session.child = conn;
-            conn->start_cstate(conn);
-            if((cache = PCB(parent->cache)) && cache->ndata > 0 )
-            {
-                conn->set_timeout(conn, hiproxy_timeout);
-                return conn->push_chunk(conn, cache->data, cache->ndata);
-            }
-        }
-        else if((child = hiproxy->findconn(hiproxy,  conn->session.childid))
-                && child == conn->session.child)
-        {
-            if((chunk = PCB(conn->chunk)) && chunk->ndata > 0)
-            {
-                return child->push_chunk(child, chunk->data, chunk->ndata);
-            }
-            else
-            {
-                return conn->set_timeout(child, PROXY_TIMEOUT);
-            }
-        }
-    }
-    return -1;
-}
- 
-/* hiproxy OOB handler */
-int hiproxy_oob_handler(CONN *conn, CB_DATA *oob)
-{
-    if(conn)
-    {
-        return 0;
-    }
-    return -1;
-}
-
-/* hiproxy error handler */
-int hiproxy_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
-{
-    CONN *parent = NULL, *child = NULL;
-
-    if(conn)
-    {
-        //fprintf(stdout, "%d:ready for over connection:%s:%d via %d\n", 
-        //        __LINE__, conn->remote_ip, conn->remote_port, conn->fd);
-        if((parent = hiproxy->findconn(hiproxy,  conn->session.parentid))
-                && parent == conn->session.parent)
-        {
-            parent->over(parent);
-        }
-        else if((child = hiproxy->findconn(hiproxy,  conn->session.childid))
-                && child == conn->session.child)
-        {
-            child->over(child);
-        }
-        conn->over(conn);
-        return 0;
-    }
     return -1;
 }
 
@@ -588,8 +444,8 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
     {
         p = packet->data;
         end = packet->data + packet->ndata;
-        *end = '\0';
         /*
+        *end = '\0';
         int fd = 0;
         if((fd = open("/tmp/header.txt", O_CREAT|O_RDWR|O_TRUNC, 0644)) > 0)
         {
@@ -603,6 +459,12 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
         {
             TOAUTH(conn, buf, p, authorization_name);
             return 0;
+        }
+        //proxy special
+        if(strncasecmp(http_req.path, "/proxy/", 7) == 0)
+        {
+            strcpy(http_req.path, http_req.path + 7);
+            return http_proxy_handler(conn, &http_req);
         }
         if(http_req.reqid == HTTP_GET)
         {
@@ -1247,54 +1109,6 @@ int sbase_initialize(SBASE *sbase, char *conf)
         hibase->set_basedir(hibase, p); 
     }
     else _exit(-1);
-    /* hiproxy */
-    if((hiproxy = service_init()) == NULL)
-    {
-        fprintf(stderr, "Initialize service failed, %s", strerror(errno));
-        _exit(-1);
-    }
-    hiproxy->family = iniparser_getint(dict, "HIPROXY:inet_family", AF_INET);
-    hiproxy->sock_type = iniparser_getint(dict, "HIPROXY:socket_type", SOCK_STREAM);
-    hiproxy->ip = iniparser_getstr(dict, "HIPROXY:service_ip");
-    hiproxy->port = iniparser_getint(dict, "HIPROXY:service_port", 2888);
-    hiproxy->working_mode = iniparser_getint(dict, "HIPROXY:working_mode", WORKING_PROC);
-    hiproxy->service_type = iniparser_getint(dict, "HIPROXY:service_type", S_SERVICE);
-    hiproxy->service_name = iniparser_getstr(dict, "HIPROXY:service_name");
-    hiproxy->nprocthreads = iniparser_getint(dict, "HIPROXY:nprocthreads", 1);
-    hiproxy->ndaemons = iniparser_getint(dict, "HIPROXY:ndaemons", 1);
-    hiproxy->set_log(hiproxy, iniparser_getstr(dict, "HIPROXY:logfile"));
-    hiproxy->session.packet_type = iniparser_getint(dict, "HIPROXY:packet_type",PACKET_DELIMITER);
-    hiproxy->session.packet_delimiter = iniparser_getstr(dict, "HIPROXY:packet_delimiter");
-    p = s = hiproxy->session.packet_delimiter;
-    while(*p != 0 )
-    {
-        if(*p == '\\' && *(p+1) == 'n')
-        {
-            *s++ = '\n';
-            p += 2;
-        }
-        else if (*p == '\\' && *(p+1) == 'r')
-        {
-            *s++ = '\r';
-            p += 2;
-        }
-        else
-            *s++ = *p++;
-    }
-    *s++ = 0;
-    hiproxy->session.packet_delimiter_length = strlen(hiproxy->session.packet_delimiter);
-    hiproxy->session.buffer_size = iniparser_getint(dict, "HIPROXY:buffer_size", SB_BUF_SIZE);
-    hiproxy->session.packet_reader = &hiproxy_packet_reader;
-    hiproxy->session.packet_handler = &hiproxy_packet_handler;
-    hiproxy->session.data_handler = &hiproxy_data_handler;
-    hiproxy->session.timeout_handler = &hiproxy_timeout_handler;
-    hiproxy->session.error_handler = &hiproxy_error_handler;
-    hiproxy->session.oob_handler = &hiproxy_oob_handler;
-    hiproxy->session.transaction_handler = &hiproxy_trans_handler;
-    hiproxy->session.proxy_handler = &hiproxy_proxy_handler;
-    memcpy(&(hiproxy_session), &(hiproxy->session), sizeof(SESSION));
-    if((p = iniparser_getstr(dict, "HIPROXY:access_log"))){LOGGER_INIT(hiproxy_logger, p);}
-    hiproxy_timeout = iniparser_getint(dict, "HIPROXY:timeout", 20000000);
     /* histore */
     if((histore = service_init()) == NULL)
     {
@@ -1376,8 +1190,9 @@ int sbase_initialize(SBASE *sbase, char *conf)
             ++p;
         }
     }
-    return (sbase->add_service(sbase, hitaskd) | sbase->add_service(sbase, hiproxy) 
-             | sbase->add_service(sbase, histore) | sbase->add_service(sbase, adns));
+    return (sbase->add_service(sbase, hitaskd) 
+             | sbase->add_service(sbase, histore) 
+             | sbase->add_service(sbase, adns));
 }
 
 static void hitaskd_stop(int sig){
@@ -1457,7 +1272,6 @@ int main(int argc, char **argv)
     if(hitaskd_logger){LOGGER_CLEAN(hitaskd_logger);}
     if(histore_logger){LOGGER_CLEAN(histore_logger);}
     if(adns_logger){LOGGER_CLEAN(adns_logger);}
-    if(hiproxy_logger){LOGGER_CLEAN(hiproxy_logger);}
     if(argvmap){TRIETAB_CLEAN(argvmap);}
     return 0;
 }
