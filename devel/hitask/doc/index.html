@@ -919,7 +919,8 @@
                 form['code'].value = '';
                 form['pattern'].value = '';
                 form = document.forms["urlform"];
-                form['url'].value = '';
+                form['url'].focus();
+                form['url'].value = 'http://';
             }
             //add template
             function AddTemplate(form)
@@ -1100,12 +1101,11 @@
                                 doc.close();
                                 document.forms['templateform']['code'].value = str;
                                 // Create a new script node
-                                var element = document.createElement('base');
+                                //var element = document.createElement('base');
                                 // set the 'src' attribute of the element
-                                element.setAttribute('href', url);
+                                //element.setAttribute('href', url);
                                 // insert the new node into the current document
-                                document.head.appendChild(element);
-                                //doc.innerHTML = str;
+                                //document.head.appendChild(element);
                             }
                         }
                     }
