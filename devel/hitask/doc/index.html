@@ -921,8 +921,8 @@
                 Xdiv.style.left = x;
                 Xdiv.style.top = y + 10;
                 Xdiv.style.display = 'inline';
-                var doc = getFrameDocument('source_win');
-                if(doc) doc.removeChild(doc.firstChild);
+                var esource = document.getElementById('source_view');
+                if(esource) esource.innerHTML = "";
                 var form = document.forms["templateform"];
                 form['nodeid'].value = id;
                 form['code'].value = '';
@@ -1063,16 +1063,6 @@
         }
         return Doc;
     }
-    function getSource(id)
-    {
-        var Doc = getFrameDocument(id);
-        if(Doc)
-        {
-            var html = Doc.getElementsByTagName('html');
-            if(html)
-            alert(html[0].innerHTML);
-        }
-    }
     function getSelectContent(id)
     {
         var Doc = getFrameDocument(id);
@@ -1084,13 +1074,8 @@
     function LoadURL(form)
     {
         var url = form['url'].value;
-        var frame = document.getElementById('source_win');
-        var doc = getFrameDocument('source_win');
-        if(url && frame && doc)
+        if(url)
         {
-                doc.removeChild(doc.firstChild);
-                frame.top = frame;
-                frame.parent = frame;
                 var xmlHttp = null;
                 if((xmlHttp = CreateXMLHTTP()) != null)
                 {
@@ -1103,16 +1088,30 @@
                             if(xmlHttp.status == 200)
                             {
                                 var str = xmlHttp.responseText;
-                                doc.open();
-                                doc.write(str);
-                                doc.close();
-                                document.forms['templateform']['code'].value = str;
-                                var baselink = document.getElementById('baselink');
-                                if(baselink) doc.removeChild(baselink);
-                                baselink = document.createElement("base");
-                                baselink.setAttribute("id", 'baselink');
-                                baselink.setAttribute("href", url);
-                                doc.appendChild(baselink);
+                                var element = document.getElementById('source_view');
+                                if(element) element.innerHTML = "";
+                                //var frame = document.getElementById('editor_frame');
+                                //if(frame) element.removeChild(frame);
+                                var frame = document.createElement("iframe");
+                                frame.setAttribute("id", 'editor_frame');
+                                frame.setAttribute("width", '800');
+                                frame.setAttribute("height", '400');
+                                element.appendChild(frame);
+                                var doc = null;
+                                if((doc = getFrameDocument('editor_frame')))
+                                {
+                                    doc.open();
+                                    doc.write(str);
+                                    doc.close();
+                                    var head = document.getElementsByTagName('head')[0];
+                                    var baselink = document.getElementById('baselink');
+                                    if(baselink) head.removeChild(baselink);
+                                    baselink = document.createElement("base");
+                                    baselink.setAttribute("id", 'baselink');
+                                    baselink.setAttribute("href", url);
+                                    head.appendChild(baselink);
+                                }
+                                //document.forms['templateform']['code'].value = str;
                             }
                         }
                     }
@@ -1198,7 +1197,7 @@
         URL:<input type=text size='32' name='url'>
         <input type=submit value='ok'>
     </form>
-    <iframe id='source_win' name='source_win' src='about:blank' width=600 height=400 ></iframe>
+    <div id ='source_view'></div>
     <br>
     <a  href ="javascript:getSelectContent('source_win');">select</a>
     <a  href ="javascript:getSource('source_win');">view</a>
