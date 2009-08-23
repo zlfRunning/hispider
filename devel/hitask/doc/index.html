@@ -61,7 +61,6 @@
             #xtemplateform{position:relative;width:100%;background-color:#ffffff;
                 border:1px solid #81BEF7;padding:0px;font-size:12pt;color:#2F5FA1;
                 overflow:auto;display:none;}
-            #source_view{width:994px;height:400px;}
             #editor_frame{width:994px;height:400px;}
             .formclose{font-size:14pt;font-weight:bold;color:silver;
                 cursor:pointer;display:inline;right:20px;text-align:right;}
@@ -926,8 +925,9 @@
                 Xdiv.style.top = y + 10;
                 */
                 Xdiv.style.display = 'inline';
-                var esource = document.getElementById('source_view');
-                if(esource) esource.innerHTML = "";
+                var ediv = null;
+                if((ediv = document.getElementById('source_view'))) ediv.innerHTML = "";
+                if((ediv = document.getElementById('souce_code_op'))) ediv.style.display = "none";
                 var form = document.forms["templateform"];
                 form['nodeid'].value = id;
                 form['code'].value = '';
@@ -1096,10 +1096,11 @@
 		                            if(xmlHttp.status == 200)
 		                            {
 		                                var str = xmlHttp.responseText;
+                                        var ediv = null;
+                                        if((ediv = document.getElementById('souce_code_op'))) 
+                                            ediv.style.display = "inline";
 		                                var element = document.getElementById('source_view');
 		                                if(element) element.innerHTML = "";
-		                                //var frame = document.getElementById('editor_frame');
-		                                //if(frame) element.removeChild(frame);
 		                                var frame = document.createElement("iframe");
 		                                frame.setAttribute("id", 'editor_frame');
 		                                element.appendChild(frame);
@@ -1121,17 +1122,10 @@
 		                                    doc.open();
 		                                    doc.write(htmlstr);
 		                                    doc.close();
-                                            /*
-		                                    var head = document.getElementsByTagName('head')[0];
-		                                    var baselink = document.getElementById('baselink');
-		                                    if(baselink) head.removeChild(baselink);
-		                                    baselink = document.createElement("base");
-		                                    baselink.setAttribute("id", 'baselink');
-		                                    baselink.setAttribute("href", url);
-		                                    head.appendChild(baselink);
-                                            */
-		                                    document.forms['templateform']['code'].value = str;
 		                                }
+                                        /*
+                                        */
+		                                document.forms['templateform']['code'].value = str;
 		                            }
                                     else
                                     {
@@ -1175,15 +1169,20 @@
     <div id='template'>
     <div id='treebody' level='0'></div>
     <div id='xtemplateform'>
+        <div id=urlform >
         <form action='javascript:void(0);' name='urlform' onsubmit='return LoadURL(this);'>
             URL:<input type=text size='32' name='url'>
             <input type=submit value='ok'>
             <span class='formclose' onclick="CloseForm(this)">x</span>
         </form>
+        </div>
+        <div id='souce_code_op'>
         <div id='source_view'></div>
         <div id='source_op'>
         <a  href ="javascript:getSelectContent('editor_frame');">select</a>
         </div>
+        </div>
+        <div id='templatediv'>
         <form name="templateform" action="javascript:void(0)" onsubmit="return EditTemplate(this);"> 
             <input type=hidden name='op' value='template_add' >
             <input type=hidden name='nodeid' value='' >
@@ -1191,6 +1190,7 @@
             代码:<textarea name='code' rows=20  cols=120> </textarea><br>
             摸版:<textarea name='pattern' rows=10 cols=120> </textarea>
         </form>
+        </div>
     </div>
 
 </div>
