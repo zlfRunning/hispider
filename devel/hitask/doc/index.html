@@ -61,6 +61,8 @@
             #xtemplateform{position:relative;width:100%;background-color:#ffffff;
                 border:1px solid #81BEF7;padding:0px;font-size:12pt;color:#2F5FA1;
                 overflow:auto;display:none;}
+            #source_view{width:994px;height:400px;}
+            #editor_frame{width:994px;height:400px;}
             .formclose{font-size:14pt;font-weight:bold;color:silver;
                 cursor:pointer;display:inline;right:20px;text-align:right;}
             .node
@@ -1100,20 +1102,22 @@
 		                                //if(frame) element.removeChild(frame);
 		                                var frame = document.createElement("iframe");
 		                                frame.setAttribute("id", 'editor_frame');
-		                                frame.setAttribute("width", '100%');
-		                                frame.setAttribute("height", '400');
 		                                element.appendChild(frame);
 		                                var doc = null;
 		                                if((doc = getFrameDocument('editor_frame')))
 		                                {
-                                            var baseurl = url;
-                                            var post = 0;
-                                            if((pos = url.lastIndexOf('/')) > 6)
+                                            var htmlstr = str;
+                                            if(str.match(/<base .*?href=.*?>/i) == null)
                                             {
-                                                baseurl = url.substring(0, pos+1);
+                                                var baseurl = url;
+                                                var post = 0;
+                                                if((pos = url.lastIndexOf('/')) > 6)
+                                                {
+                                                    baseurl = url.substring(0, pos+1);
+                                                }
+                                                var basehref = "<head><base href='"+baseurl+"'>";
+                                                htmlstr = str.replace(/<head>/i, basehref);
                                             }
-                                            var basehref = "<head><base href='"+baseurl+"'>";
-                                            var htmlstr = str.replace(/<head>/i, basehref);
 		                                    doc.open();
 		                                    doc.write(htmlstr);
 		                                    doc.close();
@@ -1126,9 +1130,14 @@
 		                                    baselink.setAttribute("href", url);
 		                                    head.appendChild(baselink);
                                             */
-		                                    document.forms['templateform']['code'].value = htmlstr;
+		                                    document.forms['templateform']['code'].value = str;
 		                                }
 		                            }
+                                    else
+                                    {
+		                                document.forms['templateform']['code'].value 
+                                        = xmlHttp.getAllResponseHeader();
+                                    }
 		                        }
 		                    }
 		                    xmlHttp.send();
@@ -1179,8 +1188,8 @@
             <input type=hidden name='op' value='template_add' >
             <input type=hidden name='nodeid' value='' >
             <input type=hidden name='templateid' value='' >
-            代码:<textarea name='code' rows=20 cols=80 > </textarea><br>
-            摸版:<textarea name='pattern' rows=10 cols=80> </textarea>
+            代码:<textarea name='code' rows=20  cols=120> </textarea><br>
+            摸版:<textarea name='pattern' rows=10 cols=120> </textarea>
         </form>
     </div>
 
