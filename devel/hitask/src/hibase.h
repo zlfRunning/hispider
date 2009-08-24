@@ -16,8 +16,7 @@ extern "C" {
 #define F_IS_NULL               0x02
 #define TEMPLATE_NAME_MAX	    32
 #define HIBASE_PATH_MAX		    256
-#define HI_BUF_SIZE             65536
-#define REGX_SIZE_MAX		    4096
+#define PATTERN_LEN_MAX		    4096
 #define TABLE_INCRE_NUM         256
 #define TEMPLATE_INCRE_NUM      10000
 #define PNODE_INCRE_NUM         10000
@@ -29,6 +28,12 @@ extern "C" {
 #define FIELD_STATUS_OK         1
 #define TEMPLATE_STATUS_ERR     -1
 #define TEMPLATE_STATUS_OK      1
+#ifndef HI_URL_MAX
+#define HI_URL_MAX              4096
+#endif
+#ifndef HI_BUF_SIZE
+#define HI_BUF_SIZE             65536
+#endif
 /* field */
 typedef struct _IFIELD
 {
@@ -83,7 +88,8 @@ typedef struct _ITEMPLATE
     short status;
     short nfields;
     IREGX map[FIELD_NUM_MAX];
-    char  pattern[REGX_SIZE_MAX];
+    char  pattern[PATTERN_LEN_MAX];
+    char  url[HI_URL_MAX];
     int   flags;
     int prev;
     int next;

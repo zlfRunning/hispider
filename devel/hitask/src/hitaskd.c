@@ -105,10 +105,12 @@ static char *e_ops[]=
 #define E_OP_TEMPLATE_ADD   17
     "template_update",
 #define E_OP_TEMPLATE_UPDATE    18
-    "template_delete"
+    "template_delete",
 #define E_OP_TEMPLATE_DELETE    19
+    "template_list"
+#define E_OP_TEMPLATE_LIST      20
 };
-#define E_OP_NUM 20
+#define E_OP_NUM 21
 /* dns packet reader */
 int adns_packet_reader(CONN *conn, CB_DATA *buffer)
 {
@@ -563,12 +565,13 @@ err_end:
 /*  data handler */
 int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
-    int i = 0, id = 0, n = 0, op = -1, nodeid = -1, 
-        parentid = -1, urlid = -1, hostid = -1, tableid = -1, fieldid = -1,
+    int i = 0, id = 0, n = 0, op = -1, nodeid = -1, x = -1, fieldid = -1,
+        parentid = -1, urlid = -1, hostid = -1, tableid = -1, 
         type = -1, flag = -1, templateid = -1;
     char *p = NULL, *end = NULL, *name = NULL, *host = NULL, *url = NULL, 
          *pattern = NULL, *map = NULL, buf[HTTP_BUF_SIZE], block[HTTP_BUF_SIZE];
     HTTP_REQ httpRQ = {0}, *http_req = NULL;
+    ITEMPLATE template = {0};
     void *dp = NULL;
 
     if(conn && packet && cache && chunk && chunk->ndata > 0)
@@ -648,6 +651,35 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                             }
                         }
                     }
+                }
+                if(map)
+                {
+                    p = map;
+                    while(*p != '{' && *p != '\0')++p;
+                    if(*p != '{') goto err_end;
+                    ++p;
+                    while(*p != '\0' && *p != '[')++p;
+                    if(*p != '[') goto err_end;
+                    for(i = 0; i < FIELD_NUM_MAX; i++)
+                    {
+                        if(*p == '[') ++p;
+                        else goto err_end;
+                        template.map[i].tableid = atoi(p);
+                        while(*p != '\0' && *p >= '0' && *p <= '9')++p;
+                        while(*p != '\0' && *p != ',')++p;
+                        if(*p != ',') goto err_end;
+                        ++p;
+                        template.map[i].fieldid = atoi(p);
+                        while(*p != '\0' && *p >= '0' && *p <= '9')++p;
+                        while(*p != '\0' && *p != ']')++p;
+                        ++p;
+                        while(*p != '\0' && *p != ';')++p;
+                        if(*p != ';') break;
+                        ++p;
+                        while(*p != '\0' && *p != '[')++p;
+                        if(*p != '[') break;
+                    }
+                    template.nfields = ++i;
                 }
                 switch(op)
                 {
@@ -804,6 +836,48 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         }else goto err_end;
                         break;
                     case E_OP_TEMPLATE_ADD:
+                        if(nodeid >= 0 && pattern && map && url
+                            && (template.flags = flag) >= 0
+                            && (n = strlen(pattern)) > 0 && n < PATTERN_LEN_MAX
+                            && (x = strlen(url)) > 0 && x < HI_URL_MAX
+                            && (memcpy(template.pattern, pattern, n))
+                            && (memcpy(template.url, url, x))
+                            && hibase->add_template(hibase, nodeid, &template) >= 0
+                            && (n = hibase->view_templates(hibase, nodeid, block)) > 0)
+                        {
+                             conn->push_chunk(conn, block, n);
+                             goto end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_TEMPLATE_UPDATE:
+                        if(nodeid >= 0 && templateid >= 0 && pattern && map && url
+                            && (template.flags = flag) >= 0
+                            && (n = strlen(pattern)) > 0 && n < PATTERN_LEN_MAX
+                            && (x = strlen(url)) > 0 && x < HI_URL_MAX
+                            && (memcpy(template.pattern, pattern, n))
+                            && (memcpy(template.url, url, x))
+                            && hibase->update_template(hibase, templateid, &template) >= 0
+                            && (n = hibase->view_templates(hibase, nodeid, block)) > 0)
+                        {
+                             conn->push_chunk(conn, block, n);
+                             goto end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_TEMPLATE_DELETE:
+                        if(nodeid >= 0 && templateid >= 0 
+                                && hibase->delete_template(hibase, nodeid, templateid) >= 0
+                                && (n = hibase->view_templates(hibase, nodeid, block)) > 0)
+                        {
+                            conn->push_chunk(conn, block, n);
+                            goto end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_TEMPLATE_LIST:
+                        if(nodeid >= 0 && (n = hibase->view_templates(hibase, nodeid, block)) > 0)
+                        {
+                            conn->push_chunk(conn, block, n);
+                            goto end;
+                        }else goto err_end;
                         break;
                     default:
                         goto err_end;

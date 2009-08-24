@@ -48,11 +48,12 @@
             #dbfieldform{position:absolute;width:600px;background-color:#ffffff;
                 border:1px solid #81BEF7;padding:0px;font-size:12pt;color:#2F5FA1;
                 overflow:auto;display:none;}
-            #template{position:relative;top:36px;left:0px;}
-            #treebody{position:relative;background-color:#ffffff;display:none;width:998px;
-                border:1px solid #81BEF7; padding:0px;left:0px;top:0px;color:#2F5FA1;}
-            #tempnode{position:absolute;background-color:#ffffff;display:inline;
-                border:1px solid #81BEF7;padding:0px;left:0px;top:400px;color:#2F5FA1;};
+            #template{position:absolute;top:36px;left:0px;display:none;}
+            .template-tab{position:relative;border:1px solid #81BEF7;padding:0px;width:100%;}
+            #treebody{position:relative;background-color:#ffffff;display:inline;width:998px;
+                border:0px solid #81BEF7; padding:0px;left:0px;top:0px;color:#2F5FA1;}
+            #node-template{position:relative;background-color:#ffffff;
+                border:1px solid #81BEF7;padding:0px;left:0px;color:#2F5FA1;};
             .treeline{border:0px;font-size:12pt;font-weight:bold;color:#BDBDBD;}
             .title{border:0px;font-size:12pt;background-color:#ffffff;color:#000000;}
             .btitle{border:0px;font-size:12pt;background-color:#F2F2F2;}
@@ -61,7 +62,7 @@
             #xtemplateform{position:relative;width:100%;background-color:#ffffff;
                 border:1px solid #81BEF7;padding:0px;font-size:12pt;color:#2F5FA1;
                 overflow:auto;display:none;}
-            #editor_frame{width:994px;height:400px;}
+            #editor-frame{width:994px;height:400px;}
             .formclose{font-size:14pt;font-weight:bold;color:silver;
                 cursor:pointer;display:inline;right:20px;text-align:right;}
             .node
@@ -971,7 +972,7 @@
             //database
             function selectView(div, e)
             {
-                var elist = new Array('taskinfo','database', 'treebody', 'dns', 'proxy');
+                var elist = new Array('taskinfo','database', 'template', 'dns', 'proxy');
                 e = e || window.event;
                 var element = e.target || e.srcElement;
                 var oli = null, ob = null, odiv = null;
@@ -1003,10 +1004,14 @@
                         ListTables();
                     }
                 }
-                else if(div == 'treebody' && ob.innerHTML == '')
+                else if(div == 'template')
                 {
+                    var treebody = document.getElementById('treebody');
+                    if(treebody.innerHTML == '')
+                    {
                         AddNode(-1,0,"Root",0);
                         Fold(document.getElementById('fold_0'));
+                    }
                 }
                 else if(div == 'dns' && ob.innerHTML == '')
                 {
@@ -1102,10 +1107,10 @@
 		                                var element = document.getElementById('source_view');
 		                                if(element) element.innerHTML = "";
 		                                var frame = document.createElement("iframe");
-		                                frame.setAttribute("id", 'editor_frame');
+		                                frame.setAttribute("id", 'editor-frame');
 		                                element.appendChild(frame);
 		                                var doc = null;
-		                                if((doc = getFrameDocument('editor_frame')))
+		                                if((doc = getFrameDocument('editor-frame')))
 		                                {
                                             var htmlstr = str;
                                             if(str.match(/<base .*?href=.*?>/i) == null)
@@ -1149,7 +1154,7 @@
         <ul>
         <li class='tab-selected' id='tab0' onclick="selectView('taskinfo',event)" >下载任务</li>
         <li id='tab1' onclick="selectView('database',event)" >数据表</li>
-        <li id='tab2' onclick="selectView('treebody', event)" >抓取树</li>
+        <li id='tab2' onclick="selectView('template', event)" >抓取树</li>
         <li id='tab3' onclick="selectView('dns', event)" >DNS</li>
         <li id='tab4' onclick="selectView('proxy', event)" >代理</li>
         <div class="cleard"></div>
@@ -1167,34 +1172,25 @@
     <div id='dns'></div>
     <div id='proxy'></div>
     <div id='template'>
-    <div id='treebody' level='0'></div>
-    <div id='xtemplateform'>
-        <div id=urlform >
-        <form action='javascript:void(0);' name='urlform' onsubmit='return LoadURL(this);'>
-            URL:<input type=text size='32' name='url'>
+        <table class='template-tab'>
+        <tr>
+            <td valign=top>
+            <div id='treebody' level='0'></div>
+            </td>
+            <td>
+            <div id='node-template'>
+            <form name='name'>
+                URL: <input name=url size=32><br>
+                预览：<textarea name='view' rows=20 cols=80></textarea><br>
+                HTML：<textarea name='code' rows=20 cols=80></textarea><br>
+                摸版：<textarea name='pattern' rows=10 cols=80></textarea><br>
             <input type=submit value='ok'>
-            <span class='formclose' onclick="CloseForm(this)">x</span>
-        </form>
-        </div>
-        <div id='souce_code_op'>
-        <div id='source_view'></div>
-        <div id='source_op'>
-        <a  href ="javascript:getSelectContent('editor_frame');">select</a>
-        </div>
-        </div>
-        <div id='templatediv'>
-        <form name="templateform" action="javascript:void(0)" onsubmit="return EditTemplate(this);"> 
-            <input type=hidden name='op' value='template_add' >
-            <input type=hidden name='nodeid' value='' >
-            <input type=hidden name='templateid' value='' >
-            代码:<textarea name='code' rows=20  cols=120> </textarea><br>
-            摸版:<textarea name='pattern' rows=10 cols=120> </textarea>
-        </form>
-        </div>
+            </form>
+            </div>
+            </td>
+        </tr>
+        </table>
     </div>
-
-</div>
-</div>
     <div id='txtform' class='formdiv'>
         <form name="editorform" action="javascript:void(0)" onsubmit="return EditNode(this);"> 
             <input type=hidden name='op' value='node_add' >
@@ -1235,6 +1231,30 @@
             <input type=submit value='ok' class='submit' >
             &nbsp;&nbsp;<span class='formclose' onclick="CloseForm(this)">x</span>
         </form>
+    </div>
+    <div id='xtemplateform'>
+        <div id=urlform >
+        <form action='javascript:void(0);' name='urlform' onsubmit='return LoadURL(this);'>
+            URL:<input type=text size='32' name='url'>
+            <input type=submit value='ok'>
+            <span class='formclose' onclick="CloseForm(this)">x</span>
+        </form>
+        </div>
+        <div id='souce_code_op'>
+            <div id='source_view'></div>
+            <div id='source_op'>
+                <a  href ="javascript:getSelectContent('editor-frame');">select</a>
+            </div>
+        </div>
+        <div id='templatediv'>
+        <form name="templateform" action="javascript:void(0)" onsubmit="return EditTemplate(this);"> 
+            <input type=hidden name='op' value='template_add' >
+            <input type=hidden name='nodeid' value='' >
+            <input type=hidden name='templateid' value='' >
+            代码:<textarea name='code' rows=20  cols=120> </textarea><br>
+            摸版:<textarea name='pattern' rows=10 cols=120> </textarea>
+        </form>
+        </div>
     </div>
     <script language='javascript'>
     //ViewTask('task_view');

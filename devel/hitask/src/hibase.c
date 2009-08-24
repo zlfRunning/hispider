@@ -932,7 +932,7 @@ int hibase_update_template(HIBASE *hibase, int templateid, ITEMPLATE *template)
         MUTEX_LOCK(hibase->mutex);
         if((ptemplate = (ITEMPLATE *)(hibase->templateio.map)) && ptemplate != (ITEMPLATE *)-1)
         {
-            memcpy(&(ptemplate[templateid]), template, sizeof(ITEMPLATE));
+            memcpy(&(ptemplate[templateid]), template, sizeof(ITEMPLATE) - (sizeof(int) * 2));
             ptemplate[templateid].status = TEMPLATE_STATUS_OK;
             ret = templateid;
         }
@@ -981,7 +981,7 @@ int hibase_delete_template(HIBASE *hibase, int pnodeid, int templateid)
 }
 
 /* view templates */
-int hibase_view_template(HIBASE *hibase, int pnodeid, char *block)
+int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
 {
     ITEMPLATE *ptemplate = NULL;
     PNODE *pnode = NULL;
@@ -1095,7 +1095,7 @@ HIBASE * hibase_init()
         hibase->get_template        = hibase_get_template;
         hibase->update_template     = hibase_update_template;
         hibase->delete_template     = hibase_delete_template;
-        hibase->view_templates      = hibase_view_template;
+        hibase->view_templates      = hibase_view_templates;
         hibase->clean               = hibase_clean;
     }
     return hibase;
