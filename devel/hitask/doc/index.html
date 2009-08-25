@@ -18,8 +18,9 @@
                 background-color:#ffffff;
                 margin:auto;
                 width:1000px;
-                height:675px;
+                height:100%;
             }
+            
             #itab {position:absolute;background:#ffffff;height:50px; top:0px;left:0px;}
             #itab ul{margin:0;padding:0;list-style:none;color:#2F5FA1;}
             #itab li{float:left;background-color:#F4FBFF;border-right:1px solid #FFF;
@@ -31,7 +32,11 @@
             .ktask{font-size:12pt;font-weight:bold;}
             .vtask{font-size:12pt;font-weight:bold;}
             #database{position:absolute;background-color:#F4FBFF;display:none;
-                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:639px;}
+                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:100%;}
+            #dns{position:absolute;background-color:#F4FBFF;display:none;
+                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:100%;}
+            #proxy{position:absolute;background-color:#F4FBFF;display:none;
+                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:100%;}
             #dbtitle{position:absolute;top:0px;left:0px;padding:0px;
                 background-color:#D0E9F7;height:20px;width:200px;color:#2F5FA1;}
             #dbselect{position:absolute;top:20px;width:200px;height:619px;
@@ -48,21 +53,25 @@
             #dbfieldform{position:absolute;width:600px;background-color:#ffffff;
                 border:1px solid #81BEF7;padding:0px;font-size:12pt;color:#2F5FA1;
                 overflow:auto;display:none;}
-            #template{position:absolute;top:36px;left:0px;display:none;}
-            .template-tab{position:relative;border:1px solid #81BEF7;padding:0px;width:100%;}
-            #treebody{position:relative;background-color:#ffffff;display:inline;width:998px;
+            #template{position:absolute;background-color:#F4FBFF;display:none;
+                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;}
+            #treebody{position:relative;background-color:#ffffff;display:inline;width:996px;
                 border:0px solid #81BEF7; padding:0px;left:0px;top:0px;color:#2F5FA1;}
-            #node-template{position:relative;background-color:#ffffff;
-                border:1px solid #81BEF7;padding:0px;left:0px;color:#2F5FA1;};
+            #node-template{position:relative;background-color:#D0E9F7; width:996px;
+                border:0px solid #81BEF7;padding:0px;top:0px;left:0px;color:#2F5FA1;}
+            .template-header{background-color:#D0E9F7;cursor: pointer;};
+            .ltemplate{background-color:#D0E9F7;cursor: pointer;}
+            .ltemplate-selected{background-color:#F4FBFF;cursor: pointer;}
             .treeline{border:0px;font-size:12pt;font-weight:bold;color:#BDBDBD;}
             .title{border:0px;font-size:12pt;background-color:#ffffff;color:#000000;}
             .btitle{border:0px;font-size:12pt;background-color:#F2F2F2;}
             .formdiv{position:absolute;width:200px;background-color:#ffffff;
                 border:1px solid #81BEF7;padding:10px;overflow:auto;display:none;}
-            #xtemplateform{position:relative;width:100%;background-color:#ffffff;
-                border:1px solid #81BEF7;padding:0px;font-size:12pt;color:#2F5FA1;
-                overflow:auto;display:none;}
-            #editor-frame{width:994px;height:400px;}
+            #xtemplateform{position:relative;background-color:#ffffff;display:none;width:996px;
+                border:0px solid #81BEF7;padding:0px;font-size:12pt;color:#2F5FA1;}
+            #souce_code_op{display:none;}
+            #templatediv{display:none;}
+            #editor-frame{height:240px;width:996px;border:0px;}
             .formclose{font-size:14pt;font-weight:bold;color:silver;
                 cursor:pointer;display:inline;right:20px;text-align:right;}
             .node
@@ -212,7 +221,7 @@
                     htmlstr += "<span id='fold_"+ id +"' class='icon' onclick='Fold(this)'>►</span>";
                 htmlstr += "&nbsp;&nbsp;";
                 htmlstr += "<span id='nd_"+id+"' class='nodename' ";
-                htmlstr += " onclick='ViewNodeTemplate(event, "+id+")' >"+name+"</span>";
+                htmlstr += " onclick='ViewTemplates("+id+")' >"+name+"</span>";
                 htmlstr += "[<span id='ch_"+ id +"' class='nchilds' >"+count+"</span>]";
                 htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
                 htmlstr += "<span class='eadd' title='Add' ";
@@ -913,6 +922,135 @@
                 }
                 return true;
             }
+            function selectTemplate(element)
+            {
+                element.className = 'ltemplate-selected';
+            }
+            function outTempalte(element)
+            {
+                element.className = 'ltemplate';
+            }
+            function XTAdd(e, nodeid)
+            {
+                e = e || window.event;
+                var element = e.target || e.srcElement;
+                var Xdiv =  document.getElementById("xtemplateform");
+                Xdiv.style.display = 'inline';
+                var form = document.forms["templateform"];
+                form['code'].value = '';
+                form['pattern'].value = '';
+                form = document.forms["urlform"];
+                form['url'].focus();
+                form['url'].value = 'http://';
+            }
+            function XTEdit(e)
+            {
+                e = e || window.event;
+                var element = e.target || e.srcElement;
+                var Xdiv =  document.getElementById("xtemplateform");
+                var x = e.clientX;
+                var y = e.clientY;
+                Xdiv.style.left = x;
+                Xdiv.style.top = y + 10;
+                Xdiv.style.display = 'inline';
+            }
+            function HiddenTemplate()
+            {
+                var div = null;
+                if((div = document.getElementById('source_view')))
+                    div.innerHTML = "";
+                if((div = document.getElementById('souce_code_op')))
+                    div.style.display = 'none';
+                if((div = document.getElementById('templatediv')))
+                    div.style.display = 'none';
+                if((div = document.getElementById('xtemplateform')))
+                    div.style.display = 'none';
+                var form = document.forms['templateform'];
+                    form['code'].value = '';
+                    form['pattern'].value = '';
+                    form['nodeid'].value = '';
+                    form['templateid'].value = '';
+                    form['flag'].value = '';
+                return true;
+            }
+            function TestTemplate(form)
+            {
+                 
+            }
+            function ShowTemplates(txt)
+            {
+                var arr = null;
+                var ediv = document.getElementById('node-template');
+                if(ediv) ediv.innerHTML = "";
+                if(txt && ediv && (arr = eval(txt)))
+                {
+                    var template = null;
+                    var nodeid = arr['id'];
+                    var tempid = 0;
+                    var flag = 0;
+                    var pattern = "";
+                    var map = "";
+                    var nfields = 0;
+                    var htmlstr =  "<ul class='ultab' >";
+                        htmlstr += "<li class='template-header'>";
+                        htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;"
+                        htmlstr += "点击&nbsp;<span class='eadd' title='Click Add New Template' ";
+                        htmlstr += "onclick=\"XTAdd(event, '"+nodeid+"')\">✚</span>&nbsp;添加摸版";
+                        htmlstr += "到&nbsp;&nbsp;"
+                        htmlstr += arr['name'] + "[" + arr['ntemplates'] + "]";
+                        htmlstr += "</li>";
+                    for(i = 0; i < arr['ntemplates']; i++)
+                    {
+                        temp = arr['template'][i];
+                        pattern = temp['pattern'];
+                        flag = temp['flag'];
+                        tempid = temp['id'];
+                        map = temp['map'];
+                        nfields = temp['nfields'];
+                        htmlstr += "<li class='ltemplate' onmousemove='selectTempalte(this)' "
+                        htmlstr += " onmouseout='outTempalte(this);' >";
+                        htmlstr += "<span class='pattern'>"+pattern+"</span>";
+                        htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;"
+                        htmlstr += "<span class='eupdate' title='Change' ";
+                        htmlstr += "onclick=\"XTEdit(event, '"+nodeid+"', '"+tempid+"',";
+                        htmlstr += "'"+pattern+"','"+flag+"','"+nfields+"','"+map+"')\">✎</span>";
+                        htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
+                        htmlstr += "<span class='edelete' title='Delete' ";
+                        htmlstr += "onclick='XTDelete("+nodeid+", "+tempid+")'>✘</span>";
+                        htmlstr += "</li>";
+                    }
+                    htmlstr += "</ul>";
+                    ediv.innerHTML = htmlstr;
+                }
+            }
+            function ViewTemplates(nodeid)
+            {
+                if(document.forms['templateform']['nodeid'] != nodeid)
+                {
+                    HiddenTemplate();
+                }
+                var xmlHttp = null;
+                if(nodeid > 0 && (xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    var argv = "op=template_list&nodeid="+nodeid;
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                ShowTemplates(xmlHttp.responseText);
+                            }
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+                return true;
+            }
+
             //view node template
             function ViewNodeTemplate(e, id)
             {
@@ -1128,9 +1266,11 @@
 		                                    doc.write(htmlstr);
 		                                    doc.close();
 		                                }
-                                        /*
-                                        */
-		                                document.forms['templateform']['code'].value = str;
+                                        if((ediv = document.getElementById('templatediv'))) 
+                                        {
+                                            ediv.style.display = "inline";
+		                                    document.forms['templateform']['code'].value = str;
+                                        }
 		                            }
                                     else
                                     {
@@ -1147,17 +1287,14 @@
     </head>
     <!-- <body onload='javascript:loadInit();'> -->
     <body>
-<div id='mainframe'>
-    <!--
-    !-->
+  <div id='mainframe'>
     <div id='itab'>
         <ul>
         <li class='tab-selected' id='tab0' onclick="selectView('taskinfo',event)" >下载任务</li>
-        <li id='tab1' onclick="selectView('database',event)" >数据表</li>
-        <li id='tab2' onclick="selectView('template', event)" >抓取树</li>
+        <li id='tab1' onclick="selectView('database',event)" >数据库配置</li>
+        <li id='tab2' onclick="selectView('template', event)" >摸版配置</li>
         <li id='tab3' onclick="selectView('dns', event)" >DNS</li>
         <li id='tab4' onclick="selectView('proxy', event)" >代理</li>
-        <div class="cleard"></div>
         </ul>
     </div>
     <div id='taskinfo'></div>
@@ -1172,25 +1309,39 @@
     <div id='dns'></div>
     <div id='proxy'></div>
     <div id='template'>
-        <table class='template-tab'>
-        <tr>
-            <td valign=top>
-            <div id='treebody' level='0'></div>
-            </td>
-            <td>
-            <div id='node-template'>
-            <form name='name'>
-                URL: <input name=url size=32><br>
-                预览：<textarea name='view' rows=20 cols=80></textarea><br>
-                HTML：<textarea name='code' rows=20 cols=80></textarea><br>
-                摸版：<textarea name='pattern' rows=10 cols=80></textarea><br>
+        <div id='treebody' level='0'></div>
+        <div id='node-template'></div>
+        <div id='xtemplateform'>
+        <div id=urlform >
+        <form action='javascript:void(0);' name='urlform' onsubmit='return LoadURL(this);'>
+            URL:<input type=text size='32' name='url'>
             <input type=submit value='ok'>
-            </form>
+            <span class='formclose' onclick="CloseForm(this)">x</span>
+        </form>
+        </div>
+        <div id='souce_code_op'>
+            <div id='source_view'></div>
+            <div id='source_op'>
+                <a  href ="javascript:getSelectContent('editor-frame');">select</a>
             </div>
-            </td>
-        </tr>
-        </table>
+        </div>
+        <div id='templatediv'>
+        <form name="templateform" action="javascript:void(0)" onsubmit="return EditTemplate(this);"> 
+            <input type=hidden name='op' value='template_add' >
+            <input type=hidden name='nodeid' value='' >
+            <input type=hidden name='templateid' value='' >
+            <input type=hidden name='flag' value='' >
+            代码:<textarea name='code' rows=10  cols=120> </textarea><br>
+            <br>
+            摸版:<input type=text name='pattern' size=128 >
+            <br>
+            <br>
+            <input type='submit' value='ok'>
+        </form>
+        </div>
+        </div>
     </div>
+</div>
     <div id='txtform' class='formdiv'>
         <form name="editorform" action="javascript:void(0)" onsubmit="return EditNode(this);"> 
             <input type=hidden name='op' value='node_add' >
@@ -1232,52 +1383,5 @@
             &nbsp;&nbsp;<span class='formclose' onclick="CloseForm(this)">x</span>
         </form>
     </div>
-    <div id='xtemplateform'>
-        <div id=urlform >
-        <form action='javascript:void(0);' name='urlform' onsubmit='return LoadURL(this);'>
-            URL:<input type=text size='32' name='url'>
-            <input type=submit value='ok'>
-            <span class='formclose' onclick="CloseForm(this)">x</span>
-        </form>
-        </div>
-        <div id='souce_code_op'>
-            <div id='source_view'></div>
-            <div id='source_op'>
-                <a  href ="javascript:getSelectContent('editor-frame');">select</a>
-            </div>
-        </div>
-        <div id='templatediv'>
-        <form name="templateform" action="javascript:void(0)" onsubmit="return EditTemplate(this);"> 
-            <input type=hidden name='op' value='template_add' >
-            <input type=hidden name='nodeid' value='' >
-            <input type=hidden name='templateid' value='' >
-            代码:<textarea name='code' rows=20  cols=120> </textarea><br>
-            摸版:<textarea name='pattern' rows=10 cols=120> </textarea>
-        </form>
-        </div>
-    </div>
-    <script language='javascript'>
-    //ViewTask('task_view');
-    //window.setInterval("ViewTask('task_view')", 10000);
-    /*
-    var levels = 0;
-    function addnodes(pid)
-    {
-        var i = 0, id = 0;
-        for(i = 1; i < 10; i++)
-        {
-            id = pid * 10 + i;
-            AddNode(pid, id, "node"+id);
-        }
-    }
-    addnodes(0);
-    */
-    /*
-    alert(document.getElementById('treebody').innerHTML);
-    document.write("<pre>");
-    document.write(dxtree.TreeList);
-    document.write("</pre>");
-    */
-</script>
-</body>
+    </body>
 </html>

@@ -992,13 +992,12 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
     {
         MUTEX_LOCK(hibase->mutex);
         if((pnode = (PNODE *)(hibase->pnodeio.map)) && pnode != (PNODE *)-1
-            && pnode[pnodeid].ntemplates > 0
             && (ptemplate = (ITEMPLATE *)(hibase->templateio.map)) 
             && ptemplate != (ITEMPLATE *)-1)
         {
             p = buf;
-            p += sprintf(p, "({id:'%d', ntemplates:'%d', templates:[", 
-                    pnodeid, pnode[pnodeid].ntemplates);
+            p += sprintf(p, "({id:'%d', name:'%s', ntemplates:'%d', templates:[", 
+                    pnodeid, pnode[pnodeid].name, pnode[pnodeid].ntemplates);
             if(pnode[pnodeid].ntemplates > 0)
             {
                 x = pnode[pnodeid].template_first;

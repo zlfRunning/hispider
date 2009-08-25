@@ -54,7 +54,7 @@ typedef struct _ITABLE
 }ITABLE;
 /* page node */
 #define PNODE_NUM_MAX   256
-#define PNODE_NAME_MAX  64
+#define PNODE_NAME_MAX  256
 typedef struct _PNODE
 {
     short status;

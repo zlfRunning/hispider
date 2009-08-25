@@ -343,13 +343,14 @@ int http_proxy_handler(CONN *conn,  HTTP_REQ *http_req)
             for(i = 0; i < HTTP_HEADER_NUM; i++)
             {
                 if(HEAD_REQ_HOST == i && host) continue;
+                if(HEAD_REQ_REFERER == i) continue;
                 if((n = http_req->headers[i]) > 0 && (s = (http_req->hlines + n)))
                 {
                     p += sprintf(p, "%s %s\r\n", http_headers[i].e, s);
                 }
             }
             p += sprintf(p, "%s", "\r\n");
-            //fprintf(stdout, "%s", buf);
+            fprintf(stdout, "%s", buf);
             conn->push_exchange(conn, buf, (p - buf));
         }
         else if(http_req->reqid == HTTP_POST)
@@ -360,13 +361,14 @@ int http_proxy_handler(CONN *conn,  HTTP_REQ *http_req)
             for(i = 0; i < HTTP_HEADER_NUM; i++)
             {
                 if(HEAD_REQ_HOST == i && host) continue;
+                if(HEAD_REQ_REFERER == i) continue;
                 if((n = http_req->headers[i]) > 0 && (s = http_req->hlines + n))
                 {
                     p += sprintf(p, "%s %s\r\n", http_headers[i].e, s);
                 }
             }
             p += sprintf(p, "%s", "\r\n");
-            //fprintf(stdout, "%s", buf);
+            fprintf(stdout, "%s", buf);
             conn->push_exchange(conn, buf, (p - buf));
             if((n = http_req->headers[HEAD_ENT_CONTENT_LENGTH]) > 0 
                     && (n = atol(http_req->hlines + n)) > 0)
