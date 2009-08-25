@@ -71,7 +71,7 @@
                 border:0px solid #81BEF7;padding:0px;font-size:12pt;color:#2F5FA1;}
             #souce_code_op{display:none;}
             #templatediv{display:none;}
-            #editor-frame{height:240px;width:996px;border:0px;}
+            #editor-frame{height:240px;width:994px;border:1px solid #000000;}
             .formclose{font-size:14pt;font-weight:bold;color:silver;
                 cursor:pointer;display:inline;right:20px;text-align:right;}
             .node
@@ -975,7 +975,25 @@
             }
             function TestTemplate(form)
             {
-                 
+                if(form)
+                {
+                    var pattern = form['pattern'].value;
+                    var code = form['code'].value;
+                    var arr = null;
+                    var reg = new  RegExp(pattern, 'im');
+                    if((arr = reg.exec(code))) 
+                    {
+                        var str = "RegExp-Result:\n";
+                        for(i = 1; i < arr.length;i++)
+                        {
+                            str += i+"--start--\n\n";
+                            str += arr[i]+"\n\n";
+                            str += "--end--\n\n"
+                        }
+                        str += "\n";
+                        alert(str);
+                    }
+                }
             }
             function ShowTemplates(txt)
             {
@@ -1331,9 +1349,11 @@
             <input type=hidden name='nodeid' value='' >
             <input type=hidden name='templateid' value='' >
             <input type=hidden name='flag' value='' >
-            代码:<textarea name='code' rows=10  cols=120> </textarea><br>
+            代码:<textarea name='code' rows=10  cols=120> </textarea> 
             <br>
-            摸版:<input type=text name='pattern' size=128 >
+            <br>
+            摸版:<textarea name='pattern' rows=5  cols=100 > </textarea>
+            <input type=button onclick='TestTemplate(this.form)' value='Test'><br>
             <br>
             <br>
             <input type='submit' value='ok'>
