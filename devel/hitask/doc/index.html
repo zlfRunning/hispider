@@ -20,7 +20,6 @@
                 width:1000px;
                 height:100%;
             }
-            
             #itab {position:absolute;background:#ffffff;height:50px; top:0px;left:0px;}
             #itab ul{margin:0;padding:0;list-style:none;color:#2F5FA1;}
             #itab li{float:left;background-color:#F4FBFF;border-right:1px solid #FFF;
@@ -72,6 +71,11 @@
             #souce_code_op{display:none;}
             #templatediv{display:none;}
             #editor-frame{height:240px;width:994px;border:1px solid #000000;}
+            .template-editor{position:absolute;background-color:#D0E9F7;display:inline;width:500px;
+                border:1px solid #000000;padding:0px;font-size:12pt;color:#2F5FA1;}
+            .template-editor-header{position:relative;background-color:#81BEF7;
+                display:inline;width:500px;border:0px solid #000000;
+                padding:0px;font-size:12pt;color:#2F5FA1;}
             .formclose{font-size:14pt;font-weight:bold;color:silver;
                 cursor:pointer;display:inline;right:20px;text-align:right;}
             .node
@@ -290,7 +294,34 @@
             {
                 element.parentNode.parentNode.style.display = "none";
             }
-
+            //delete form
+            function divreset(element)
+            {
+                document.body.removeChild(element);
+            }
+            function divmove(e, o)
+            {
+                o.onselectstart = function()
+                {
+                    return(false);
+                };
+                o.onmousedown = function(e)
+                {
+                    e = e||window.event;
+                    var x = parseInt(e.clientX - o.offsetLeft);
+                    var y = parseInt(e.clientY - o.offsetTop);
+                    document.onmousemove = function(e)
+                    {
+                        e=e||window.event;
+                        o.style.left=(e.clientX-x)+"px";
+                        o.style.top=(e.clientY-y)+"px";
+                    };
+                    document.onmouseup=function()
+                    {
+                        document.onmousemove=null;
+                    };
+                };
+            }
             //Add child
             function XAdd(e)
             {
@@ -983,15 +1014,37 @@
                     var reg = new  RegExp(pattern, 'im');
                     if((arr = reg.exec(code))) 
                     {
-                        var str = "RegExp-Result:\n";
+                        var str = "<div class='template-editor-header' onmousemove='";
+                            str += "divmove(event, this.parentNode)'>";
+                            str += "<span class='formclose' onclick='divreset(";
+                            str += "this.parentNode.parentNode)' >X</span>";
+                            str += "</div>";
+                            str += "<form name='tempform'>";
                         for(i = 1; i < arr.length;i++)
                         {
-                            str += i+"--start--\n\n";
-                            str += arr[i]+"\n\n";
-                            str += "--end--\n\n"
+                            str += "<span class='ctxt_block'>"
+                            str += "<textarea name='txt_"+i+"' cols=40 rows=5>"
+                            str += arr[i];
+                            str += "</textarea><br>";
+                            str += "<input type=checkbox name='spam_"+i+"'>去广告";
+                            str += "&nbsp;&nbsp;";
+                            str += "<input type=checkbox name='img_"+i+"'>拼接URL";
+                            str += "&nbsp;&nbsp;";
+                            str += "<input type=checkbox name='link_"+i+"'>是否链接";
+                            str += "</span>";
                         }
-                        str += "\n";
-                        alert(str);
+                        str += "</form>";
+                        var element = document.createElement('div');
+                            element.innerHTML = str;
+                            element.className = 'template-editor';
+                        var obody = document.getElementById('mainframe');
+                        var xleft = parseInt(obody.offsetWidth) - 400;
+                        var x = obody.offsetLeft +(xleft/2);
+                        var y = 100 + document.body.scrollTop;
+                        element.style.left = x+'px';
+                        element.style.top = y+'px';
+                        element.style.width = '400px';
+                        document.body.appendChild(element);
                     }
                 }
             }
