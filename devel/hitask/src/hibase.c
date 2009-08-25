@@ -386,7 +386,7 @@ int hibase_add_field(HIBASE *hibase, int tableid, char *name, int type, int flag
         if((tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1
                 && tab[tableid].nfields < FIELD_NUM_MAX)
         {
-            if((flag & F_IS_INDEX) > 0){from = 0; to = HI_INDEX_MAX;}
+            if(flag >= 0 && (flag & F_IS_INDEX) > 0){from = 0; to = HI_INDEX_MAX;}
             else {from = HI_INDEX_MAX; to = FIELD_NUM_MAX;}
             for(i = from; i < to; i++)
             {
@@ -394,7 +394,7 @@ int hibase_add_field(HIBASE *hibase, int tableid, char *name, int type, int flag
                 {
                     tab[tableid].fields[i].status = FIELD_STATUS_OK;
                     tab[tableid].fields[i].type   = type;
-                    tab[tableid].fields[i].flag   |= flag;
+                    if(flag >= 0) tab[tableid].fields[i].flag   |= flag;
                     tab[tableid].fields[i].uid    = uid;
                     memcpy(tab[tableid].fields[i].name, name, n);
                     tab[tableid].nfields++;
@@ -428,7 +428,7 @@ int hibase_update_field(HIBASE *hibase, int tableid, int fieldid,
         if((tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1
             && tab[tableid].fields[fieldid].status == FIELD_STATUS_OK)
         {
-            isindex = (flag & F_IS_INDEX);
+            if(flag >= 0 ) isindex = (flag & F_IS_INDEX);
             old_is_index = (tab[tableid].fields[fieldid].flag & F_IS_INDEX);
             if(isindex > 0 && old_is_index == 0)
             {
@@ -570,6 +570,51 @@ int hibase_list_table(HIBASE *hibase, char *block)
     return ret;
 }
 
+/* view DB */
+int hibase_view_database(HIBASE *hibase, char *block)
+{
+    int ret = -1, i = 0, j = 0;
+    ITABLE *tab = NULL;
+    char buf[HI_BUF_SIZE], *p =  NULL, *pp = NULL, *ppp = NULL;
+
+    if(hibase && block)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if((tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1)
+        {
+            p = buf;
+            p += sprintf(p, "%s","({tables:[");
+            pp = p;
+            for(i = 0; i < hibase->tableio.total; i++)
+            {
+                if(tab[i].status == TAB_STATUS_OK)
+                {
+                    p += sprintf(p, "{id:'%d', name:'%s', nfields:'%d', fields:[", 
+                        i, tab[i].name, tab[i].nfields);
+                    ppp = p;
+                    for(j = 0; j < FIELD_NUM_MAX; i++)
+                    {
+                        if(tab[i].fields[j].status == FIELD_STATUS_OK)
+                        {
+                            p += sprintf(p, "{id:'%d', name:'%s', type:'%d', "
+                                    "flag:'%d', status:'%d'},", j, tab[i].fields[j].name, 
+                                    tab[i].fields[j].type, tab[i].fields[j].flag, 
+                                    tab[i].fields[j].status);
+                        }
+                    }
+                    if(p != ppp) --p;
+                    p += sprintf(p, "%s", "]}");
+                }
+            }
+            if(p != pp)--p;
+            p += sprintf(p, "%s", "]})");
+            ret = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
+                "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (p - buf), buf);
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return ret;
+}
 /* check pnode exists */
 int hibase_pnode_exists(HIBASE *hibase, int parentid, char *name, int len)
 {
@@ -1081,6 +1126,7 @@ HIBASE * hibase_init()
         hibase->delete_table        = hibase_delete_table;
         hibase->view_table          = hibase_view_table;
         hibase->list_table          = hibase_list_table;
+        hibase->view_database       = hibase_view_database;
         hibase->add_field           = hibase_add_field;
         hibase->update_field        = hibase_update_field;
         hibase->delete_field        = hibase_delete_field;
@@ -1126,10 +1172,11 @@ int main(int argc, char **argv)
                 for(j = 0; j < rand; j++)
                 {
                     sprintf(name, "field_%d", j);
-                    x = j % 3;
+                    x = j % 4;
                     if(x == 0 )type = FTYPE_INT;
                     else if (x == 1) type = FTYPE_FLOAT;
-                    else  type = FTYPE_TEXT;
+                    else if (x == 2) type = FTYPE_TEXT;
+                    else  type = FTYPE_BLOB;
                     flag = F_IS_NULL;
                     if(j % 2) flag |= F_IS_INDEX; 
                     if((fieldid = hibase_add_field(hibase, tabid, name, type, flag)) > 0)

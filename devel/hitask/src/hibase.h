@@ -6,7 +6,8 @@ extern "C" {
 #define FTYPE_INT 		        0x01
 #define FTYPE_FLOAT		        0x02
 #define FTYPE_TEXT		        0x04
-#define FTYPE_ALL 		        (FTYPE_INT|FTYPE_FLOAT|FTYPE_TEXT)	
+#define FTYPE_BLOB		        0x08
+#define FTYPE_ALL 		        (FTYPE_INT|FTYPE_FLOAT|FTYPE_TEXT|FTYPE_BLOB)	
 #define FIELD_NUM_MAX		    256
 #define HI_INDEX_MAX		    32
 #define PATTERN_NUM_MAX         8
@@ -32,7 +33,7 @@ extern "C" {
 #define HI_URL_MAX              4096
 #endif
 #ifndef HI_BUF_SIZE
-#define HI_BUF_SIZE             65536
+#define HI_BUF_SIZE             262144
 #endif
 /* field */
 typedef struct _IFIELD
@@ -130,6 +131,7 @@ typedef struct _HIBASE
     int 	(*rename_table)(struct _HIBASE *, int table_id, char *table_name);
     int 	(*delete_table)(struct _HIBASE *, int table_id);
     int	    (*view_table)(struct _HIBASE *, int table_id, char *block);
+    int	    (*view_database)(struct _HIBASE *, char *block);
     int 	(*list_table)(struct _HIBASE *, char *block);
     int     (*add_field)(struct _HIBASE *, int table_id, 
             char *name, int type, int flag);

@@ -107,10 +107,12 @@ static char *e_ops[]=
 #define E_OP_TEMPLATE_UPDATE    18
     "template_delete",
 #define E_OP_TEMPLATE_DELETE    19
-    "template_list"
+    "template_list",
 #define E_OP_TEMPLATE_LIST      20
+    "database_view"
+#define E_OP_DATABASE_VIEW      21
 };
-#define E_OP_NUM 21
+#define E_OP_NUM 22
 /* dns packet reader */
 int adns_packet_reader(CONN *conn, CB_DATA *buffer)
 {
@@ -798,6 +800,13 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         break;
                     case E_OP_TABLE_LIST:
                         if((n = hibase->list_table(hibase, block)) > 0)
+                        {
+                            conn->push_chunk(conn, block, n);
+                            goto end;
+                        }else goto err_end;
+                        break;
+                     case E_OP_DATABASE_VIEW:
+                        if((n = hibase->view_database(hibase, block)) > 0)
                         {
                             conn->push_chunk(conn, block, n);
                             goto end;
