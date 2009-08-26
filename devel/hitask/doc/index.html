@@ -1032,9 +1032,35 @@
                 Xdiv.style.top = y + 10;
                 Xdiv.style.display = 'inline';
             }
+            function XTDelete(nodeid, templateid)
+            {
+                var xmlHttp = null;
+                var msg = "Are you sure delete template["+templateid+"] from node["+nodeid+"] ?";
+                if(confirm(msg) && (xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    var argv = "op=template_delete&nodeid="+nodeid+"&templateid="+templateid;
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                ShowTemplates(xmlHttp.responseText);
+                            }
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+                return true;
+            }
             function HiddenTemplate()
             {
                 var div = null;
+                if((div = document.getElementById('node-template')))
+                    div.innerHTML = "";
                 if((div = document.getElementById('source_view')))
                     div.innerHTML = "";
                 if((div = document.getElementById('souce_code_op')))
@@ -1060,7 +1086,7 @@
                 var tabid = -1;
                 var fieldsoptions = "";
                 var select = form[fselectid];
-                if(select) select.options.length = 0;
+                if(select) select.options.length = 1;
                 if(form && (odiv = document.getElementById('database')) 
                     && (strdb = odiv.getAttribute('dbase')) && (dbase = eval(strdb)))
                 {
@@ -1068,7 +1094,7 @@
                         && (fields = dbase['tables'][tabid]['fields'])
                         && select)
                     {
-                        i = 0;
+                        i = 1;
                         for(x in fields)
                         {
                             select.options[i++] = new Option(fields[x]['name'], x);
@@ -1136,7 +1162,7 @@
                             str += "<input type=hidden name='templateid' value='"+templateid+"'>";
                             str += "<input type=hidden name='op' value='"+op+"'>";
                             str += "<input type=hidden name='is_global'>";
-                            str += "URL:<input type=text name='url' size=72 value="+url+"><br>";
+                            str += "URL:<input type=text name='url' size=96 value="+url+"><br>";
                             str += "模版:<textarea name='pattern' cols=80 rows=4>";
                             str += pattern+"</textarea><br>";
                             str += "<input type=checkbox name='is_public'>公共&nbsp;&nbsp;";
@@ -1152,6 +1178,7 @@
                             str += tablesoptions;
                             str += "</select>";
                             str += "字段:<select name='fieldid_"+i+"'>";
+                            str += "<option value='-1' selected>请选择</option>";
                             str += "</select>";
                             str += "节点:<select name='nodeid_"+i+"'>";
                             str += "<option value='-1' selected>请选择</option>";
@@ -1173,6 +1200,7 @@
                         str += tablesoptions;
                         str += "</select>";
                         str += "字段:<select name='link_field'>";
+                        str += "<option value='-1' selected>请选择</option>";
                         str += "</select>";
                         str += "节点:<select name='link_nodeid'>";
                         str += "<option value='-1' selected>请选择</option>";
@@ -1217,10 +1245,12 @@
                     var pattern = "";
                     var map = "";
                     var nfields = 0;
+                    var url = "";
+                    var link = "";
                     document.forms['templateform']['nodeid'].value = nodeid;
                     var htmlstr =  "<ul class='ultab' >";
                         htmlstr += "<li class='template-header'>";
-                        htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;"
+                        htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
                         htmlstr += "点击&nbsp;<span class='eadd' title='Click Add New Template' ";
                         htmlstr += "onclick=\"XTAdd(event, '"+nodeid+"')\">✚</span>&nbsp;添加摸版";
                         htmlstr += "到&nbsp;&nbsp;"
@@ -1228,22 +1258,32 @@
                         htmlstr += "</li>";
                     for(i = 0; i < arr['ntemplates']; i++)
                     {
-                        temp = arr['template'][i];
+                        temp = arr['templates'][i];
                         pattern = temp['pattern'];
                         flag = temp['flag'];
                         tempid = temp['id'];
                         map = temp['map'];
+                        url = temp['url'];
+                        link = temp['link'];
                         nfields = temp['nfields'];
-                        htmlstr += "<li class='ltemplate' onmousemove='selectTempalte(this)' "
+                        htmlstr += "<hr><li class='ltemplate' onmousemove='selectTempalte(this)' "
                         htmlstr += " onmouseout='outTempalte(this);' >";
-                        htmlstr += "<span class='pattern'>"+pattern+"</span>";
-                        htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;"
+                        htmlstr += "<form action='javascript:void(0)' >";
+                        htmlstr += "<textarea name='pattern' cols=80 rows=1 readonly/disabled >"
+                            +pattern+"</textarea>&nbsp;&nbsp;&nbsp;&nbsp;";
+                        htmlstr += "<input type=hidden name='nodeid' value='"+nodeid+"'>";
+                        htmlstr += "<input type=hidden name='templateid' value='"+tempid+"'>";
+                        htmlstr += "<input type=hidden name='flag' value='"+flag+"'>";
+                        htmlstr += "<input type=hidden name='nfields' value='"+nfields+"'>";
+                        htmlstr += "<input type=hidden name='map' value='"+map+"'>";
+                        htmlstr += "<input type=hidden name='link' value='"+link+"'>";
+                        htmlstr += "<input type=hidden name='url' value='"+url+"'>";
                         htmlstr += "<span class='eupdate' title='Change' ";
-                        htmlstr += "onclick=\"XTEdit(event, '"+nodeid+"', '"+tempid+"',";
-                        htmlstr += "'','"+flag+"','"+nfields+"','"+map+"')\">✎</span>";
+                        htmlstr += "onclick=\"XTEdit(event, this.form)\" >✎</span>";
                         htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
                         htmlstr += "<span class='edelete' title='Delete' ";
                         htmlstr += "onclick='XTDelete("+nodeid+", "+tempid+")'>✘</span>";
+                        htmlstr += "</form>";
                         htmlstr += "</li>";
                     }
                     htmlstr += "</ul>";
@@ -1253,7 +1293,7 @@
             function ViewTemplates(nodeid)
             {
                 var oldnodeid = document.forms['templateform']['nodeid'].value;
-                if(oldnodeid > 0 && oldnodeid != nodeid)
+                if(oldnodeid != nodeid)
                 {
                     HiddenTemplate();
                 }
@@ -1301,21 +1341,22 @@
                 var map = "{";
                 for(i = 1; i < nfields; i++)
                 {
+                    tabselect = form['tableid_'+i];
+                    fieldselect = form['nodeid_'+i];
+                    nodeselect = form['fieldid_'+i];
                     tabid = form['tableid_'+i].value;
-                    fieldid = -1;
-                    if(form['fieldid_'+i]) 
-                        fieldid = form['fieldid_'+i].value;
-                    child_nodeid = form['nodeid_'+i].value;
-                    child_flag = 0;
+                    fieldid =  form['fieldid_'+i].value;
+                    node_id = form['nodeid_'+i].value;
+                    node_flag = 0;
                     if(form['is_link_'+i].checked == true) 
-                        child_flag |= 1;
+                        node_flag |= 1;
                     if(form['is_img_'+i].checked == true) 
-                        child_flag |= 2;
+                        node_flag |= 2;
                     if(form['is_need_clearhtml_'+i].checked == true) 
-                        child_flag |= 4;
+                        node_flag |= 4;
                     if(form['is_need_antispam_'+i].checked == true) 
-                        child_flag |= 8;
-                    map += "["+tabid+","+fieldid+","+child_nodeid+","+flag+"]";
+                        node_flag |= 8;
+                    map += "["+tabid+","+fieldid+","+node_id+","+node_flag+"]";
                     if(i < (nfields - 1)) map += ";";
                 }
                 map += "}";
