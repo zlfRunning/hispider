@@ -76,6 +76,7 @@
             #template-editor{position:absolute;background-color:#D0E9F7;display:inline;
                 border:1px solid #000000;padding:0px;font-size:12pt;color:#2F5FA1;}
             #templateeditorheader{position:relative;background-color:#2F5FA1;}
+            .ctxt_block{position:relative;background-color:silver;}
             .formclose{font-size:14pt;font-weight:bold;color:silver;
                 cursor:pointer;display:inline;right:20px;text-align:right;}
             .node
@@ -973,6 +974,7 @@
             function divreset(element)
             {
                 document.body.removeChild(element);
+                return true;
             }
             //moving div
             function divmove(e, o)
@@ -1044,12 +1046,12 @@
                 var form = document.forms['templateform'];
                     form['code'].value = '';
                     form['pattern'].value = '';
-                    form['nodeid'].value = '';
-                    form['templateid'].value = '';
+                    form['nodeid'].value = '-1';
+                    form['templateid'].value = '-1';
                     form['flag'].value = '';
                 return true;
             }
-            function changeTable(form, id, el)
+            function changeTable(form, fselectid, el)
             {
                 var odiv = null;
                 var strdb = null;
@@ -1057,9 +1059,9 @@
                 var fields = null;
                 var tabid = -1;
                 var fieldsoptions = "";
-                var select = form['fieldid_'+id];
+                var select = form[fselectid];
                 if(select) select.options.length = 0;
-                if(form && id >= 0 && (odiv = document.getElementById('database')) 
+                if(form && (odiv = document.getElementById('database')) 
                     && (strdb = odiv.getAttribute('dbase')) && (dbase = eval(strdb)))
                 {
                     if((tabid = el.options[el.selectedIndex].value) >= 0 
@@ -1075,13 +1077,20 @@
                     }
                 }
             }
+            function TestLink(form)
+            {
+
+            }
             function TestTemplate(form)
             {
                 if(form)
                 {
                     var nodeid = form['nodeid'].value;
+                    var templateid = form['templateid'].value;
                     var pattern = form['pattern'].value;
                     var code = form['code'].value;
+                    var op = form['op'].value;
+                    var url = form['url'].value;
                     var arr = null;
                     var reg = new  RegExp(pattern, 'im');
                     if((arr = reg.exec(code))) 
@@ -1120,24 +1129,25 @@
                             str += "<span class='formclose' onclick='divreset(";
                             str += "this.parentNode.parentNode)' >X</span>";
                             str += "</div>";
-                            str += "<form name='tempform'>";
+                            str += "<form name='tempform' action='javascript:void(0)' ";
+                            str += "onsubmit='EditTemplate(this, this.parentNode)'>";
                             str += "<input type=hidden name='nfields' value='"+arr.length+"'>";
                             str += "<input type=hidden name='nodeid' value='"+nodeid+"'>";
-                            str += "<input type=hidden name='op' value='template_add'>";
+                            str += "<input type=hidden name='templateid' value='"+templateid+"'>";
+                            str += "<input type=hidden name='op' value='"+op+"'>";
+                            str += "<input type=hidden name='is_global'>";
+                            str += "URL:<input type=text name='url' size=72 value="+url+"><br>";
+                            str += "模版:<textarea name='pattern' cols=80 rows=4>";
+                            str += pattern+"</textarea><br>";
+                            str += "<input type=checkbox name='is_public'>公共&nbsp;&nbsp;";
+                            str += "<hr>";
                         for(i = 1; i < arr.length;i++)
                         {
-                            str += "<span class='ctxt_block'>"
-                            str += "<textarea name='txt_"+i+"' cols=40 rows=5>"
+                            str += "结果:<textarea name='txt_"+i+"' cols=80 rows=5>"
                             str += arr[i];
                             str += "</textarea><br>";
-                            str += "<input type=checkbox name='is_link_"+i+"'>链接";
-                            str += "&nbsp;&nbsp;";
-                            str += "<input type=checkbox name='is_img_"+i+"'>图片";
-                            str += "&nbsp;&nbsp;";
-                            str += "<input type=checkbox name='is_spam_"+i+"'>去广告";
-                            str += "&nbsp;&nbsp;";
-                            str += "数据表:<select name='tableid_"+i+"' onchange='";
-                            str += "changeTable(this.form,"+i+",this)'>";
+                            str += "数据表:<select name='tableid_"+i+"' onchange=\"";
+                            str += "changeTable(this.form,'fieldid_"+i+"',this)\">";
                             str += "<option value='-1' selected>请选择</option>";
                             str += tablesoptions;
                             str += "</select>";
@@ -1146,10 +1156,32 @@
                             str += "节点:<select name='nodeid_"+i+"'>";
                             str += "<option value='-1' selected>请选择</option>";
                             str += childsoptions;
-                            str += "</select>";
-                            str += "</span>";
+                            str += "</select><br>";
+                            str += "<input type=checkbox name='is_link_"+i+"'>链接";
+                            str += "&nbsp;&nbsp;";
+                            str += "<input type=checkbox name='is_img_"+i+"'>图片";
+                            str += "&nbsp;&nbsp;";
+                            str += "<input type=checkbox name='is_need_clearhtml_"+i+"'>去HTML";
+                            str += "&nbsp;&nbsp;";
+                            str += "<input type=checkbox name='is_need_antispam_"+i+"'>去广告";
+                            str += "<hr>";
                         }
-                        str += "</form>";
+                        str += "URL拼接规则:<input type=text name='link' size=72><br>";
+                        str += "数据表:<select name='link_table' onchange=\"";
+                        str += "changeTable(this.form,'link_field',this)\">";
+                        str += "<option value='-1' selected>请选择</option>";
+                        str += tablesoptions;
+                        str += "</select>";
+                        str += "字段:<select name='link_field'>";
+                        str += "</select>";
+                        str += "节点:<select name='link_nodeid'>";
+                        str += "<option value='-1' selected>请选择</option>";
+                        str += childsoptions;
+                        str += "</select><input type=button value='Test' ";
+                        str += " onclick='TestLink(this.form)'>";
+                        str += "<br><hr>";
+                        str += "<input type=submit value='ok'> </form>";
+                        str += "<br>";
                         var element = null;
                         if((element = document.getElementById('template-editor')))
                         {
@@ -1169,6 +1201,7 @@
                         document.body.appendChild(element);
                     }
                 }
+                return true;
             }
             function ShowTemplates(txt)
             {
@@ -1207,7 +1240,7 @@
                         htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;"
                         htmlstr += "<span class='eupdate' title='Change' ";
                         htmlstr += "onclick=\"XTEdit(event, '"+nodeid+"', '"+tempid+"',";
-                        htmlstr += "'"+pattern+"','"+flag+"','"+nfields+"','"+map+"')\">✎</span>";
+                        htmlstr += "'','"+flag+"','"+nfields+"','"+map+"')\">✎</span>";
                         htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
                         htmlstr += "<span class='edelete' title='Delete' ";
                         htmlstr += "onclick='XTDelete("+nodeid+", "+tempid+")'>✘</span>";
@@ -1219,7 +1252,8 @@
             }
             function ViewTemplates(nodeid)
             {
-                if(document.forms['templateform']['nodeid'] != nodeid)
+                var oldnodeid = document.forms['templateform']['nodeid'].value;
+                if(oldnodeid > 0 && oldnodeid != nodeid)
                 {
                     HiddenTemplate();
                 }
@@ -1245,47 +1279,63 @@
                 }
                 return true;
             }
-
-            //view node template
-            function ViewNodeTemplate(e, id)
+            //edit template
+            function EditTemplate(form, element)
             {
-                e = e || window.event;
-                var element = e.target || e.srcElement;
-                var Xdiv =  document.getElementById("xtemplateform");
-                /*
-                var x = e.clientX + document.body.scrollLeft;
-                var y = e.clientY + document.body.scrollTop;
-                Xdiv.style.left = x;
-                Xdiv.style.top = y + 10;
-                */
-                Xdiv.style.display = 'inline';
-                var ediv = null;
-                if((ediv = document.getElementById('source_view'))) ediv.innerHTML = "";
-                if((ediv = document.getElementById('souce_code_op'))) ediv.style.display = "none";
-                var form = document.forms["templateform"];
-                form['nodeid'].value = id;
-                form['code'].value = '';
-                form['pattern'].value = '';
-                form = document.forms["urlform"];
-                form['url'].focus();
-                form['url'].value = 'http://';
-            }
-            //add template
-            function AddTemplate(form)
-            {
+                var op = form['op'].value;
+                var nodeid = form['nodeid'].value;
+                var templateid = form['templateid'].value;
                 var pattern = form['pattern'].value;
+                var url = form['url'].value;
                 var flag = 0;
                 if(form['is_public'].checked == true) flag |= 1;
                 var nfields = form['nfields'].value;
-                var map = null;
-                for(i = 0; i < nfields; i++)
+                var tabid = null;
+                var fieldid = null;
+                var is_link = 0;
+                var is_img = 0;
+                var is_need_clearhtml = 0;
+                var is_need_antispam = 0;
+                var child_nodeid = 0;
+                var child_flag = 0;
+                var map = "{";
+                for(i = 1; i < nfields; i++)
                 {
-
+                    tabid = form['tableid_'+i].value;
+                    fieldid = -1;
+                    if(form['fieldid_'+i]) 
+                        fieldid = form['fieldid_'+i].value;
+                    child_nodeid = form['nodeid_'+i].value;
+                    child_flag = 0;
+                    if(form['is_link_'+i].checked == true) 
+                        child_flag |= 1;
+                    if(form['is_img_'+i].checked == true) 
+                        child_flag |= 2;
+                    if(form['is_need_clearhtml_'+i].checked == true) 
+                        child_flag |= 4;
+                    if(form['is_need_antispam_'+i].checked == true) 
+                        child_flag |= 8;
+                    map += "["+tabid+","+fieldid+","+child_nodeid+","+flag+"]";
+                    if(i < (nfields - 1)) map += ";";
                 }
+                map += "}";
+                alert(map);
                 var xmlHttp = null;
-                if(tabid >= 0 && (xmlHttp = CreateXMLHTTP()) != null)
+                var argv = "nodeid="+nodeid+"&flag="+flag+"&map="+encodeURIComponent(map)
+                    +"&pattern="+encodeURIComponent(pattern);
+                if(url) argv += "&url="+encodeURIComponent(url);
+                if(op == 'template_add')
                 {
-                    var argv = "op=table_view&tableid="+tabid;
+                    argv += "&op=template_add";
+                }
+                else if(op == 'template_update')
+                {
+                    argv += "&op=template_update&templateid="+templateid;
+                }
+                else return false;
+                if(argv && (xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    alert(argv);
                     xmlHttp.open('POST', '/', true);
                     xmlHttp.setRequestHeader("Content-Length", argv.length);
                     xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
@@ -1295,12 +1345,14 @@
                         {
                             if(xmlHttp.status == 200)
                             {
-                                ViewFields(xmlHttp.responseText);
+                                ShowTemplates(xmlHttp.responseText);
+                                divreset(element);
                             }
                         }
                     }
                     xmlHttp.send(argv);
                 }
+                return true;
             }
             //database
             function selectView(div, e)
@@ -1465,6 +1517,7 @@
                                         {
                                             ediv.style.display = "inline";
 		                                    document.forms['templateform']['code'].value = str;
+		                                    document.forms['templateform']['url'].value = url;
                                         }
 		                            }
                                     else
@@ -1513,7 +1566,6 @@
         <form action='javascript:void(0);' name='urlform' onsubmit='return LoadURL(this);'>
             URL:<input type=text size='32' name='url'>
             <input type=submit value='ok'>
-            <span class='formclose' onclick="CloseForm(this)">x</span>
         </form>
         </div>
         <div id='souce_code_op'>
@@ -1523,16 +1575,16 @@
             </div>
         </div>
         <div id='templatediv'>
-        <form name="templateform" action="javascript:void(0)" onsubmit="return EditTemplate(this);"> 
+        <form name="templateform" action="javascript:void(0)" onsubmit="return TestTemplate(this);"> 
             <input type=hidden name='op' value='template_add' >
-            <input type=hidden name='nodeid' value='' >
+            <input type=hidden name='nodeid' value='-1' >
             <input type=hidden name='templateid' value='' >
             <input type=hidden name='flag' value='' >
+            <input type=hidden name='url' value='' >
             代码:<textarea name='code' rows=10  cols=120> </textarea> 
             <br>
             <br>
             摸版:<textarea name='pattern' rows=5  cols=100 > </textarea>
-            <input type=button onclick='TestTemplate(this.form)' value='Test'><br>
             <br>
             <br>
             <input type='submit' value='ok'>

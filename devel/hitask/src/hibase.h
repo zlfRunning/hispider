@@ -77,6 +77,8 @@ typedef struct _IREGX
 {
     short tableid;
     short fieldid;
+    int   nodeid;
+    int   flag;
 }IREGX;
 #define RP_IS_PUBLIC 0x01
 #define RP_IS_MULTI  0x02
