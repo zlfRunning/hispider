@@ -583,31 +583,31 @@ int hibase_view_database(HIBASE *hibase, char *block)
         if((tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1)
         {
             p = buf;
-            p += sprintf(p, "%s","({tables:[");
+            p += sprintf(p, "%s","({tables:{");
             pp = p;
             for(i = 0; i < hibase->tableio.total; i++)
             {
                 if(tab[i].status == TAB_STATUS_OK)
                 {
-                    p += sprintf(p, "{id:'%d', name:'%s', nfields:'%d', fields:[", 
-                        i, tab[i].name, tab[i].nfields);
+                    p += sprintf(p, "%d:{id:'%d', name:'%s', nfields:'%d', fields:{", 
+                        i, i, tab[i].name, tab[i].nfields);
                     ppp = p;
-                    for(j = 0; j < FIELD_NUM_MAX; i++)
+                    for(j = 0; j < FIELD_NUM_MAX; j++)
                     {
                         if(tab[i].fields[j].status == FIELD_STATUS_OK)
                         {
-                            p += sprintf(p, "{id:'%d', name:'%s', type:'%d', "
-                                    "flag:'%d', status:'%d'},", j, tab[i].fields[j].name, 
+                            p += sprintf(p, "%d:{id:'%d', name:'%s', type:'%d', "
+                                    "flag:'%d', status:'%d'},", j, j, tab[i].fields[j].name, 
                                     tab[i].fields[j].type, tab[i].fields[j].flag, 
                                     tab[i].fields[j].status);
                         }
                     }
                     if(p != ppp) --p;
-                    p += sprintf(p, "%s", "]}");
+                    p += sprintf(p, "%s", "}},");
                 }
             }
             if(p != pp)--p;
-            p += sprintf(p, "%s", "]})");
+            p += sprintf(p, "%s", "}})");
             ret = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
                 "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (p - buf), buf);
         }

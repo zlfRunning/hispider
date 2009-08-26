@@ -73,11 +73,9 @@
             #souce_code_op{display:none;}
             #templatediv{display:none;}
             #editor-frame{height:240px;width:994px;border:1px solid #000000;}
-            #template-editor{position:absolute;background-color:#D0E9F7;display:inline;width:500px;
+            #template-editor{position:absolute;background-color:#D0E9F7;display:inline;
                 border:1px solid #000000;padding:0px;font-size:12pt;color:#2F5FA1;}
-            .template-editor-header{position:relative;background-color:#81BEF7;
-                display:inline;width:500px;border:0px solid #000000;
-                padding:0px;font-size:12pt;color:#2F5FA1;}
+            #templateeditorheader{position:relative;background-color:#2F5FA1;}
             .formclose{font-size:14pt;font-weight:bold;color:silver;
                 cursor:pointer;display:inline;right:20px;text-align:right;}
             .node
@@ -191,6 +189,23 @@
                 var level = oParent.getAttribute('level') * 1;
                 var nchilds = oParent.getAttribute('nchilds') * 1;
                 oParent.setAttribute('nchilds', nchilds + 1);
+                if(pid >= 0)
+                {
+                    var strchilds = oParent.getAttribute('childs');
+                    var pName = oParent.getAttribute('UName');
+                    var childs = null;
+                    if(strchilds) childs = eval(strchilds);
+                    else childs = new Array();
+                    childs[id] = name;
+                    strchilds = "({";
+                    for(x in childs)
+                    {
+                        if(x != pid)
+                            strchilds += x+":'"+childs[x]+"',";
+                    }
+                    strchilds += pid+":'"+pName+"'})";
+                    oParent.setAttribute('childs', strchilds);
+                }
                 var ofold = null;
                 if((ofold = document.getElementById('fold_'+pid)))
                 {
@@ -695,6 +710,32 @@
                     xmlHttp.send(argv);
                 }
             }
+             //View database
+            function ViewDatabase()
+            {
+                var xmlHttp = null;
+                if((xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    var argv = "op=database_view";
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                var odb = document.getElementById('database');
+                                odb.setAttribute('dbase', xmlHttp.responseText);
+                                alert(xmlHttp.responseText);
+                            }
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+                return true;
+            }
             //List Tables
             function ListTables()
             {
@@ -943,13 +984,13 @@
                 o.onmousedown = function(e)
                 {
                     e = e||window.event;
-                    var x = parseInt(e.clientX - o.offsetLeft);
-                    var y = parseInt(e.clientY - o.offsetTop);
+                    var x = parseInt(e.clientX - o.parentNode.offsetLeft);
+                    var y = parseInt(e.clientY - o.parentNode.offsetTop);
                     document.onmousemove = function(e)
                     {
                         e=e||window.event;
-                        o.style.left=(e.clientX-x)+"px";
-                        o.style.top=(e.clientY-y)+"px";
+                        o.parentNode.style.left=(e.clientX-x)+"px";
+                        o.parentNode.style.top=(e.clientY-y)+"px";
                     };
                     document.onmouseup=function()
                     {
@@ -1008,22 +1049,74 @@
                     form['flag'].value = '';
                 return true;
             }
+            function changeTable(form, id)
+            {
+                var odiv = null;
+                var strdb = null;
+                var dbase = null;
+                var fields = null;
+                if(form && (odiv = document.getElementById('database')) 
+                    && (strdb = odiv.getAttribute('dbase')) && (dbase = eval(strdb))
+                    && (fields = dbase[id]) )
+                {
+                    fieldsoptions = "";
+                    for(x in fields)
+                    {
+                        fieldsoptions += "<option value='"+fields[x]['id']+"'>"
+                            +fields[x]['name']+"</option>";    
+                    }
+                    alert(fieldsoptions);
+                }
+            }
             function TestTemplate(form)
             {
                 if(form)
                 {
+                    var nodeid = form['nodeid'].value;
                     var pattern = form['pattern'].value;
                     var code = form['code'].value;
                     var arr = null;
                     var reg = new  RegExp(pattern, 'im');
                     if((arr = reg.exec(code))) 
                     {
-                        var str = "<div class='template-editor-header' onmousemove='";
-                            str += "divmove(event, this.parentNode)'>";
+                        var odiv = null;
+                        var tablesoptions = "";
+                        var childsoptions = "";
+                        if((odiv = document.getElementById('database')))
+                        {
+                            var strdb = odiv.getAttribute('dbase');
+                            var dbase = eval(strdb);
+                            if(dbase)
+                            {
+                                for(x in dbase['tables'])
+                                {
+                                    tablesoptions += "<option values='"+x+"'>"
+                                        +dbase['tables'][x]['name']+"</option>";
+                                }
+                            }
+                        }
+                        if(nodeid > 0 && (odiv = document.getElementById('node'+nodeid)))
+                        {
+                            var strchilds = odiv.getAttribute('childs');
+                            var childs = eval(strchilds);
+                            if(childs)
+                            {
+                                for(x in childs)
+                                {
+                                    childsoptions += "<option value='"+x+"'>"
+                                        +childs[x]+"</option>";
+                                }
+                            }
+                        }
+                        var str = "<div id='templateeditorheader' onmousedown='";
+                            str += "divmove(event, this)'>";
                             str += "<span class='formclose' onclick='divreset(";
                             str += "this.parentNode.parentNode)' >X</span>";
                             str += "</div>";
                             str += "<form name='tempform'>";
+                            str += "<input type=hidden name='nfields' value='"+arr.length+"'>";
+                            str += "<input type=hidden name='nodeid' value='"+nodeid+"'>";
+                            str += "<input type=hidden name='op' value='template_add'>";
                         for(i = 1; i < arr.length;i++)
                         {
                             str += "<span class='ctxt_block'>"
@@ -1036,15 +1129,17 @@
                             str += "&nbsp;&nbsp;";
                             str += "<input type=checkbox name='is_spam_"+i+"'>去广告";
                             str += "&nbsp;&nbsp;";
-                            str += "<select name='tableid_"+i+"'>";
+                            str += "<select name='tableid_"+i+"' onchange='";
+                            str += "changeTable(this.form."+i+")'>";
                             str += "<option value='-1' selected>数据表</option>";
+                            str += tablesoptions;
                             str += "</select>";
                             str += "<select name='fieldid_"+i+"'>";
-                            str += "<option value='-1' selected>字段</option>";
+                            str += "</select>";
                             str += "<select name='nodeid_"+i+"'>";
                             str += "<option value='-1' selected>子节点</option>";
+                            str += childsoptions;
                             str += "</select>";
-
                             str += "</span>";
                         }
                         str += "</form>";
@@ -1082,6 +1177,7 @@
                     var pattern = "";
                     var map = "";
                     var nfields = 0;
+                    document.forms['templateform']['nodeid'].value = nodeid;
                     var htmlstr =  "<ul class='ultab' >";
                         htmlstr += "<li class='template-header'>";
                         htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;"
@@ -1120,6 +1216,7 @@
                 {
                     HiddenTemplate();
                 }
+                Fold(document.getElementById('fold_'+nodeid));
                 var xmlHttp = null;
                 if(nodeid > 0 && (xmlHttp = CreateXMLHTTP()) != null)
                 {
@@ -1373,6 +1470,7 @@
 		                    xmlHttp.send();
 		                }
 		        }
+                return ViewDatabase();
 		    }
     </script>
     </head>
