@@ -728,7 +728,7 @@
                             {
                                 var odb = document.getElementById('database');
                                 odb.setAttribute('dbase', xmlHttp.responseText);
-                                alert(xmlHttp.responseText);
+                                //alert(xmlHttp.responseText);
                             }
                         }
                     }
@@ -1049,23 +1049,30 @@
                     form['flag'].value = '';
                 return true;
             }
-            function changeTable(form, id)
+            function changeTable(form, id, el)
             {
                 var odiv = null;
                 var strdb = null;
                 var dbase = null;
                 var fields = null;
-                if(form && (odiv = document.getElementById('database')) 
-                    && (strdb = odiv.getAttribute('dbase')) && (dbase = eval(strdb))
-                    && (fields = dbase[id]) )
+                var tabid = -1;
+                var fieldsoptions = "";
+                var select = form['fieldid_'+id];
+                if(select) select.options.length = 0;
+                if(form && id >= 0 && (odiv = document.getElementById('database')) 
+                    && (strdb = odiv.getAttribute('dbase')) && (dbase = eval(strdb)))
                 {
-                    fieldsoptions = "";
-                    for(x in fields)
+                    if((tabid = el.options[el.selectedIndex].value) >= 0 
+                        && (fields = dbase['tables'][tabid]['fields'])
+                        && select)
                     {
-                        fieldsoptions += "<option value='"+fields[x]['id']+"'>"
-                            +fields[x]['name']+"</option>";    
+                        i = 0;
+                        for(x in fields)
+                        {
+                            select.options[i++] = new Option(fields[x]['name'], x);
+                        }
+                        //alert(fieldsoptions);
                     }
-                    alert(fieldsoptions);
                 }
             }
             function TestTemplate(form)
@@ -1090,8 +1097,8 @@
                             {
                                 for(x in dbase['tables'])
                                 {
-                                    tablesoptions += "<option values='"+x+"'>"
-                                        +dbase['tables'][x]['name']+"</option>";
+                                    tablesoptions += "<option value='"+x+"'>";
+                                    tablesoptions += dbase['tables'][x]['name']+"</option>\n";
                                 }
                             }
                         }
@@ -1103,8 +1110,8 @@
                             {
                                 for(x in childs)
                                 {
-                                    childsoptions += "<option value='"+x+"'>"
-                                        +childs[x]+"</option>";
+                                    childsoptions += "<option value='"+x+"'>";
+                                    childsoptions += childs[x]+" </option>\n";
                                 }
                             }
                         }
@@ -1129,15 +1136,15 @@
                             str += "&nbsp;&nbsp;";
                             str += "<input type=checkbox name='is_spam_"+i+"'>去广告";
                             str += "&nbsp;&nbsp;";
-                            str += "<select name='tableid_"+i+"' onchange='";
-                            str += "changeTable(this.form."+i+")'>";
-                            str += "<option value='-1' selected>数据表</option>";
+                            str += "数据表:<select name='tableid_"+i+"' onchange='";
+                            str += "changeTable(this.form,"+i+",this)'>";
+                            str += "<option value='-1' selected>请选择</option>";
                             str += tablesoptions;
                             str += "</select>";
-                            str += "<select name='fieldid_"+i+"'>";
+                            str += "字段:<select name='fieldid_"+i+"'>";
                             str += "</select>";
-                            str += "<select name='nodeid_"+i+"'>";
-                            str += "<option value='-1' selected>子节点</option>";
+                            str += "节点:<select name='nodeid_"+i+"'>";
+                            str += "<option value='-1' selected>请选择</option>";
                             str += childsoptions;
                             str += "</select>";
                             str += "</span>";
