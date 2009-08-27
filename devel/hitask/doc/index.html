@@ -1177,7 +1177,6 @@
                         element.appendChild(frame);
                         var block = "";
                         var url = "";
-                        var rp = null;
                         link = form['link'].value;
                         for(i = 0; i < count; i++)
                         {
@@ -1190,12 +1189,14 @@
                                     +matches[i][j]+"</textarea><br>";    
                                 if(link)
                                 {
-                                    rp = new RegExp("<"+j+">", 'gi');
-                                    url = url.replace(rp, matches[i][j]);
+                                    reg = new RegExp("<"+j+">", "ig");
+                                    url = url.replace(reg, matches[i][j]);
                                 }
                             }
                             if(url)
+                            {
                                 block += "URL:<input type=text size=64 value='"+url+"'><br>";
+                            }
                             block += "</span><hr><br><br>";
                         }
                         frame.contentWindow.document.open();
