@@ -1153,7 +1153,7 @@
                         var str = "<div id='templateeditorheader' onmousedown='";
                         str += "divmove(event, this)'>";
                         str += "<span class='closebutton' onclick='divreset(";
-                        str += "this.parentNode.parentNode)' >X</span>";
+                        str += "this.parentNode.parentNode)' >x</span>";
                         str += "</div>";
                         var element = null;
                         if((element = document.getElementById('template-editor')))
@@ -1206,7 +1206,7 @@
                 }
                 return true;
             }
-            function TestTemplates(form)
+            function EditTemplate(form)
             {
                 if(form && form['pattern'].value && form['code'].value)
                 {
@@ -1219,7 +1219,7 @@
                     var is_multi = 0;
                     var arr = null;
                     var condition = "im";
-                    if(form['url'].checked == true) 
+                    if(form['is_link'].checked == true) 
                     {
                         is_multi = 1;
                         condition += "g"; 
@@ -1278,7 +1278,7 @@
                         var str = "<div id='templateeditorheader' onmousedown='";
                             str += "divmove(event, this)'>";
                             str += "<span class='closebutton' onclick='divreset(";
-                            str += "this.parentNode.parentNode)' >X</span>";
+                            str += "this.parentNode.parentNode)' >x</span>";
                             str += "</div>";
                             str += "<form name='tempform' action='javascript:void(0)' ";
                             str += "onsubmit='EditTemplate(this, this.parentNode)'>";
@@ -1445,7 +1445,7 @@
                 return true;
             }
             //edit template
-            function EditTemplate(form, element)
+            function EditTemplates(form, element)
             {
                 var op = form['op'].value;
                 var nodeid = form['nodeid'].value;
@@ -1747,7 +1747,7 @@
         <div id=urlform >
         <form action='javascript:void(0);' name='urlform' onsubmit='return LoadURL(this);'>
             URL:<input type=text size='32' name='url'>
-            <input type=submit value='ok'>
+            <input type=submit value='Load'>
         </form>
         </div>
         <div id='souce_code_op'>
@@ -1757,7 +1757,7 @@
             </div>
         </div>
         <div id='templatediv'>
-        <form name="templateform" action="javascript:void(0)" onsubmit="return TestTemplate(this);"> 
+            <form name="templateform" action="javascript:void(0)" >
             <input type=hidden name='op' value='template_add' >
             <input type=hidden name='nodeid' value='-1' >
             <input type=hidden name='templateid' value='' >
@@ -1773,16 +1773,29 @@
             &nbsp;&nbsp;&nbsp;&nbsp;
             <input type=checkbox name='is_ignorecase' >是否忽略大小写
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-            <input type='submit' value='Test'>
+            <input type='button' value='Test Template' onclick="TestTemplate(this.form)">
+            <input type='button' value='Add Template' onclick="EditTemplate(this.form);">
             </span>
             <br>
             <hr>
-            用于拼接隐藏的链接和Ajax内容块地址
-            <hr>
+            用于拼接隐藏的链接和Ajax内容块地址 <hr>
             <br>
             URL规则:<input type=text name='link' value='' size=64>
-            &nbsp;&nbsp;<input type=button value='Test' onclick='TestLink(this.form)'>
-            &nbsp;&nbsp;<input type=button value='Add' onclick='AddLink(this.form)'>
+            &nbsp;&nbsp;&nbsp;&nbsp;
+            <input type='button' value='Test Template & Link' onclick="TestTemplate(this.form)">
+            <br>
+            &nbsp;&nbsp;&nbsp;&nbsp;
+            <select name='table_link'>
+            <option value='-1' selected>数据表</option>
+            </select>&nbsp;&nbsp;
+            <select name='field_link'>
+            <option value='-1' selected>字段</option>
+            </select>&nbsp;&nbsp;
+            <select name='node_link'>
+            <option value='-1' selected>子节点</option>
+            </select>
+            &nbsp;&nbsp;&nbsp;&nbsp;
+            <input type='button' value='Add Link' onclick="EditTemplate(this.form);">
             <hr>
         </form>
         </div>
