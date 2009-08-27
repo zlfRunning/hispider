@@ -74,10 +74,13 @@
             #templatediv{display:none;}
             #editor-frame{height:240px;width:994px;border:1px solid #000000;}
             #template-editor{position:absolute;background-color:#D0E9F7;display:inline;
-                border:1px solid #000000;padding:0px;font-size:12pt;color:#2F5FA1;}
-            #templateeditorheader{position:relative;background-color:#2F5FA1;}
-            .ctxt_block{position:relative;background-color:silver;}
-            .formclose{font-size:14pt;font-weight:bold;color:silver;
+                border:1px solid #000000;padding:0px;height:520px;font-size:12pt;color:#2F5FA1;}
+            #templateeditorheader{position:relative;background-color:#2F5FA1;height:20px;}
+            #template-viewer{position:relative;background-color:#D0E9F7;
+                border:0px solid #000000;width:100%;height:500px;
+                font-size:12pt;color:#2F5FA1;}
+            .ctxt_block{position:relative;background-color:silver;border:1px solid #000000;}
+            .closebutton{font-size:14pt;font-weight:bold;color:red;
                 cursor:pointer;display:inline;right:20px;text-align:right;}
             .node
             {
@@ -308,7 +311,7 @@
                 return HiddenEditor();
             }
             //close form
-            function CloseForm(element)
+            function CloseThis(element)
             {
                 element.parentNode.parentNode.style.display = "none";
             }
@@ -1017,6 +1020,9 @@
                 var form = document.forms["templateform"];
                 form['code'].value = '';
                 form['pattern'].value = '';
+                form['is_global'].checked = false;
+                form['is_ignorecase'].checked = false;
+                form['link'].value = '';
                 form = document.forms["urlform"];
                 form['url'].focus();
                 form['url'].value = 'http://';
@@ -1109,7 +1115,99 @@
             }
             function TestTemplate(form)
             {
-                if(form)
+                var pattern = "";
+                var link = "";
+                var code = "";
+                var arr = null;
+                var condition = "m";
+                var count = 0;
+                var is_global= 0;
+                if(form && (pattern = form['pattern'].value)
+                    && (code = form['code'].value))
+                {
+                    if(form['is_global'].checked == true) 
+                    {
+                        is_global = 1;
+                        condition += "g"; 
+                    }
+                    if(form['is_ignorecase'].checked == true) 
+                        condition += "i"; 
+                    var reg = new  RegExp(pattern, condition);
+                    var matches = new Array();
+                    if(is_global)
+                    {
+                        while((arr = reg.exec(code)) != null)
+                        {
+                            matches[count++] = arr;
+                        }
+                    }
+                    else
+                    {
+                        if((arr = reg.exec(code)) != null)
+                        {
+                            matches[count++] = arr;
+                        }
+                    }
+                    if(count > 0)
+                    {
+                        var str = "<div id='templateeditorheader' onmousedown='";
+                        str += "divmove(event, this)'>";
+                        str += "<span class='closebutton' onclick='divreset(";
+                        str += "this.parentNode.parentNode)' >X</span>";
+                        str += "</div>";
+                        var element = null;
+                        if((element = document.getElementById('template-editor')))
+                        {
+                            document.body.removeChild(element);
+                        }
+                        element = document.createElement('div');
+                        element.innerHTML = str;
+                        element.id = 'template-editor';
+                        var divwidth = 700;
+                        var obody = document.getElementById('mainframe');
+                        var xleft = parseInt(obody.offsetWidth) - divwidth;
+                        var x = obody.offsetLeft +(xleft/2);
+                        var y = 20 + document.body.scrollTop;
+                        element.style.left = x+'px';
+                        element.style.top = y+'px';
+                        element.style.width = divwidth + 'px';
+                        document.body.appendChild(element);
+                        var frame = document.createElement('iframe');
+                        frame.id = 'template-viewer';
+                        element.appendChild(frame);
+                        var block = "";
+                        var url = "";
+                        var rp = null;
+                        link = form['link'].value;
+                        for(i = 0; i < count; i++)
+                        {
+                            if(link) url = link;
+                            block += "<span class='ctxt_block'><hr>";
+                            for(j = 1; j < matches[i].length; j++) 
+                            {
+                                if(j < 10) block += "0"; 
+                                block += j+":<textarea cols=76 rows=1>"
+                                    +matches[i][j]+"</textarea><br>";    
+                                if(link)
+                                {
+                                    rp = new RegExp("<"+j+">", 'gi');
+                                    url = url.replace(rp, matches[i][j]);
+                                }
+                            }
+                            if(url)
+                                block += "URL:<input type=text size=64 value='"+url+"'><br>";
+                            block += "</span><hr><br><br>";
+                        }
+                        frame.contentWindow.document.open();
+                        frame.contentWindow.document.write(block);
+                        frame.contentWindow.document.close();
+                    }
+                }
+                return true;
+            }
+            function TestTemplates(form)
+            {
+                if(form && form['pattern'].value && form['code'].value)
                 {
                     var nodeid = form['nodeid'].value;
                     var templateid = form['templateid'].value;
@@ -1117,9 +1215,35 @@
                     var code = form['code'].value;
                     var op = form['op'].value;
                     var url = form['url'].value;
+                    var is_multi = 0;
                     var arr = null;
-                    var reg = new  RegExp(pattern, 'im');
-                    if((arr = reg.exec(code))) 
+                    var condition = "im";
+                    if(form['url'].checked == true) 
+                    {
+                        is_multi = 1;
+                        condition += "g"; 
+                    }
+                    var reg = new  RegExp(pattern, condition);
+                    var matches = new Array();
+                    var count = 0;
+                    while((arr = reg.exec(code)))
+                    {
+                        matches[count++] = arr;
+                    }
+                    var result = "";
+                    for(i = 0; i < count; i++)
+                    {
+                        result += "<hr><span class='txt_block'>";
+                        for(j = 1; j < matches[i].length; i++) 
+                        {
+                            result += "<textarea cols=80 rows=1>"
+                                +matches[i][j]+"</textarea><br>";    
+                        }
+                        result += "</span>";
+                    }
+                    alert(result);
+                    return true;
+                    if(count > 0) 
                     {
                         var odiv = null;
                         var tablesoptions = "";
@@ -1152,7 +1276,7 @@
                         }
                         var str = "<div id='templateeditorheader' onmousedown='";
                             str += "divmove(event, this)'>";
-                            str += "<span class='formclose' onclick='divreset(";
+                            str += "<span class='closebutton' onclick='divreset(";
                             str += "this.parentNode.parentNode)' >X</span>";
                             str += "</div>";
                             str += "<form name='tempform' action='javascript:void(0)' ";
@@ -1507,9 +1631,25 @@
 	            var Doc = getFrameDocument(id);
 	            if(Doc)
 	            {
-	                alert(Doc.getSelection());
+                    if(Doc.getSelection)
+                    {
+	                    alert(Doc.getSelection().parentNode.innerHTML);
+                    }
+                    else if(Doc.selection)
+                    {
+                        alert(Doc.selection.parentNode.innerHTML);
+                    }
 	            }
 	        }
+            function ViewSelect(e)
+            {
+                e = e || window.event;
+                var element = e.target || e.srcElement;
+                if(element.innerHTML)
+                {
+                    alert(element.parentNode.innerHTML);
+                }
+            }
 		    function LoadURL(form)
 		    {
 		        var url = form['url'].value;
@@ -1625,10 +1765,24 @@
             代码:<textarea name='code' rows=10  cols=120> </textarea> 
             <br>
             <br>
-            摸版:<textarea name='pattern' rows=5  cols=100 > </textarea>
+            摸版:<textarea name='pattern' rows=3  cols=120 > </textarea><br>
+            <span align=center>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            <input type=checkbox name='is_global' >是否重复匹配多条
+            &nbsp;&nbsp;&nbsp;&nbsp;
+            <input type=checkbox name='is_ignorecase' >是否忽略大小写
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            <input type='submit' value='Test'>
+            </span>
             <br>
+            <hr>
+            用于拼接隐藏的链接和Ajax内容块地址
+            <hr>
             <br>
-            <input type='submit' value='ok'>
+            URL规则:<input type=text name='link' value='' size=64>
+            &nbsp;&nbsp;<input type=button value='Test' onclick='TestLink(this.form)'>
+            &nbsp;&nbsp;<input type=button value='Add' onclick='AddLink(this.form)'>
+            <hr>
         </form>
         </div>
         </div>
@@ -1641,7 +1795,7 @@
             <input type=hidden name='pid' value='0' >
             <input type='text' name='nodename' class='txtinput' size=16>
             <input type=submit value='ok' class='submit' >
-            &nbsp;&nbsp;<span class='formclose' onclick="CloseForm(this)">x</span>
+            &nbsp;&nbsp;<span class='closebutton' onclick="CloseThis(this)">x</span>
         </form>
     </div>
     <div id='dbform' class='formdiv'>
@@ -1650,7 +1804,7 @@
             <input type=hidden name='tableid' value='0' >
             <input type='text' name='name' class='txtinput' size=16>
             <input type=submit value='ok' class='submit' >
-            &nbsp;&nbsp;<span class='formclose' onclick="CloseForm(this)">x</span>
+            &nbsp;&nbsp;<span class='closebutton' onclick="CloseThis(this)">x</span>
         </form>
     </div>
     <div id='dbfieldform'>
@@ -1673,7 +1827,7 @@
             <input type=checkbox name='is_index' value=1 >是否索引
             <input type=checkbox name='is_null' value=4 >是否为空
             <input type=submit value='ok' class='submit' >
-            &nbsp;&nbsp;<span class='formclose' onclick="CloseForm(this)">x</span>
+            &nbsp;&nbsp;<span class='closebutton' onclick="CloseThis(this)">x</span>
         </form>
     </div>
     </body>
