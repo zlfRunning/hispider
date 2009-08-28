@@ -65,7 +65,23 @@ do                                                                              
         mp = NULL;                                                                      \
     }                                                                                   \
 }while(0)
-static char *table_data_types[] = {"null", "int", "float", "null", "text"};
+#define URLENCODE(dst, src)                                                     \
+do                                                                              \
+{                                                                               \
+    while(*src != '\0')                                                         \
+    {                                                                           \
+        if(*((unsigned char *)src) > 127 || *src == 0x20)                       \
+        {                                                                       \
+            dst += sprintf(dst, "%%%02X", *((unsigned char *)src));             \
+            ++src;                                                              \
+        }                                                                       \
+        else *dst++ = *src++;                                                   \
+    }                                                                           \
+    *dst = '\0';                                                                \
+}while(0)
+
+static char *table_data_types[] = {"null", "int", "float", "null", "text",
+    "null","null","null","blob"};
 /* mkdir */
 int hibase_mkdir(char *path, int mode)
 {
@@ -1031,7 +1047,8 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
     ITEMPLATE *ptemplate = NULL;
     PNODE *pnode = NULL;
     int n = -1, x = 0, i = 0;
-    char *p = NULL, buf[HI_BUF_SIZE];
+    char buf[HI_BUF_SIZE], xcode[HI_BUF_SIZE], url[HI_URL_MAX], link[HI_URL_MAX],
+        *p = NULL, *dst = NULL, *src = NULL;
 
     if(hibase && pnodeid >= 0 && pnodeid < hibase->pnodeio.total && block)
     {
@@ -1041,22 +1058,36 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
             && ptemplate != (ITEMPLATE *)-1)
         {
             p = buf;
+            dst = xcode;
+            src = pnode[pnodeid].name;
+            URLENCODE(dst, src);
             p += sprintf(p, "({id:'%d', name:'%s', ntemplates:'%d', templates:[", 
-                    pnodeid, pnode[pnodeid].name, pnode[pnodeid].ntemplates);
+                    pnodeid, xcode, pnode[pnodeid].ntemplates);
             if(pnode[pnodeid].ntemplates > 0)
             {
                 x = pnode[pnodeid].template_first;
                 while(x > 0)
                 {
-                    p += sprintf(p, "{id:'%d', flags:'%d', pattern:'%s', nfields:'%d', map:[",
-                            x, ptemplate[x].flags, ptemplate[x].pattern, ptemplate[x].nfields);
+                    dst = xcode;
+                    src = ptemplate[x].pattern;
+                    URLENCODE(dst, src);
+                    dst = url;
+                    src = ptemplate[x].url;
+                    URLENCODE(dst, src);
+                    dst = link;
+                    src = ptemplate[x].link;
+                    URLENCODE(dst, src);
+                    p += sprintf(p, "{id:'%d', flags:'%d', pattern:'%s', "
+                            "url:'%s', link:'%s', nfields:'%d', map:[", 
+                            x, ptemplate[x].flags, xcode, url, link, ptemplate[x].nfields);
                     if(ptemplate[x].nfields > 0)
                     {
                         i = 0;
                         while(i < ptemplate[x].nfields && ptemplate[x].nfields < FIELD_NUM_MAX)
                         {
-                            p += sprintf(p, "{tableid:%d, fieldid:%d},", 
-                                    ptemplate[x].map[i].tableid, ptemplate[x].map[i].fieldid);
+                            p += sprintf(p, "{tableid:'%d', fieldid:'%d', nodeid:'%d', flag:'%d'},", 
+                                    ptemplate[x].map[i].tableid, ptemplate[x].map[i].fieldid,
+                                    ptemplate[x].map[i].nodeid, ptemplate[x].map[i].flag);
                             i++;
                         }
                         --p;

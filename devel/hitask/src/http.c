@@ -11,8 +11,27 @@ static char *ymonths[]= {
 #define HEX2CH(c, x) ( ((x = (c - '0')) >= 0 && x < 10) \
         || ((x = (c - 'a')) >= 0 && (x += 10) < 16) \
         || ((x = (c - 'A')) >= 0 && (x += 10) < 16) )
+#define URLENCODE(dst, src)                                                     \
+do                                                                              \
+{                                                                               \
+    while(*src != '\0')                                                         \
+    {                                                                           \
+        if(*src == 0x20)                                                        \
+        {                                                                       \
+            *dst++ = '+';                                                       \
+            ++src;                                                              \
+        }                                                                       \
+        else if(*((unsigned char *)src) > 127)                                  \
+        {                                                                       \
+            dst += sprintf(dst, "%%%02X", *((unsigned char *)src));             \
+            ++src;                                                              \
+        }                                                                       \
+        else *dst++ = *src++;                                                   \
+    }                                                                           \
+    *dst = '\0';                                                                \
+}while(0)
 #define URLDECODE(s, end, high, low, pp)                                            \
-    do                                                                                  \
+do                                                                                  \
 {                                                                                   \
     if(*s == '%' && s < (end - 2) && HEX2CH(*(s+1), high)  && HEX2CH(*(s+2), low))  \
     {                                                                               \

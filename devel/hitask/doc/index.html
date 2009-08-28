@@ -1021,9 +1021,24 @@
             {
                 element.className = 'ltemplate-selected';
             }
-            function outTempalte(element)
+            function outTemplate(element)
             {
                 element.className = 'ltemplate';
+            }
+            function XTReset()
+            {
+                var form = document.forms["templateform"];
+                form['op'].value = 'template_add';
+                form['nodeid'].value = -1;
+                form['templateid'].value = -1;
+                form['code'].value = '';
+                form['pattern'].value = ''
+                form['is_global'].checked = false;
+                form['is_ignorecase'].checked = false;
+                form['flag'].value = '';
+                form['nfields'].value = 0;
+                form['url'].value = '';
+                form['link'].value = '';
             }
             function XTAdd(e, nodeid)
             {
@@ -1031,26 +1046,47 @@
                 var element = e.target || e.srcElement;
                 var Xdiv =  document.getElementById("xtemplateform");
                 Xdiv.style.display = 'inline';
-                var form = document.forms["templateform"];
-                form['code'].value = '';
-                form['pattern'].value = '';
-                form['is_global'].checked = false;
-                form['is_ignorecase'].checked = false;
-                form['link'].value = '';
-                form = document.forms["urlform"];
-                form['url'].focus();
-                form['url'].value = 'http://';
+                XTReset();
+                var xform = document.forms["templateform"];
+                xform['nodeid'].value = nodeid;
+                var urlform = document.forms["urlform"];
+                urlform['url'].focus();
+                urlform['url'].value = 'http://';
             }
-            function XTEdit(e)
+            function XTEdit(formid)
             {
-                e = e || window.event;
-                var element = e.target || e.srcElement;
-                var Xdiv =  document.getElementById("xtemplateform");
-                var x = e.clientX;
-                var y = e.clientY;
-                Xdiv.style.left = x;
-                Xdiv.style.top = y + 10;
-                Xdiv.style.display = 'inline';
+                XTReset();
+                var xform = document.forms["templateform"];
+                var form = document.forms[formid];
+                xform['op'].value = 'template_update';
+                xform['nodeid'].value = form['nodeid'].value;
+                xform['templateid'].value = form['templateid'].value;
+                xform['pattern'].value = form['pattern'].value;
+                xform['flag'].value = form['flag'].value;
+                xform['nfields'].value = form['nfields'].value;
+                xform['url'].value = form['url'].value;
+                xform['link'].value = form['link'].value;
+                xform['map'].value = form['map'].value;
+                if(xform['flag'].value & 2)
+                    xform['is_global'].checked = true;
+                if(xform['flag'].value & 4)
+                    xform['is_ignorecase'].checked = true;
+                var ediv = null;
+                if((ediv = document.getElementById('xtemplateform'))) 
+                {
+                    ediv.style.display = "inline";
+                }
+                if((ediv = document.getElementById('templatediv'))) 
+                {
+                    ediv.style.display = "inline";
+                }
+                var urlform = document.forms["urlform"];
+                urlform['url'].focus();
+                if(form['url'].value)
+                {
+                    urlform['url'].value = form['url'].value;
+                    LoadURL(urlform);
+                }
             }
             function XTDelete(nodeid, templateid)
             {
@@ -1091,12 +1127,7 @@
                     div.style.display = 'none';
                 if((div = document.getElementById('xtemplateform')))
                     div.style.display = 'none';
-                var form = document.forms['templateform'];
-                    form['code'].value = '';
-                    form['pattern'].value = '';
-                    form['nodeid'].value = '-1';
-                    form['templateid'].value = '-1';
-                    form['flag'].value = '';
+                XTReset();
                 return true;
             }
             function changeTable(form, fselectid, el)
@@ -1139,14 +1170,29 @@
                     var nodeid = form['nodeid'].value;
                     var templateid = form['templateid'].value;
                     var url = form['url'].value;
-                    var map = form['map'].value;
-                    var op = "template_add";
+                    var op = form['op'].value;
+                    var map = null;
                     var condition = "m";
-                    if(form['is_ignorecase'].checked == true) 
-                        condition += "i"; 
-                    var reg = new  RegExp(pattern, condition);
-                    if((arr = reg.exec(code)) && arr.length > 0) 
+                    var is_public = false;
+                    var is_ignorecase = false;
+                    var is_global = false;
+                    if(form['flag'].value & 1)
                     {
+                        is_public = true;
+                    }
+                    if(form['is_ignorecase'].checked == true) 
+                    {
+                        is_ignorecase = true;
+                        condition += "i"; 
+                    }
+                    if(form['is_global'].checked == true) 
+                    {
+                        is_global = true;
+                    }
+                    var reg = new  RegExp(pattern, condition);
+                    if((arr = reg.exec(code)) && arr.length > 1) 
+                    {
+                        if(form['map'].value) map = eval(form['map'].value);
                         form['nfields'].value = arr.length;
                         var odiv = null;
                         var tablesoptions = "";
@@ -1196,7 +1242,16 @@
                                 +pattern+"</textarea>";
                             block += "<br>";
                             block += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-                            block += "<input type=checkbox name='is_public' >公共数据";
+                            block += "<input type=checkbox name='is_public' ";
+                            if(is_public) block += "checked";
+                            block += ">公共数据";
+                            block += "<input type=checkbox name='is_global' ";
+                            if(is_global) block += "checked";
+                            block += ">是否重复匹配多条";
+                            block += "&nbsp;&nbsp;&nbsp;&nbsp;";
+                            block += "<input type=checkbox name='is_ignorecase' ";
+                            if(is_ignorecase) block += "checked";
+                            block += ">是否忽略大小写";
                             block += "<hr>";
                         for(i = 1; i < arr.length;i++)
                         {
@@ -1207,26 +1262,69 @@
                             block += arr[i];
                             block += "</textarea><br>";
                             block += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-                            block += "<input type=checkbox name='is_link_"+i+"'>链接";
+                            block += "<input type=checkbox name='is_link_"+i+"'";
+                            if(map && map[i-1]['flag'] & 1) block += " checked ";
+                            block += ">链接";
                             block += "&nbsp;&nbsp;";
-                            block += "<input type=checkbox name='is_img_"+i+"'>图片";
+                            block += "<input type=checkbox name='is_img_"+i+"'";
+                            if(map && map[i-1]['flag'] & 2) block += " checked ";
+                            block += ">图片";
                             block += "&nbsp;&nbsp;";
-                            block += "<input type=checkbox name='is_need_clearhtml_"+i+"'>去HTML";
+                            block += "<input type=checkbox name='is_need_clearhtml_"+i+"'";
+                            if(map && map[i-1]['flag'] & 4) block += " checked ";
+                            block += ">去HTML";
                             block += "&nbsp;&nbsp;";
-                            block += "<input type=checkbox name='is_need_antispam_"+i+"'>去广告";
+                            block += "<input type=checkbox name='is_need_antispam_"+i+"'";
+                            if(map && map[i-1]['flag'] & 8) block += " checked ";
+                            block += ">去广告";
                             block += "<br>";
                             block += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
                             block += "数据表:<select name='tableid_"+i+"' onchange=\"";
                             block += "changeTable(this.form,'fieldid_"+i+"',this)\">";
                             block += "<option value='-1' selected>请选择</option>";
-                            block += tablesoptions;
+                            if(map)
+                            {
+                                for(x in dbase['tables'])
+                                {
+                                    block += "<option value='"+x+"' ";
+                                    if(map && map[i-1]['tableid'] == x) block += " selected ";
+                                    block += ">"+ dbase['tables'][x]['name']+"</option>\n";
+                                }
+                            }
+                            else
+                            {
+                                block += tablesoptions;
+                            }
                             block += "</select>";
                             block += "字段:<select name='fieldid_"+i+"'>";
                             block += "<option value='-1' selected>请选择</option>";
+                            if(map)
+                            {
+                                tabid = map[i-1]['tableid'];
+                                for(x in dbase['tables'][tabid]['fields'])
+                                {
+                                    block += "<option value='"+x+"' ";
+                                    if(map && map[i-1]['fieldid'] == x) block += " selected ";
+                                    block += ">"+dbase['tables'][tabid]['fields'][x]['name']
+                                        +"</option>\n";
+                                }
+                            }
                             block += "</select>";
                             block += "节点:<select name='nodeid_"+i+"'>";
                             block += "<option value='-1' selected>请选择</option>";
-                            block += childsoptions;
+                            if(map)
+                            {
+                                for(x in childs)
+                                {
+                                    block += "<option value='"+x+"' ";
+                                    if(map && map[i-1]['nodeid'] == x) block += " selected ";
+                                    block += ">"+ childs[x]+" </option>";
+                                }
+                            }
+                            else
+                            {
+                                block += childsoptions;
+                            }
                             block += "</select>";
                             block += "<hr>";
                         }
@@ -1285,14 +1383,14 @@
                     var matches = new Array();
                     if(is_global)
                     {
-                        while((arr = reg.exec(code)) != null)
+                        while((arr = reg.exec(code)) != null && arr.length > 1)
                         {
                             matches[count++] = arr;
                         }
                     }
                     else
                     {
-                        if((arr = reg.exec(code)) != null)
+                        if((arr = reg.exec(code)) != null && arr.length > 1)
                         {
                             matches[count++] = arr;
                         }
@@ -1367,10 +1465,12 @@
                     var tempid = 0;
                     var flag = 0;
                     var pattern = "";
-                    var map = "";
+                    var map = null;
+                    var strmap = "";
                     var nfields = 0;
                     var url = "";
                     var link = "";
+                    var name = decodeURIComponent(arr['name']);
                     document.forms['templateform']['nodeid'].value = nodeid;
                     var htmlstr =  "<ul class='ultab' >";
                         htmlstr += "<li class='template-header'>";
@@ -1378,32 +1478,47 @@
                         htmlstr += "点击&nbsp;<span class='eadd' title='Click Add New Template' ";
                         htmlstr += "onclick=\"XTAdd(event, '"+nodeid+"')\">✚</span>&nbsp;添加摸版";
                         htmlstr += "到&nbsp;&nbsp;"
-                        htmlstr += arr['name'] + "[" + arr['ntemplates'] + "]";
+                        htmlstr += name + "[" + arr['ntemplates'] + "]";
                         htmlstr += "</li>";
                     for(i = 0; i < arr['ntemplates']; i++)
                     {
                         temp = arr['templates'][i];
-                        pattern = temp['pattern'];
-                        flag = temp['flag'];
+                        pattern = decodeURIComponent(temp['pattern']);
+                        flag = temp['flags'];
                         tempid = temp['id'];
                         map = temp['map'];
-                        url = temp['url'];
-                        link = temp['link'];
-                        nfields = temp['nfields'];
-                        htmlstr += "<hr><li class='ltemplate' onmousemove='selectTempalte(this)' "
-                        htmlstr += " onmouseout='outTempalte(this);' >";
-                        htmlstr += "<form action='javascript:void(0)' >";
+                        strmap = "";
+                        if(map.length > 0)
+                        {
+                            strmap = "{[";
+                            for(x in map)
+                            {
+                                strmap += "{tableid:"+map[x]['tableid']+","
+                                    +"fieldid:"+map[x]['fieldid']+ ","
+                                    +"nodeid:"+map[x]['nodeid']+ ","
+                                    +"flag:"+map[x]['flag']+ "}";
+                                if(x < (map.length - 1)) strmap += ",";
+                            }
+                            strmap += "]}";
+                        }
+                        url = decodeURIComponent(temp['url']);
+                        link = decodeURIComponent(temp['link']);
+                        nfields = temp['nfields']+1;
+                        htmlstr += "<hr><li class='ltemplate' onmousemove='selectTemplate(this)' "
+                        htmlstr += " onmouseout='outTemplate(this);' >";
+                        htmlstr += "<form action='javascript:void(0)' ";
+                        htmlstr += " name='xform"+tempid+"' onsubmit='XTEdit(this)'>";
                         htmlstr += "<textarea name='pattern' cols=80 rows=1 readonly/disabled >"
                             +pattern+"</textarea>&nbsp;&nbsp;&nbsp;&nbsp;";
                         htmlstr += "<input type=hidden name='nodeid' value='"+nodeid+"'>";
                         htmlstr += "<input type=hidden name='templateid' value='"+tempid+"'>";
                         htmlstr += "<input type=hidden name='flag' value='"+flag+"'>";
                         htmlstr += "<input type=hidden name='nfields' value='"+nfields+"'>";
-                        htmlstr += "<input type=hidden name='map' value='"+map+"'>";
+                        htmlstr += "<input type=hidden name='map' value='"+strmap+"'>";
                         htmlstr += "<input type=hidden name='link' value='"+link+"'>";
                         htmlstr += "<input type=hidden name='url' value='"+url+"'>";
                         htmlstr += "<span class='eupdate' title='Change' ";
-                        htmlstr += "onclick=\"XTEdit(event, this.form)\" >✎</span>";
+                        htmlstr += "onclick=\"XTEdit('xform"+tempid+"')\" >✎</span>";
                         htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
                         htmlstr += "<span class='edelete' title='Delete' ";
                         htmlstr += "onclick='XTDelete("+nodeid+", "+tempid+")'>✘</span>";
@@ -1453,6 +1568,8 @@
                 var url = form['url'].value;
                 var flag = 0;
                 if(form['is_public'].checked == true) flag |= 1;
+                if(form['is_global'].checked == true) flag |= 2;
+                if(form['is_ignorecase'].checked == true) flag |= 4;
                 var nfields = form['nfields'].value;
                 var tabid = null;
                 var fieldid = null;
@@ -1484,7 +1601,7 @@
                     if(i < (nfields - 1)) map += ";";
                 }
                 map += "}";
-                alert(map);
+                //alert(map);
                 var xmlHttp = null;
                 var argv = "nodeid="+nodeid+"&flag="+flag+"&map="+encodeURIComponent(map)
                     +"&pattern="+encodeURIComponent(pattern);
@@ -1500,7 +1617,7 @@
                 else return false;
                 if(argv && (xmlHttp = CreateXMLHTTP()) != null)
                 {
-                    alert(argv);
+                    //alert(argv);
                     xmlHttp.open('POST', '/', true);
                     xmlHttp.setRequestHeader("Content-Length", argv.length);
                     xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
@@ -1512,6 +1629,7 @@
                             {
                                 ShowTemplates(xmlHttp.responseText);
                                 divremove(element);
+                                XTReset();
                             }
                         }
                     }

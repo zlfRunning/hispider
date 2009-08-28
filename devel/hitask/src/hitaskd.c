@@ -61,10 +61,12 @@ static char *e_argvs[] =
 #define E_ARGV_FLAG     12
     "templateid",
 #define E_ARGV_TEMPLATEID 13
-    "map"
+    "map",
 #define E_ARGV_MAP      14
+    "link"
+#define E_ARGV_LINK     15
 };
-#define E_ARGV_NUM      15
+#define E_ARGV_NUM      16
 static char *e_ops[]=
 {
     "host_up",
@@ -572,7 +574,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
     int i = 0, id = 0, n = 0, op = -1, nodeid = -1, x = -1, fieldid = -1,
         parentid = -1, urlid = -1, hostid = -1, tableid = -1, 
         type = -1, flag = -1, templateid = -1;
-    char *p = NULL, *end = NULL, *name = NULL, *host = NULL, *url = NULL, 
+    char *p = NULL, *end = NULL, *name = NULL, *host = NULL, *url = NULL, *link = NULL, 
          *pattern = NULL, *map = NULL, buf[HTTP_BUF_SIZE], block[HTTP_BUF_SIZE];
     HTTP_REQ httpRQ = {0}, *http_req = NULL;
     ITEMPLATE template = {0};
@@ -650,6 +652,9 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                                 case E_ARGV_MAP:
                                     map = p;
                                     break;
+                                case E_ARGV_LINK:
+                                    link = p;
+                                    break;
                                 default:
                                     break;
                             }
@@ -694,6 +699,10 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         if(*p != '[') break;
                     }
                     template.nfields = ++i;
+                }
+                if(link && (x = strlen(link)))
+                {
+                    memcpy(template.link, link, x);
                 }
                 switch(op)
                 {
@@ -860,8 +869,8 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         if(nodeid >= 0 && pattern && map && url
                             && (template.flags = flag) >= 0
                             && (n = strlen(pattern)) > 0 && n < PATTERN_LEN_MAX
-                            && (x = strlen(url)) > 0 && x < HI_URL_MAX
                             && (memcpy(template.pattern, pattern, n))
+                            && (x = strlen(url)) > 0 && x < HI_URL_MAX
                             && (memcpy(template.url, url, x))
                             && hibase->add_template(hibase, nodeid, &template) >= 0
                             && (n = hibase->view_templates(hibase, nodeid, block)) > 0)
@@ -874,8 +883,8 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         if(nodeid >= 0 && templateid >= 0 && pattern && map && url
                             && (template.flags = flag) >= 0
                             && (n = strlen(pattern)) > 0 && n < PATTERN_LEN_MAX
-                            && (x = strlen(url)) > 0 && x < HI_URL_MAX
                             && (memcpy(template.pattern, pattern, n))
+                            && (x = strlen(url)) > 0 && x < HI_URL_MAX
                             && (memcpy(template.url, url, x))
                             && hibase->update_template(hibase, templateid, &template) >= 0
                             && (n = hibase->view_templates(hibase, nodeid, block)) > 0)
