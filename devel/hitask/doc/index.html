@@ -1039,6 +1039,7 @@
                 form['nfields'].value = 0;
                 form['url'].value = '';
                 form['link'].value = '';
+                form['map'].value = '';
             }
             function XTAdd(e, nodeid)
             {
@@ -1192,6 +1193,7 @@
                     var reg = new  RegExp(pattern, condition);
                     if((arr = reg.exec(code)) && arr.length > 1) 
                     {
+                        //alert(form['map'].value);
                         if(form['map'].value) map = eval(form['map'].value);
                         form['nfields'].value = arr.length;
                         var odiv = null;
