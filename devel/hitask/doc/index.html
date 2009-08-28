@@ -70,9 +70,12 @@
                 border:1px solid #81BEF7;padding:10px;overflow:auto;display:none;}
             #xtemplateform{position:relative;background-color:#ffffff;display:none;width:996px;
                 border:0px solid #81BEF7;padding:0px;font-size:12pt;color:#2F5FA1;}
-            #souce_code_op{display:none;}
-            #templatediv{display:none;}
-            #editor-frame{height:240px;width:994px;border:1px solid #000000;}
+            #source_code_op{display:none;}
+            #templatediv{display:none;position:relative;}
+            #template-config{position:relative;background-color:#D0E9F7;}
+            .template-bar{position:relative;background-color:#2F5FA1;height:20px;
+                font-size:13pt;font-weight:bold;color:silver;}
+            #editor-frame{height:200px;width:994px;border:1px solid #000000;}
             #template-editor{position:absolute;background-color:#D0E9F7;display:inline;
                 border:1px solid #000000;padding:0px;height:520px;font-size:12pt;color:#2F5FA1;}
             #templateeditorheader{position:relative;background-color:#2F5FA1;height:20px;}
@@ -315,7 +318,6 @@
             {
                 element.parentNode.parentNode.style.display = "none";
             }
-
             //Add child
             function XAdd(e)
             {
@@ -974,10 +976,17 @@
                 return true;
             }
             //delete div
-            function divreset(element)
+            function divremove(element)
             {
                 document.body.removeChild(element);
                 return true;
+            }
+            function divhidden(element)
+            {
+                if(element && element.innerHTML)
+                {
+                    element.innerHTML = "";
+                }
             }
             //moving div
             function divmove(e, o)
@@ -1065,11 +1074,13 @@
             function HiddenTemplate()
             {
                 var div = null;
+                if((div = document.getElementById('template-config')))
+                    div.innerHTML = "";
                 if((div = document.getElementById('node-template')))
                     div.innerHTML = "";
                 if((div = document.getElementById('source_view')))
                     div.innerHTML = "";
-                if((div = document.getElementById('souce_code_op')))
+                if((div = document.getElementById('source_code_op')))
                     div.style.display = 'none';
                 if((div = document.getElementById('templatediv')))
                     div.style.display = 'none';
@@ -1113,6 +1124,86 @@
             {
 
             }
+            function ConfigTemplate(form, arr)
+            {
+                if(form && arr)
+                {
+                    var nodeid = form['nodeid'].value;
+                    if(arr.length > 0) 
+                    {
+                        form['nfields'].value = arr.length;
+                        var odiv = null;
+                        var tablesoptions = "";
+                        var childsoptions = "";
+                        if((odiv = document.getElementById('database')))
+                        {
+                            var strdb = odiv.getAttribute('dbase');
+                            var dbase = eval(strdb);
+                            if(dbase)
+                            {
+                                for(x in dbase['tables'])
+                                {
+                                    tablesoptions += "<option value='"+x+"'>";
+                                    tablesoptions += dbase['tables'][x]['name']+"</option>\n";
+                                }
+                            }
+                        }
+                        if(nodeid > 0 && (odiv = document.getElementById('node'+nodeid)))
+                        {
+                            var strchilds = odiv.getAttribute('childs');
+                            var childs = eval(strchilds);
+                            if(childs)
+                            {
+                                for(x in childs)
+                                {
+                                    childsoptions += "<option value='"+x+"'>";
+                                    childsoptions += childs[x]+" </option>\n";
+                                }
+                            }
+                        }
+                        var block = "<div class='template-bar'>";
+                            block += "<span class='closebutton' onclick='divhidden(";
+                            block += "this.parentNode.parentNode)' >X</span>";
+                            block += "</div>"
+                            block += "<form action='javascript:void(0)'>"
+                        for(i = 1; i < arr.length;i++)
+                        {
+                            block += "&nbsp;&nbsp;";
+                            if(i < 10) block += '0';
+                            block += i+":";
+                            block += "<textarea name='r_"+i+"' cols=120 readonly/disabled>";
+                            block += arr[i];
+                            block += "</textarea><br>";
+                            block += "&nbsp;&nbsp;";
+                            block += "数据表:<select name='tableid_"+i+"' onchange=\"";
+                            block += "changeTable(this.form,'fieldid_"+i+"',this)\">";
+                            block += "<option value='-1' selected>请选择</option>";
+                            block += tablesoptions;
+                            block += "</select>";
+                            block += "字段:<select name='fieldid_"+i+"'>";
+                            block += "<option value='-1' selected>请选择</option>";
+                            block += "</select>";
+                            block += "节点:<select name='nodeid_"+i+"'>";
+                            block += "<option value='-1' selected>请选择</option>";
+                            block += childsoptions;
+                            block += "</select><br>";
+                            block += "&nbsp;&nbsp;";
+                            block += "<input type=checkbox name='is_link_"+i+"'>链接";
+                            block += "&nbsp;&nbsp;";
+                            block += "<input type=checkbox name='is_img_"+i+"'>图片";
+                            block += "&nbsp;&nbsp;";
+                            block += "<input type=checkbox name='is_need_clearhtml_"+i+"'>去HTML";
+                            block += "&nbsp;&nbsp;";
+                            block += "<input type=checkbox name='is_need_antispam_"+i+"'>去广告";
+                            block += "<hr>";
+                        }
+                        block += "</form>";
+                        odiv = document.getElementById('template-config');
+                        odiv.innerHTML = block;
+                    }
+                }
+                return true;
+            }
             function TestTemplate(form)
             {
                 var pattern = "";
@@ -1152,8 +1243,8 @@
                     {
                         var str = "<div id='templateeditorheader' onmousedown='";
                         str += "divmove(event, this)'>";
-                        str += "<span class='closebutton' onclick='divreset(";
-                        str += "this.parentNode.parentNode)' >x</span>";
+                        str += "<span class='closebutton' onclick='divremove(";
+                        str += "this.parentNode.parentNode)' >X</span>";
                         str += "</div>";
                         var element = null;
                         if((element = document.getElementById('template-editor')))
@@ -1202,156 +1293,7 @@
                         frame.contentWindow.document.open();
                         frame.contentWindow.document.write(block);
                         frame.contentWindow.document.close();
-                    }
-                }
-                return true;
-            }
-            function EditTemplate(form)
-            {
-                if(form && form['pattern'].value && form['code'].value)
-                {
-                    var nodeid = form['nodeid'].value;
-                    var templateid = form['templateid'].value;
-                    var pattern = form['pattern'].value;
-                    var code = form['code'].value;
-                    var op = form['op'].value;
-                    var url = form['url'].value;
-                    var is_multi = 0;
-                    var arr = null;
-                    var condition = "im";
-                    if(form['is_link'].checked == true) 
-                    {
-                        is_multi = 1;
-                        condition += "g"; 
-                    }
-                    var reg = new  RegExp(pattern, condition);
-                    var matches = new Array();
-                    var count = 0;
-                    while((arr = reg.exec(code)))
-                    {
-                        matches[count++] = arr;
-                    }
-                    var result = "";
-                    for(i = 0; i < count; i++)
-                    {
-                        result += "<hr><span class='txt_block'>";
-                        for(j = 1; j < matches[i].length; i++) 
-                        {
-                            result += "<textarea cols=80 rows=1>"
-                                +matches[i][j]+"</textarea><br>";    
-                        }
-                        result += "</span>";
-                    }
-                    alert(result);
-                    return true;
-                    if(count > 0) 
-                    {
-                        var odiv = null;
-                        var tablesoptions = "";
-                        var childsoptions = "";
-                        if((odiv = document.getElementById('database')))
-                        {
-                            var strdb = odiv.getAttribute('dbase');
-                            var dbase = eval(strdb);
-                            if(dbase)
-                            {
-                                for(x in dbase['tables'])
-                                {
-                                    tablesoptions += "<option value='"+x+"'>";
-                                    tablesoptions += dbase['tables'][x]['name']+"</option>\n";
-                                }
-                            }
-                        }
-                        if(nodeid > 0 && (odiv = document.getElementById('node'+nodeid)))
-                        {
-                            var strchilds = odiv.getAttribute('childs');
-                            var childs = eval(strchilds);
-                            if(childs)
-                            {
-                                for(x in childs)
-                                {
-                                    childsoptions += "<option value='"+x+"'>";
-                                    childsoptions += childs[x]+" </option>\n";
-                                }
-                            }
-                        }
-                        var str = "<div id='templateeditorheader' onmousedown='";
-                            str += "divmove(event, this)'>";
-                            str += "<span class='closebutton' onclick='divreset(";
-                            str += "this.parentNode.parentNode)' >x</span>";
-                            str += "</div>";
-                            str += "<form name='tempform' action='javascript:void(0)' ";
-                            str += "onsubmit='EditTemplate(this, this.parentNode)'>";
-                            str += "<input type=hidden name='nfields' value='"+arr.length+"'>";
-                            str += "<input type=hidden name='nodeid' value='"+nodeid+"'>";
-                            str += "<input type=hidden name='templateid' value='"+templateid+"'>";
-                            str += "<input type=hidden name='op' value='"+op+"'>";
-                            str += "<input type=hidden name='is_global'>";
-                            str += "URL:<input type=text name='url' size=96 value="+url+"><br>";
-                            str += "模版:<textarea name='pattern' cols=80 rows=4>";
-                            str += pattern+"</textarea><br>";
-                            str += "<input type=checkbox name='is_public'>公共&nbsp;&nbsp;";
-                            str += "<hr>";
-                        for(i = 1; i < arr.length;i++)
-                        {
-                            str += "结果:<textarea name='txt_"+i+"' cols=80 rows=5>"
-                            str += arr[i];
-                            str += "</textarea><br>";
-                            str += "数据表:<select name='tableid_"+i+"' onchange=\"";
-                            str += "changeTable(this.form,'fieldid_"+i+"',this)\">";
-                            str += "<option value='-1' selected>请选择</option>";
-                            str += tablesoptions;
-                            str += "</select>";
-                            str += "字段:<select name='fieldid_"+i+"'>";
-                            str += "<option value='-1' selected>请选择</option>";
-                            str += "</select>";
-                            str += "节点:<select name='nodeid_"+i+"'>";
-                            str += "<option value='-1' selected>请选择</option>";
-                            str += childsoptions;
-                            str += "</select><br>";
-                            str += "<input type=checkbox name='is_link_"+i+"'>链接";
-                            str += "&nbsp;&nbsp;";
-                            str += "<input type=checkbox name='is_img_"+i+"'>图片";
-                            str += "&nbsp;&nbsp;";
-                            str += "<input type=checkbox name='is_need_clearhtml_"+i+"'>去HTML";
-                            str += "&nbsp;&nbsp;";
-                            str += "<input type=checkbox name='is_need_antispam_"+i+"'>去广告";
-                            str += "<hr>";
-                        }
-                        str += "URL拼接规则:<input type=text name='link' size=72><br>";
-                        str += "数据表:<select name='link_table' onchange=\"";
-                        str += "changeTable(this.form,'link_field',this)\">";
-                        str += "<option value='-1' selected>请选择</option>";
-                        str += tablesoptions;
-                        str += "</select>";
-                        str += "字段:<select name='link_field'>";
-                        str += "<option value='-1' selected>请选择</option>";
-                        str += "</select>";
-                        str += "节点:<select name='link_nodeid'>";
-                        str += "<option value='-1' selected>请选择</option>";
-                        str += childsoptions;
-                        str += "</select><input type=button value='Test' ";
-                        str += " onclick='TestLink(this.form)'>";
-                        str += "<br><hr>";
-                        str += "<input type=submit value='ok'> </form>";
-                        str += "<br>";
-                        var element = null;
-                        if((element = document.getElementById('template-editor')))
-                        {
-                            document.body.removeChild(element);
-                        }
-                        element = document.createElement('div');
-                        element.innerHTML = str;
-                        element.id = 'template-editor';
-                        var divwidth = 700;
-                        var obody = document.getElementById('mainframe');
-                        var xleft = parseInt(obody.offsetWidth) - divwidth;
-                        var x = obody.offsetLeft +(xleft/2);
-                        var y = 100 + document.body.scrollTop;
-                        element.style.left = x+'px';
-                        element.style.top = y+'px';
-                        element.style.width = divwidth + 'px';
-                        document.body.appendChild(element);
+                        if(link == "")ConfigTemplate(form, matches[0]);
                     }
                 }
                 return true;
@@ -1512,7 +1454,7 @@
                             if(xmlHttp.status == 200)
                             {
                                 ShowTemplates(xmlHttp.responseText);
-                                divreset(element);
+                                divremove(element);
                             }
                         }
                     }
@@ -1669,7 +1611,7 @@
 		                            {
 		                                var str = xmlHttp.responseText;
                                         var ediv = null;
-                                        if((ediv = document.getElementById('souce_code_op'))) 
+                                        if((ediv = document.getElementById('source_code_op'))) 
                                             ediv.style.display = "inline";
 		                                var element = document.getElementById('source_view');
 		                                if(element) element.innerHTML = "";
@@ -1750,7 +1692,7 @@
             <input type=submit value='Load'>
         </form>
         </div>
-        <div id='souce_code_op'>
+        <div id='source_code_op'>
             <div id='source_view'></div>
             <div id='source_op'>
                 <a  href ="javascript:getSelectContent('editor-frame');">select</a>
@@ -1760,44 +1702,32 @@
             <form name="templateform" action="javascript:void(0)" >
             <input type=hidden name='op' value='template_add' >
             <input type=hidden name='nodeid' value='-1' >
-            <input type=hidden name='templateid' value='' >
-            <input type=hidden name='flag' value='' >
+            <input type=hidden name='templateid' value='-1' >
+            <input type=hidden name='flag' value='0' >
+            <input type=hidden name='nfields' value='-1' >
             <input type=hidden name='url' value='' >
-            代码:<textarea name='code' rows=10  cols=120> </textarea> 
+            代码:<textarea name='code' rows=5  cols=120> </textarea> 
             <br>
-            <br>
-            摸版:<textarea name='pattern' rows=3  cols=120 > </textarea><br>
+            摸版:<textarea name='pattern' rows=2  cols=120 > </textarea><br>
             <span align=center>
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
             <input type=checkbox name='is_global' >是否重复匹配多条
             &nbsp;&nbsp;&nbsp;&nbsp;
             <input type=checkbox name='is_ignorecase' >是否忽略大小写
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            &nbsp;&nbsp;&nbsp;&nbsp;
             <input type='button' value='Test Template' onclick="TestTemplate(this.form)">
-            <input type='button' value='Add Template' onclick="EditTemplate(this.form);">
-            </span>
-            <br>
             <hr>
-            用于拼接隐藏的链接和Ajax内容块地址 <hr>
+            <div class='template-bar'>用于拼接隐藏的链接和Ajax内容块地址</div>
             <br>
             URL规则:<input type=text name='link' value='' size=64>
             &nbsp;&nbsp;&nbsp;&nbsp;
-            <input type='button' value='Test Template & Link' onclick="TestTemplate(this.form)">
-            <br>
-            &nbsp;&nbsp;&nbsp;&nbsp;
-            <select name='table_link'>
-            <option value='-1' selected>数据表</option>
-            </select>&nbsp;&nbsp;
-            <select name='field_link'>
-            <option value='-1' selected>字段</option>
-            </select>&nbsp;&nbsp;
-            <select name='node_link'>
-            <option value='-1' selected>子节点</option>
-            </select>
+            <input type='button' value='Test Template & Link' onclick="TestLink(this.form)">
             &nbsp;&nbsp;&nbsp;&nbsp;
             <input type='button' value='Add Link' onclick="EditTemplate(this.form);">
-            <hr>
+            <br>
+            </span>
         </form>
+        <div id='template-config'></div>
         </div>
         </div>
     </div>
