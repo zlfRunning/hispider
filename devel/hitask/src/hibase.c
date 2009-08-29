@@ -82,6 +82,43 @@ do                                                                              
 
 static char *table_data_types[] = {"null", "int", "float", "null", "text",
     "null","null","null","blob"};
+char *base64encode(const char *bin, size_t len)
+{
+
+    char *buf = (char *) malloc ((len + 2) / 3 * 4 + 1);
+    size_t i = 0, j = 0;
+
+    char BASE64_END = '=';
+    char base64_table[64];
+    strncpy (base64_table, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/", 64);
+
+    while (j < len - 2) {
+        buf[i++] = base64_table[bin[j] >> 2];
+        buf[i++] = base64_table[((bin[j] & 3) << 4) | (bin[j + 1] >> 4)];
+        buf[i++] = base64_table[((bin[j + 1] & 15) << 2) | (bin[j + 2] >> 6)];
+        buf[i++] = base64_table[bin[j + 2] & 63];
+        j += 3;
+    }
+
+    switch (len - j) {
+        case 1:
+            buf[i++] = base64_table[bin[j] >> 2];
+            buf[i++] = base64_table[(bin[j] & 3) << 4];
+            buf[i++] = BASE64_END;
+            buf[i++] = BASE64_END;
+            break;
+        case 2:
+            buf[i++] = base64_table[bin[j] >> 2];
+            buf[i++] = base64_table[((bin[j] & 3) << 4) | (bin[j + 1] >> 4)];
+            buf[i++] = base64_table[(bin[j + 1] & 15) << 2];
+            buf[i++] = BASE64_END;
+            break;
+        case 0:
+            break;
+    }
+    buf[i] = '\0';
+    return buf;
+}
 /* mkdir */
 int hibase_mkdir(char *path, int mode)
 {
@@ -1047,8 +1084,7 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
     ITEMPLATE *ptemplate = NULL;
     PNODE *pnode = NULL;
     int n = -1, x = 0, i = 0;
-    char buf[HI_BUF_SIZE], xcode[HI_BUF_SIZE], url[HI_URL_MAX], link[HI_URL_MAX],
-        *p = NULL, *dst = NULL, *src = NULL;
+    char buf[HI_BUF_SIZE], *pattern = NULL, *p = NULL;
 
     if(hibase && pnodeid >= 0 && pnodeid < hibase->pnodeio.total && block)
     {
@@ -1058,35 +1094,26 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
             && ptemplate != (ITEMPLATE *)-1)
         {
             p = buf;
-            dst = xcode;
-            src = pnode[pnodeid].name;
-            URLENCODE(dst, src);
             p += sprintf(p, "({id:'%d', name:'%s', ntemplates:'%d', templates:[", 
-                    pnodeid, xcode, pnode[pnodeid].ntemplates);
+                    pnodeid, pnode[pnodeid].name, pnode[pnodeid].ntemplates);
             if(pnode[pnodeid].ntemplates > 0)
             {
                 x = pnode[pnodeid].template_first;
                 while(x > 0)
                 {
-                    dst = xcode;
-                    src = ptemplate[x].pattern;
-                    URLENCODE(dst, src);
-                    dst = url;
-                    src = ptemplate[x].url;
-                    URLENCODE(dst, src);
-                    dst = link;
-                    src = ptemplate[x].link;
-                    URLENCODE(dst, src);
+                    pattern = base64encode(ptemplate[x].pattern, strlen(ptemplate[x].pattern));
                     p += sprintf(p, "{id:'%d', flags:'%d', pattern:'%s', link:'%s',",
-                            x, ptemplate[x].flags, xcode, link);
-                    if(ptemplate[x].flags & RP_IS_LINK)
+                            x, ptemplate[x].flags, pattern, ptemplate[x].link);
+                    if(pattern){free(pattern);pattern = NULL;}
+                    if(ptemplate[x].flags & TMP_IS_LINK)
                     {
                         p += sprintf(p, "linkmap:{tableid:'%d', fieldid:'%d', "
                                 "nodeid:'%d', flag:'%d'},", 
                             ptemplate[x].linkmap.tableid, ptemplate[x].linkmap.fieldid,
                             ptemplate[x].linkmap.nodeid, ptemplate[x].linkmap.flag);
                     }
-                    p += sprintf(p, "url:'%s', nfields:'%d', map:[", url, ptemplate[x].nfields);
+                    p += sprintf(p, "url:'%s', nfields:'%d', map:[", 
+                            ptemplate[x].url, ptemplate[x].nfields);
                     if(ptemplate[x].nfields > 0)
                     {
                         i = 0;

@@ -73,6 +73,10 @@ typedef struct _PNODE
     int template_last;
     char name[PNODE_NAME_MAX];
 }PNODE;
+#define REG_IS_URL               0x01
+#define REG_IS_IMG               0x02
+#define REG_IS_NEED_CLEARHTML    0x04
+#define REG_IS_NEED_ANTISPAM     0x08
 typedef struct _IREGX
 {
     short tableid;
@@ -80,11 +84,10 @@ typedef struct _IREGX
     int   nodeid;
     int   flag;
 }IREGX;
-#define RP_IS_PUBLIC 0x01
-#define RP_IS_MULTI  0x02
-#define RP_IS_HTML   0x04
-#define RP_IS_IMAGE  0x08
-#define RP_IS_LINK   0x10
+#define TMP_IS_PUBLIC       0x01
+#define TMP_IS_GLOBAL       0x02
+#define TMP_IS_IGNORECASE   0x04
+#define TMP_IS_LINK         0x08
 /* template regular expression */
 typedef struct _ITEMPLATE
 {

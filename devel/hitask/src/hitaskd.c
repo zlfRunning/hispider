@@ -117,6 +117,7 @@ static char *e_ops[]=
 #define E_OP_DATABASE_VIEW      21
 };
 #define E_OP_NUM 22
+
 /* dns packet reader */
 int adns_packet_reader(CONN *conn, CB_DATA *buffer)
 {
@@ -711,7 +712,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                     memcpy(template.link, link, x);
                     p = linkmap;
                     while(*p != '\0' && *p != '[')++p;
-                    if(*p != ']') goto err_end;
+                    if(*p != '[') goto err_end;
                     template.linkmap.tableid = atoi(p);
                     while(*p != '\0' && ((*p >= '0' && *p <= '9') || *p == '-'))++p;
                     while(*p != '\0' && *p != ',')++p;
@@ -728,8 +729,9 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                     if(*p != ',') goto err_end;
                     ++p;
                     template.linkmap.flag = atoi(p);
-                    template.flags |= RP_IS_LINK; 
+                    template.flags |= TMP_IS_LINK; 
                 }
+                //if(pattern)fprintf(stdout, "%d::%s\n", __LINE__, pattern);
                 switch(op)
                 {
                     case E_OP_NODE_ADD :
@@ -892,7 +894,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         }else goto err_end;
                         break;
                     case E_OP_TEMPLATE_ADD:
-                        if(nodeid >= 0 && pattern && map && url
+                        if(nodeid >= 0 && pattern && (map||linkmap) && url
                             && (template.flags = flag) >= 0
                             && (n = strlen(pattern)) > 0 && n < PATTERN_LEN_MAX
                             && (memcpy(template.pattern, pattern, n))
@@ -906,7 +908,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         }else goto err_end;
                         break;
                     case E_OP_TEMPLATE_UPDATE:
-                        if(nodeid >= 0 && templateid >= 0 && pattern && map && url
+                        if(nodeid >= 0 && templateid >= 0 && pattern && (map||linkmap) && url
                             && (template.flags = flag) >= 0
                             && (n = strlen(pattern)) > 0 && n < PATTERN_LEN_MAX
                             && (memcpy(template.pattern, pattern, n))
