@@ -63,10 +63,12 @@ static char *e_argvs[] =
 #define E_ARGV_TEMPLATEID 13
     "map",
 #define E_ARGV_MAP      14
-    "link"
+    "link",
 #define E_ARGV_LINK     15
+    "linkmap"
+#define E_ARGV_LINKMAP  16
 };
-#define E_ARGV_NUM      16
+#define E_ARGV_NUM      17
 static char *e_ops[]=
 {
     "host_up",
@@ -575,7 +577,8 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
         parentid = -1, urlid = -1, hostid = -1, tableid = -1, 
         type = -1, flag = -1, templateid = -1;
     char *p = NULL, *end = NULL, *name = NULL, *host = NULL, *url = NULL, *link = NULL, 
-         *pattern = NULL, *map = NULL, buf[HTTP_BUF_SIZE], block[HTTP_BUF_SIZE];
+         *pattern = NULL, *map = NULL, *linkmap = NULL, 
+         buf[HTTP_BUF_SIZE], block[HTTP_BUF_SIZE];
     HTTP_REQ httpRQ = {0}, *http_req = NULL;
     ITEMPLATE template = {0};
     void *dp = NULL;
@@ -655,6 +658,9 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                                 case E_ARGV_LINK:
                                     link = p;
                                     break;
+                                case E_ARGV_LINKMAP:
+                                    linkmap = p;
+                                    break;
                                 default:
                                     break;
                             }
@@ -700,9 +706,29 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                     }
                     template.nfields = ++i;
                 }
-                if(link && (x = strlen(link)))
+                if(link && (x = strlen(link)) && linkmap)
                 {
                     memcpy(template.link, link, x);
+                    p = linkmap;
+                    while(*p != '\0' && *p != '[')++p;
+                    if(*p != ']') goto err_end;
+                    template.linkmap.tableid = atoi(p);
+                    while(*p != '\0' && ((*p >= '0' && *p <= '9') || *p == '-'))++p;
+                    while(*p != '\0' && *p != ',')++p;
+                    if(*p != ',') goto err_end;
+                    ++p;
+                    template.linkmap.fieldid = atoi(p);
+                    while(*p != '\0' && ((*p >= '0' && *p <= '9') || *p == '-'))++p;
+                    while(*p != '\0' && *p != ',')++p;
+                    if(*p != ',') goto err_end;
+                    ++p;
+                    template.linkmap.nodeid = atoi(p);
+                    while(*p != '\0' && ((*p >= '0' && *p <= '9') || *p == '-'))++p;
+                    while(*p != '\0' && *p != ',')++p;
+                    if(*p != ',') goto err_end;
+                    ++p;
+                    template.linkmap.flag = atoi(p);
+                    template.flags |= RP_IS_LINK; 
                 }
                 switch(op)
                 {

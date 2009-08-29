@@ -1077,9 +1077,16 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
                     dst = link;
                     src = ptemplate[x].link;
                     URLENCODE(dst, src);
-                    p += sprintf(p, "{id:'%d', flags:'%d', pattern:'%s', "
-                            "url:'%s', link:'%s', nfields:'%d', map:[", 
-                            x, ptemplate[x].flags, xcode, url, link, ptemplate[x].nfields);
+                    p += sprintf(p, "{id:'%d', flags:'%d', pattern:'%s', link:'%s',",
+                            x, ptemplate[x].flags, xcode, link);
+                    if(ptemplate[x].flags & RP_IS_LINK)
+                    {
+                        p += sprintf(p, "linkmap:{tableid:'%d', fieldid:'%d', "
+                                "nodeid:'%d', flag:'%d'},", 
+                            ptemplate[x].linkmap.tableid, ptemplate[x].linkmap.fieldid,
+                            ptemplate[x].linkmap.nodeid, ptemplate[x].linkmap.flag);
+                    }
+                    p += sprintf(p, "url:'%s', nfields:'%d', map:[", url, ptemplate[x].nfields);
                     if(ptemplate[x].nfields > 0)
                     {
                         i = 0;

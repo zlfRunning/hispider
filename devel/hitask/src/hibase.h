@@ -94,6 +94,7 @@ typedef struct _ITEMPLATE
     char  pattern[PATTERN_LEN_MAX];
     char  url[HI_URL_MAX];
     char  link[HI_URL_MAX];
+    IREGX linkmap;
     int   flags;
     int prev;
     int next;

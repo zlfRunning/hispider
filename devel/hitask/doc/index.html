@@ -739,6 +739,7 @@
                             {
                                 var odb = document.getElementById('database');
                                 odb.setAttribute('dbase', xmlHttp.responseText);
+                                LoadLinkOptions();
                                 //alert(xmlHttp.responseText);
                             }
                         }
@@ -1281,9 +1282,9 @@
                             block += ">去广告";
                             block += "<br>";
                             block += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-                            block += "数据表:<select name='tableid_"+i+"' onchange=\"";
+                            block += "<select name='tableid_"+i+"' onchange=\"";
                             block += "changeTable(this.form,'fieldid_"+i+"',this)\">";
-                            block += "<option value='-1' selected>请选择</option>";
+                            block += "<option value='-1' selected>数据表</option>";
                             if(map)
                             {
                                 for(x in dbase['tables'])
@@ -1298,8 +1299,8 @@
                                 block += tablesoptions;
                             }
                             block += "</select>";
-                            block += "字段:<select name='fieldid_"+i+"'>";
-                            block += "<option value='-1' selected>请选择</option>";
+                            block += "<select name='fieldid_"+i+"'>";
+                            block += "<option value='-1' selected>字段</option>";
                             if(map)
                             {
                                 tabid = map[i-1]['tableid'];
@@ -1312,8 +1313,8 @@
                                 }
                             }
                             block += "</select>";
-                            block += "节点:<select name='nodeid_"+i+"'>";
-                            block += "<option value='-1' selected>请选择</option>";
+                            block += "<select name='nodeid_"+i+"'>";
+                            block += "<option value='-1' selected>关联节点</option>";
                             if(map)
                             {
                                 for(x in childs)
@@ -1472,6 +1473,8 @@
                     var nfields = 0;
                     var url = "";
                     var link = "";
+                    var linkmap = null;
+                    var strlinkmap = "";
                     var name = decodeURIComponent(arr['name']);
                     document.forms['templateform']['nodeid'].value = nodeid;
                     var htmlstr =  "<ul class='ultab' >";
@@ -1489,6 +1492,7 @@
                         flag = temp['flags'];
                         tempid = temp['id'];
                         map = temp['map'];
+                        linkmap = temp['linkmap'];
                         strmap = "";
                         if(map.length > 0)
                         {
@@ -1502,6 +1506,15 @@
                                 if(x < (map.length - 1)) strmap += ",";
                             }
                             strmap += "]}";
+                        }
+                        if(linkmap)
+                        {
+                            strlinkmap = "{"
+                                +"tableid:'"+linkmap['tableid']+"',"
+                                +"fieldid:'"+linkmap['fieldid']+"',"
+                                +"nodeid:'"+linkmap['nodeid']+"',"
+                                +"flag:'"+linkmap['flag']+"'"
+                                +"}";
                         }
                         url = decodeURIComponent(temp['url']);
                         link = decodeURIComponent(temp['link']);
@@ -1518,6 +1531,7 @@
                         htmlstr += "<input type=hidden name='nfields' value='"+nfields+"'>";
                         htmlstr += "<input type=hidden name='map' value='"+strmap+"'>";
                         htmlstr += "<input type=hidden name='link' value='"+link+"'>";
+                        htmlstr += "<input type=hidden name='linkmap' value='"+strlinkmap+"'>";
                         htmlstr += "<input type=hidden name='url' value='"+url+"'>";
                         htmlstr += "<span class='eupdate' title='Change' ";
                         htmlstr += "onclick=\"XTEdit('xform"+tempid+"')\" >✎</span>";
@@ -1770,66 +1784,131 @@
                     alert(element.parentNode.innerHTML);
                 }
             }
+            function LoadLinkOptions()
+            {
+                var nodeid = -1;
+                var flag = 0;
+                var odiv = null;
+                var linkmap = null;
+                var oselect = null;
+                var dbase = null;
+                var form = document.forms['templateform'];
+                if(form && (nodeid = form['nodeid'].value) > 0 )
+                {
+                    if(form['linkmap'].value) linkmap = eval(form['linkmap'].value);
+                    flag = form['flag'].value;
+                    if((odiv = document.getElementById('database'))
+                        && (strdb = odiv.getAttribute('dbase')) 
+                        && (dbase = eval(strdb)))
+                    {
+                        var table = null;
+                        var tabid = -1;
+                        oselect = form['link_table'];
+                        oselect.options.length = 1;
+                        i = 1;
+                        for(x in dbase['tables'])
+                        {
+                            table = dbase['tables'][x];
+                            oselect.options[i] = new Option(table['name'], x);
+                            if(linkmap && x == linkmap['tableid'])
+                                oselect.options[i].oselected = true;
+                            ++i;
+                        }
+                        if(linkmap && (tabid = linkmap['tableid']) >= 0)
+                        {
+                            var fields = dbase['tables'][tabid]['fields'];
+                            oselect = form['link_field'];
+                            oselect.options.length = 1;
+                            i = 1;
+                            for(x in fields)
+                            {
+                                oselect.options[i] = new Option(fields[x]['name'], x); 
+                                if(linkmap && x == linkmap['fieldid'])
+                                    oselect.options[i].oselected = true;
+                                ++i;
+                            }
+                        }
+                    }
+                    if(nodeid > 0 && (odiv = document.getElementById('node'+nodeid)))
+                    {
+                        var strchilds = odiv.getAttribute('childs');
+                        var childs = eval(strchilds);
+                        oselect = form['link_node'];
+                        oselect.options.length = 1;
+                        if(childs)
+                        {
+                            i = 1;
+                            for(x in childs)
+                            {
+                                oselect.options[i] = new Option(childs[x], x); 
+                                if(linkmap && x == linkmap['nodeid'])
+                                    oselect.options[i].oselected = true;
+                                ++i;
+                            }
+                        }
+                    }
+                }
+            }
 		    function LoadURL(form)
 		    {
 		        var url = form['url'].value;
 		        if(url)
 		        {
-		                var xmlHttp = null;
-		                if((xmlHttp = CreateXMLHTTP()) != null)
+		            var xmlHttp = null;
+		            if((xmlHttp = CreateXMLHTTP()) != null)
+		            {
+		                var requestURL = '/proxy/'+url;
+		                xmlHttp.open('GET', requestURL, true);
+		                xmlHttp.onreadystatechange=function()
 		                {
-		                    var requestURL = '/proxy/'+url;
-		                    xmlHttp.open('GET', requestURL, true);
-		                    xmlHttp.onreadystatechange=function()
+		                    if(xmlHttp.readyState==4)
 		                    {
-		                        if(xmlHttp.readyState==4)
+		                        if(xmlHttp.status == 200)
 		                        {
-		                            if(xmlHttp.status == 200)
+		                            var str = xmlHttp.responseText;
+                                    var ediv = null;
+                                    if((ediv = document.getElementById('source_code_op'))) 
+                                        ediv.style.display = "inline";
+		                            var element = document.getElementById('source_view');
+		                            if(element) element.innerHTML = "";
+		                            var frame = document.createElement("iframe");
+		                            frame.setAttribute("id", 'editor-frame');
+		                            element.appendChild(frame);
+		                            var doc = null;
+		                            if((doc = getFrameDocument('editor-frame')))
 		                            {
-		                                var str = xmlHttp.responseText;
-                                        var ediv = null;
-                                        if((ediv = document.getElementById('source_code_op'))) 
-                                            ediv.style.display = "inline";
-		                                var element = document.getElementById('source_view');
-		                                if(element) element.innerHTML = "";
-		                                var frame = document.createElement("iframe");
-		                                frame.setAttribute("id", 'editor-frame');
-		                                element.appendChild(frame);
-		                                var doc = null;
-		                                if((doc = getFrameDocument('editor-frame')))
-		                                {
-                                            var htmlstr = str;
-                                            if(str.match(/<base .*?href=.*?>/i) == null)
-                                            {
-                                                var baseurl = url;
-                                                var post = 0;
-                                                if((pos = url.lastIndexOf('/')) > 6)
-                                                {
-                                                    baseurl = url.substring(0, pos+1);
-                                                }
-                                                var basehref = "<head><base href='"+baseurl+"'>";
-                                                htmlstr = str.replace(/<head>/i, basehref);
-                                            }
-		                                    doc.open();
-		                                    doc.write(htmlstr);
-		                                    doc.close();
-		                                }
-                                        if((ediv = document.getElementById('templatediv'))) 
+                                        var htmlstr = str;
+                                        if(str.match(/<base .*?href=.*?>/i) == null)
                                         {
-                                            ediv.style.display = "inline";
-		                                    document.forms['templateform']['code'].value = str;
-		                                    document.forms['templateform']['url'].value = url;
+                                            var baseurl = url;
+                                            var post = 0;
+                                            if((pos = url.lastIndexOf('/')) > 6)
+                                            {
+                                                baseurl = url.substring(0, pos+1);
+                                            }
+                                            var basehref = "<head><base href='"+baseurl+"'>";
+                                            htmlstr = str.replace(/<head>/i, basehref);
                                         }
+		                                doc.open();
+		                                doc.write(htmlstr);
+		                                doc.close();
 		                            }
-                                    else
+                                    if((ediv = document.getElementById('templatediv'))) 
                                     {
-		                                document.forms['templateform']['code'].value 
-                                        = xmlHttp.getAllResponseHeader();
+                                        ediv.style.display = "inline";
+		                                document.forms['templateform']['code'].value = str;
+		                                document.forms['templateform']['url'].value = url;
                                     }
 		                        }
+                                else
+                                {
+		                            document.forms['templateform']['code'].value 
+                                        = xmlHttp.getAllResponseHeader();
+                                }
 		                    }
-		                    xmlHttp.send();
 		                }
+		                xmlHttp.send();
+		            }
 		        }
                 return ViewDatabase();
 		    }
@@ -1882,6 +1961,7 @@
             <input type=hidden name='flag' value='0' >
             <input type=hidden name='nfields' value='-1' >
             <input type=hidden name='map' value='' >
+            <input type=hidden name='linkmap' value='' >
             <input type=hidden name='url' value='' >
             代码:<textarea name='code' rows=6  cols=120> </textarea> 
             <br>
@@ -1904,6 +1984,12 @@
             &nbsp;&nbsp;&nbsp;&nbsp;
             <input type='button' value='Add Link' onclick="AddLink(this.form);">
             <br>
+            <select name='link_table' onchange="changeTable(this.form, 'link_field', this)">
+                <option value='-1'>数据表</option></select>
+            &nbsp;&nbsp;&nbsp;&nbsp;
+            <select name='link_field' ><option value='-1'>字段</option></select>
+            &nbsp;&nbsp;&nbsp;&nbsp;
+            <select name='link_node' ><option value='-1'>子节点</option></select>
             </span>
         </form>
         </div>
