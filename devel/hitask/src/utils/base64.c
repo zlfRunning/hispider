@@ -54,7 +54,8 @@ int base64_decode(unsigned char *out, const char *in, int inlen)
 
     if (inlen < 0) return -1;
 
-    while (inlen >= 4 && *inp != '\0') {
+    while (inlen >= 4 && *inp != '\0')
+    {
         buf[0] = *inp++;
         inlen--;
         if (BASE64VAL(buf[0]) == -1) break;
