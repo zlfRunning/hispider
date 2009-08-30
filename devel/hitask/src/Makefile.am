@@ -1,8 +1,8 @@
 #libhibase
-lib_LTLIBRARIES = libhibase.la
-libhibase_la_SOURCES = hibase.c hibase.h utils/trie.h utils/trie.c utils/timer.h utils/logger.h
-libhibase_la_CPPFLAGS = -I utils -D_FILE_OFFSET_BITS=64 -Wall
-include_HEADERS = hibase.h
+#lib_LTLIBRARIES = libhibase.la
+#libhibase_la_SOURCES = hibase.c hibase.h utils/trie.h utils/trie.c utils/timer.h utils/logger.h
+#libhibase_la_CPPFLAGS = -I utils -D_FILE_OFFSET_BITS=64 -Wall
+#include_HEADERS = hibase.h
 #hitaskd hitask
 bin_PROGRAMS=hitaskd hitask
 hitaskd_SOURCES= hitaskd.c evdns.c evdns.h http.c http.h ltask.c ltask.h hibase.h hibase.c \
