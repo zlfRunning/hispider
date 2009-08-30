@@ -1328,6 +1328,7 @@
                 var code = null;
                 if(form && (pattern = form['pattern'].value) && (code = form['code'].value))
                 {
+                    code = code.replace(/\r|\n/mig,'');
                     var nodeid = form['nodeid'].value;
                     var templateid = form['templateid'].value;
                     var url = form['url'].value;
@@ -1533,6 +1534,7 @@
                 if(form && (pattern = form['pattern'].value)
                     && (code = form['code'].value))
                 {
+                    code = code.replace(/\r|\n/mig,'');
                     if(form['is_global'].checked == true) 
                     {
                         is_global = 1;
