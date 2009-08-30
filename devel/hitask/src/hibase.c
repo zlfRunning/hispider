@@ -9,6 +9,7 @@
 #include "fqueue.h"
 #include "timer.h"
 #include "logger.h"
+#include "base64.h"
 #define  HIBASE_TABLE_NAME   		"hibase.table"
 #define  HIBASE_TEMPLATE_NAME 		"hibase.template"
 #define  HIBASE_PNODE_NAME 		    "hibase.pnode"
@@ -82,43 +83,6 @@ do                                                                              
 
 static char *table_data_types[] = {"null", "int", "float", "null", "text",
     "null","null","null","blob"};
-char *base64encode(const char *bin, size_t len)
-{
-
-    char *buf = (char *) malloc ((len + 2) / 3 * 4 + 1);
-    size_t i = 0, j = 0;
-
-    char BASE64_END = '=';
-    char base64_table[64];
-    strncpy (base64_table, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/", 64);
-
-    while (j < len - 2) {
-        buf[i++] = base64_table[bin[j] >> 2];
-        buf[i++] = base64_table[((bin[j] & 3) << 4) | (bin[j + 1] >> 4)];
-        buf[i++] = base64_table[((bin[j + 1] & 15) << 2) | (bin[j + 2] >> 6)];
-        buf[i++] = base64_table[bin[j + 2] & 63];
-        j += 3;
-    }
-
-    switch (len - j) {
-        case 1:
-            buf[i++] = base64_table[bin[j] >> 2];
-            buf[i++] = base64_table[(bin[j] & 3) << 4];
-            buf[i++] = BASE64_END;
-            buf[i++] = BASE64_END;
-            break;
-        case 2:
-            buf[i++] = base64_table[bin[j] >> 2];
-            buf[i++] = base64_table[((bin[j] & 3) << 4) | (bin[j + 1] >> 4)];
-            buf[i++] = base64_table[(bin[j + 1] & 15) << 2];
-            buf[i++] = BASE64_END;
-            break;
-        case 0:
-            break;
-    }
-    buf[i] = '\0';
-    return buf;
-}
 /* mkdir */
 int hibase_mkdir(char *path, int mode)
 {
@@ -1084,7 +1048,7 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
     ITEMPLATE *ptemplate = NULL;
     PNODE *pnode = NULL;
     int n = -1, x = 0, i = 0;
-    char buf[HI_BUF_SIZE], *pattern = NULL, *p = NULL;
+    char buf[HI_BUF_SIZE], xbuf[HI_BUF_SIZE], *pattern = NULL, *p = NULL;
 
     if(hibase && pnodeid >= 0 && pnodeid < hibase->pnodeio.total && block)
     {
@@ -1101,10 +1065,16 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
                 x = pnode[pnodeid].template_first;
                 while(x > 0)
                 {
-                    pattern = base64encode(ptemplate[x].pattern, strlen(ptemplate[x].pattern));
+                    if((n = strlen(ptemplate[x].pattern)) > 0
+                        && (HI_BUF_SIZE > BASE64_LEN(n)))
+                    {
+                        base64_encode(xbuf, ptemplate[x].pattern, n);
+                        pattern = xbuf;
+                    }
+                    else pattern = "";
+                    fprintf(stdout, "%d::%s\n%s\n", __LINE__, ptemplate[x].pattern, pattern);
                     p += sprintf(p, "{id:'%d', flags:'%d', pattern:'%s', link:'%s',",
                             x, ptemplate[x].flags, pattern, ptemplate[x].link);
-                    if(pattern){free(pattern);pattern = NULL;}
                     if(ptemplate[x].flags & TMP_IS_LINK)
                     {
                         p += sprintf(p, "linkmap:{tableid:'%d', fieldid:'%d', "

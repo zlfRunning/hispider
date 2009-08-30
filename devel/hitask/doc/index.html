@@ -10,24 +10,24 @@
                 font-size:12pt;
                 margin:auto;
                 width:1000px;
-                height:675px;
+                height:100%;
             }
             #mainframe
             {
-                position:absolute;
+                position:relative;
                 background-color:#ffffff;
                 margin:auto;
                 width:1000px;
                 height:100%;
             }
-            #itab {position:absolute;background:#ffffff;height:50px; top:0px;left:0px;}
+            #itab {position:relative;background:#F4FBFF;height:50px; width:100%;top:0px;left:0px;}
             #itab ul{margin:0;padding:0;list-style:none;color:#2F5FA1;}
             #itab li{float:left;background-color:#F4FBFF;border-right:1px solid #FFF;
                 padding:3px 8px 3px 8px;cursor: pointer;width:120px;height:30px;}
             #itab .tab-selected{background-color:#D0E9F7;padding:0;margin:0;
                 padding:3px 8px 3px 8px;height:30px;}
             #taskinfo{position:absolute;background-color:#F4FBFF; color:#2F5FA1;display:none;
-                border:1px solid #81BEF7; padding:0px;top:36px;height:220px;width:998px;}
+                border:1px solid #81BEF7; padding:0px;top:36px;height:100%;width:998px;}
             .ktask{font-size:12pt;font-weight:bold;}
             .vtask{font-size:12pt;font-weight:bold;}
             #database{position:absolute;background-color:#F4FBFF;display:none;
@@ -36,8 +36,8 @@
                 border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:100%;}
             #proxy{position:absolute;background-color:#F4FBFF;display:none;
                 border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:100%;}
-            #dblist{position:absolute;top:0px;left:0px;padding:0px;
-                background-color:#D0E9F7;width:400px;height:639px;}
+            #dblist{position:relative;top:0px;left:0px;padding:0px;
+                background-color:#D0E9F7;width:300px;height:100%;}
             #dbtitle{position:relative;top:0px;left:0px;padding:0px;
                 background-color:#D0E9F7;color:#2F5FA1;}
             #dbselect{position:relative;top:0px;left:0px;padding:0px;
@@ -47,7 +47,7 @@
             .ltab{background-color:#D0E9F7;cursor: pointer;}
             .ltab-selected{background-color:#F4FBFF;cursor: pointer;}
             #dbfields{position:absolute;background-color:#D0E9F7;color:#2F5FA1;
-                left:400px;top:0px;width:598px;}
+                left:300px;top:0px;width:698px;}
             .lfname{cursor: pointer;}
             .lfield{background-color:#F4FBFF;cursor: pointer;}
             .lfield-selected{background-color:#D0E9F7;cursor: pointer;}
@@ -2110,7 +2110,6 @@
         <div id='source_code_op'>
             <div id='source_view'></div>
             <div id='source_op'>
-                <a  href ="javascript:getSelectContent('editor-frame');">select</a>
             </div>
         </div>
         <div id='templatediv'>
