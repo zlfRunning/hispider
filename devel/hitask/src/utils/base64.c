@@ -12,6 +12,7 @@ static const char base64val[128] = {
     -1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
     41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1
 };
+#define IS_ASCII(c) (((unsigned char) c) <= 0177 ? 1 : 0)
 #define BASE64VAL(c)    (IS_ASCII(c) ? base64val[(int) (c)] : -1)
 void base64_encode(char *out, const unsigned char *in, int inlen)
 {
@@ -51,8 +52,7 @@ int base64_decode(unsigned char *out, const char *in, int inlen)
     unsigned char *outp = out;
     char buf[4];
 
-    if (inlen < 0)
-        inlen = G_MAXINT;
+    if (inlen < 0) return -1;
 
     while (inlen >= 4 && *inp != '\0') {
         buf[0] = *inp++;
