@@ -1202,6 +1202,10 @@
                 form['link_table'].options.length = 1;
                 form['link_field'].options.length = 1;
                 form['link_node'].options.length = 1;
+                form = document.forms['urlform'];
+                form['method'][0].checked = true;
+                form['url'].focus();
+                form['url'].value = 'http://';
             }
             function XTAdd(e, nodeid)
             {
@@ -2095,7 +2099,7 @@
                                 ++i;
                             }
                         }
-                        alert(strchilds);
+                        //alert(strchilds);
                     }
                 }
             }
@@ -2272,12 +2276,15 @@
             <input type=radio name='link_method' value='1'>POST
             &nbsp;
             <select name='link_table' onchange="changeTable(this.form, 'link_field', this)">
-                <option value='-1'>数据表</option></select>
+                <option value='-1' selected>数据表</option>
+            </select>
             &nbsp;&nbsp;&nbsp;&nbsp;
-            <select name='link_field' ><option value='-1'>字段</option></select>
+            <select name='link_field' >
+                <option value='-1' selected>字段</option>
+            </select>
             &nbsp;&nbsp;&nbsp;&nbsp;
             <select name='link_node' >
-            <option value='-1'>子节点</option>
+                <option value='-1' selected>子节点</option>
             </select>
             </span>
         </form>
