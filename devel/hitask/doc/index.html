@@ -1197,6 +1197,11 @@
                 form['url'].value = '';
                 form['link'].value = '';
                 form['map'].value = '';
+                form['method'].value = 0;
+                form['link_method'][0].checked = true;
+                form['link_table'].options.length = 1;
+                form['link_field'].options.length = 1;
+                form['link_node'].options.length = 1;
             }
             function XTAdd(e, nodeid)
             {
@@ -1208,6 +1213,7 @@
                 var xform = document.forms["templateform"];
                 xform['nodeid'].value = nodeid;
                 var urlform = document.forms["urlform"];
+                urlform['method'][0].checked = true;
                 urlform['url'].focus();
                 urlform['url'].value = 'http://';
             }
@@ -1232,6 +1238,18 @@
                     xform['is_global'].checked = true;
                 if(xform['flag'].value & 4)
                     xform['is_ignorecase'].checked = true;
+                xform['method'].value = 0;
+                if(form['method'].value == 1)
+                {
+                    xform['method'].value = 1;
+                    xform['flag'].value |= 16;
+                }
+                var strlinkmap = form['linkmap'].value;
+                var linkmap = null;
+                if(strlinkmap && (linkmap = eval(strlinkmap)) && (linkmap['flag'] & 16))
+                {
+                    xform['link_method'][1].checked = true;
+                }
                 var ediv = null;
                 if((ediv = document.getElementById('xtemplateform'))) 
                 {
@@ -1242,6 +1260,9 @@
                     ediv.style.display = "inline";
                 }
                 var urlform = document.forms["urlform"];
+                urlform['method'][0].checked = true;
+                if(form['flag'].value & 16)
+                    urlform['method'][1].checked = true;
                 urlform['url'].focus();
                 if(form['url'].value)
                 {
@@ -1266,6 +1287,7 @@
                             if(xmlHttp.status == 200)
                             {
                                 ShowTemplates(xmlHttp.responseText);
+                                XTReset();
                             }
                         }
                     }
@@ -1332,6 +1354,7 @@
                     var nodeid = form['nodeid'].value;
                     var templateid = form['templateid'].value;
                     var url = form['url'].value;
+                    var method = form['method'].value;
                     var op = form['op'].value;
                     var map = null;
                     var condition = "m";
@@ -1396,6 +1419,7 @@
                             block += "onsubmit='EditTemplate(this, this.parentNode)' >";
                             block += "<input type=hidden name='nodeid' value='"+nodeid+"'>";
                             block += "<input type=hidden name='op' value='"+op+"'>";
+                            block += "<input type=hidden name='method' value='"+method+"'>";
                             block += "<input type=hidden name='templateid' value='"+templateid+"'>";
                             block += "<input type=hidden name='nfields' value='"+arr.length+"'>";
                             block += "&nbsp;";
@@ -1669,17 +1693,17 @@
                         }
                         if(linkmap)
                         {
-                            strlinkmap = "{"
+                            strlinkmap = "({"
                                 +"tableid:'"+linkmap['tableid']+"',"
                                 +"fieldid:'"+linkmap['fieldid']+"',"
                                 +"nodeid:'"+linkmap['nodeid']+"',"
                                 +"flag:'"+linkmap['flag']+"'"
-                                +"}";
+                                +"})";
                         }
                         url = temp['url'];
                         link = temp['link'];
                         nfields = temp['nfields']+1;
-                        htmlstr += "<hr><li class='ltemplate' onmousemove='selectTemplate(this)' "
+                        htmlstr += "<li class='ltemplate' onmousemove='selectTemplate(this)' "
                         htmlstr += " onmouseout='outTemplate(this);' >";
                         htmlstr += "<form action='javascript:void(0)' ";
                         htmlstr += " name='xform"+tempid+"' onsubmit='XTEdit(this)'>";
@@ -1691,7 +1715,7 @@
                         htmlstr += "<input type=hidden name='nfields' value='"+nfields+"'>";
                         htmlstr += "<input type=hidden name='map' value='"+strmap+"'>";
                         htmlstr += "<input type=hidden name='link' value='"+link+"'>";
-                        htmlstr += "<input type=hidden name='linkmap' value='"+strlinkmap+"'>";
+                        htmlstr += "<input type=hidden name='linkmap' value=\""+strlinkmap+"\">";
                         htmlstr += "<input type=hidden name='url' value='"+url+"'>";
                         htmlstr += "<span class='eupdate' title='Change' ";
                         htmlstr += "onclick=\"XTEdit('xform"+tempid+"')\" >✎</span>";
@@ -1750,8 +1774,9 @@
                     if(form['is_public'].checked == true) flag |= 1;
                     if(form['is_global'].checked == true) flag |= 2;
                     if(form['is_ignorecase'].checked == true) flag |= 4;
+                    if(form['method'].value == 1) flag |= 16;
                     var link_flag = 0;
-                    if(form['method'][1].checked == true) link_flag |= 16;
+                    if(form['link_method'][1].checked == true) link_flag |= 16;
                     var linkmap = "[" + form['link_table'].value + ','
                         + form['link_field'].value + ','
                         + form['link_node'].value + ','
@@ -1803,10 +1828,12 @@
                 var templateid = form['templateid'].value;
                 var pattern = form['pattern'].value;
                 var url = form['url'].value;
+                var method = form['method'].value;
                 var flag = 0;
                 if(form['is_public'].checked == true) flag |= 1;
                 if(form['is_global'].checked == true) flag |= 2;
                 if(form['is_ignorecase'].checked == true) flag |= 4;
+                if(method == 1) flag |= 16;
                 var nfields = form['nfields'].value;
                 var tabid = null;
                 var fieldid = null;
@@ -2031,7 +2058,7 @@
                             table = dbase['tables'][x];
                             oselect.options[i] = new Option(table['name'], x);
                             if(linkmap && x == linkmap['tableid'])
-                                oselect.options[i].oselected = true;
+                                oselect.options[i].selected = true;
                             ++i;
                         }
                         if(linkmap && (tabid = linkmap['tableid']) >= 0)
@@ -2044,15 +2071,17 @@
                             {
                                 oselect.options[i] = new Option(fields[x]['name'], x); 
                                 if(linkmap && x == linkmap['fieldid'])
-                                    oselect.options[i].oselected = true;
+                                    oselect.options[i].selected = true;
                                 ++i;
                             }
                         }
                     }
-                    if(nodeid > 0 && (odiv = document.getElementById('node'+nodeid)))
+                    var strchilds = "";
+                    var childs = null;
+                    if(nodeid > 0 && (odiv = document.getElementById('node'+nodeid))
+                        && (strchilds = odiv.getAttribute('childs')) 
+                        && (childs = eval(strchilds)) )
                     {
-                        var strchilds = odiv.getAttribute('childs');
-                        var childs = eval(strchilds);
                         oselect = form['link_node'];
                         oselect.options.length = 1;
                         if(childs)
@@ -2062,10 +2091,11 @@
                             {
                                 oselect.options[i] = new Option(childs[x], x); 
                                 if(linkmap && x == linkmap['nodeid'])
-                                    oselect.options[i].oselected = true;
+                                    oselect.options[i].selected = true;
                                 ++i;
                             }
                         }
+                        alert(strchilds);
                     }
                 }
             }
@@ -2079,9 +2109,11 @@
 		            {
 		                var requestURL = '/proxy/'+url;
                         var argv = "";
+                        var method = 0;
                         if(form['method'][1].checked == true)
                         {
                             var pos = 0;
+                            method = 1;
                             if((pos = url.indexOf('?')) >= 0)
                             {
                                 requestURL = '/proxy/'+url.substring(0, pos-1);
@@ -2141,6 +2173,7 @@
                                         ediv.style.display = "inline";
 		                                document.forms['templateform']['code'].value = str;
 		                                document.forms['templateform']['url'].value = url;
+		                                document.forms['templateform']['method'].value = method;
                                     }
 		                        }
                                 else
@@ -2211,6 +2244,7 @@
             <input type=hidden name='map' value='' >
             <input type=hidden name='linkmap' value='' >
             <input type=hidden name='url' value='' >
+            <input type=hidden name='method' value='' >
             代码:<textarea name='code' rows=6  cols=120> </textarea> 
             <br>
             模版:<textarea name='pattern' rows=2  cols=120 > </textarea><br>
@@ -2233,16 +2267,18 @@
             &nbsp;&nbsp;&nbsp;&nbsp;
             <input type='button' value='Submit Link' onclick="EditLink(this.form);">
             <br>
-            <input type=radio name='method' value='0' checked>GET
+            <input type=radio name='link_method' value='0' checked>GET
             &nbsp;
-            <input type=radio name='method' value='1'>POST
+            <input type=radio name='link_method' value='1'>POST
             &nbsp;
             <select name='link_table' onchange="changeTable(this.form, 'link_field', this)">
                 <option value='-1'>数据表</option></select>
             &nbsp;&nbsp;&nbsp;&nbsp;
             <select name='link_field' ><option value='-1'>字段</option></select>
             &nbsp;&nbsp;&nbsp;&nbsp;
-            <select name='link_node' ><option value='-1'>子节点</option></select>
+            <select name='link_node' >
+            <option value='-1'>子节点</option>
+            </select>
             </span>
         </form>
         </div>
