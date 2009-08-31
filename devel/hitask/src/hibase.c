@@ -1072,7 +1072,7 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
                         pattern = xbuf;
                     }
                     else pattern = "";
-                    fprintf(stdout, "%d::%s\n%s\n", __LINE__, ptemplate[x].pattern, pattern);
+                    //fprintf(stdout, "%d::%s\n%s\n", __LINE__, ptemplate[x].pattern, pattern);
                     p += sprintf(p, "{id:'%d', flags:'%d', pattern:'%s', link:'%s',",
                             x, ptemplate[x].flags, pattern, ptemplate[x].link);
                     if(ptemplate[x].flags & TMP_IS_LINK)

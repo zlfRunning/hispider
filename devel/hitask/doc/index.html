@@ -1751,6 +1751,7 @@
                     if(form['is_global'].checked == true) flag |= 2;
                     if(form['is_ignorecase'].checked == true) flag |= 4;
                     var link_flag = 0;
+                    if(form['method'][1].checked == true) link_flag |= 16;
                     var linkmap = "[" + form['link_table'].value + ','
                         + form['link_field'].value + ','
                         + form['link_node'].value + ','
@@ -2077,7 +2078,30 @@
 		            if((xmlHttp = CreateXMLHTTP()) != null)
 		            {
 		                var requestURL = '/proxy/'+url;
-		                xmlHttp.open('GET', requestURL, true);
+                        var argv = "";
+                        if(form['method'][1].checked == true)
+                        {
+                            var pos = 0;
+                            if((pos = url.indexOf('?')) >= 0)
+                            {
+                                requestURL = '/proxy/'+url.substring(0, pos-1);
+                                argv = url.substring(pos + 1);
+                            }
+                            else
+                            {
+                                requestURL = '/proxy/'+url;
+                                argv = "";
+                            }
+		                    xmlHttp.open('POST', requestURL, true);
+                            xmlHttp.setRequestHeader("Content-Length", argv.length);
+                            xmlHttp.setRequestHeader("Content-Type", 
+                                "application/x-www-form-urlencoded");
+                        }
+                        else
+                        {
+		                    requestURL = '/proxy/'+url;
+		                    xmlHttp.open('GET', requestURL, true);
+                        }
 		                xmlHttp.onreadystatechange=function()
 		                {
 		                    if(xmlHttp.readyState==4)
@@ -2163,7 +2187,13 @@
         <div id='xtemplateform'>
         <div id=urlform >
         <form action='javascript:void(0);' name='urlform' onsubmit='return LoadURL(this);'>
-            URL:<input type=text size='32' name='url'> <input type=submit value='Load'>
+            URL:<input type=text size='32' name='url'>
+            &nbsp;
+            <input type=radio name='method' value='0' checked>GET
+            &nbsp;
+            <input type=radio name='method' value='1'>POST
+            &nbsp;
+            <input type=submit value='Load'>
         </form>
         </div>
         <div id='source_code_op'>
@@ -2203,6 +2233,10 @@
             &nbsp;&nbsp;&nbsp;&nbsp;
             <input type='button' value='Submit Link' onclick="EditLink(this.form);">
             <br>
+            <input type=radio name='method' value='0' checked>GET
+            &nbsp;
+            <input type=radio name='method' value='1'>POST
+            &nbsp;
             <select name='link_table' onchange="changeTable(this.form, 'link_field', this)">
                 <option value='-1'>数据表</option></select>
             &nbsp;&nbsp;&nbsp;&nbsp;

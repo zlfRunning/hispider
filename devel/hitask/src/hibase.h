@@ -77,6 +77,7 @@ typedef struct _PNODE
 #define REG_IS_IMG               0x02
 #define REG_IS_NEED_CLEARHTML    0x04
 #define REG_IS_NEED_ANTISPAM     0x08
+#define REG_IS_POST              0x10
 typedef struct _IREGX
 {
     short tableid;
@@ -88,6 +89,7 @@ typedef struct _IREGX
 #define TMP_IS_GLOBAL       0x02
 #define TMP_IS_IGNORECASE   0x04
 #define TMP_IS_LINK         0x08
+#define TMP_IS_POST         0x10
 /* template regular expression */
 typedef struct _ITEMPLATE
 {
