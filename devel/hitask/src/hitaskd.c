@@ -713,6 +713,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                     p = linkmap;
                     while(*p != '\0' && *p != '[')++p;
                     if(*p != '[') goto err_end;
+                    ++p;
                     template.linkmap.tableid = atoi(p);
                     while(*p != '\0' && ((*p >= '0' && *p <= '9') || *p == '-'))++p;
                     while(*p != '\0' && *p != ',')++p;
