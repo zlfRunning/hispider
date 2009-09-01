@@ -1197,6 +1197,7 @@
                 form['nfields'].value = 0;
                 form['url'].value = '';
                 form['link'].value = '';
+                form['linkmap'].value = '';
                 form['map'].value = '';
                 form['method'].value = 0;
                 form['link_method'][0].checked = true;
@@ -1627,7 +1628,7 @@
                         for(i = 0; i < count; i++)
                         {
                             if(link) url = link;
-                            block += "<span class='ctxt_block'>Result:"+i+"<hr>";
+                            block += "<span class='ctxt_block'>Result:"+i+"";
                             for(j = 1; j < matches[i].length; j++) 
                             {
                                 if(j < 10) block += "0"; 
@@ -1643,7 +1644,7 @@
                             {
                                 block += "URL:<input type=text size=64 value='"+url+"'><br>";
                             }
-                            block += "</span>";
+                            block += "</span><hr>";
                         }
                         frame.contentWindow.document.open();
                         frame.contentWindow.document.write(block);
@@ -1703,6 +1704,7 @@
                             }
                             strmap += "]}";
                         }
+                        strlinkmap = "";
                         if(linkmap)
                         {
                             strlinkmap = "({"
@@ -1763,6 +1765,7 @@
                             if(xmlHttp.status == 200)
                             {
                                 ShowTemplates(xmlHttp.responseText);
+                                //alert(xmlHttp.responseText);
                             }
                         }
                     }
@@ -2070,7 +2073,9 @@
                             table = dbase['tables'][x];
                             oselect.options[i] = new Option(table['name'], x);
                             if(linkmap && x == linkmap['tableid'])
+                            {
                                 oselect.options[i].selected = true;
+                            }
                             ++i;
                         }
                         if(linkmap && (tabid = linkmap['tableid']) >= 0)
@@ -2083,7 +2088,9 @@
                             {
                                 oselect.options[i] = new Option(fields[x]['name'], x); 
                                 if(linkmap && x == linkmap['fieldid'])
+                                {
                                     oselect.options[i].selected = true;
+                                }
                                 ++i;
                             }
                         }
@@ -2094,6 +2101,8 @@
                         && (strchilds = odiv.getAttribute('childs')) 
                         && (childs = eval(strchilds)) )
                     {
+                        //alert(strchilds);
+                        //alert(form['linkmap'].value);
                         oselect = form['link_node'];
                         oselect.options.length = 1;
                         if(childs)
@@ -2103,7 +2112,9 @@
                             {
                                 oselect.options[i] = new Option(childs[x], x); 
                                 if(linkmap && x == linkmap['nodeid'])
+                                {
                                     oselect.options[i].selected = true;
+                                }
                                 ++i;
                             }
                         }
