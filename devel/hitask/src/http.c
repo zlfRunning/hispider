@@ -3,6 +3,7 @@
 #include <iconv.h>
 #include "chardet.h"
 #include "zstream.h"
+#define CHARSET_MAX 256
 #endif
 static char *wdays[]={"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
 #ifndef _STATIS_YMON
@@ -333,10 +334,10 @@ int http_response_parse(char *p, char *end, HTTP_RESPONSE *http_resp)
 
     if(p && end)
     {
-        while(s < end && *s != 0x20 && *s != 0x09)++s;
-        while(s < end && (*s == 0x20 || *s == 0x09))++s;
         pp = http_resp->hlines;
         epp = http_resp->hlines + HTTP_HEADER_MAX;
+        while(s < end && *s != 0x20 && *s != 0x09)*pp++ = *s++;
+        while(s < end && (*s == 0x20 || *s == 0x09))*pp++ = *s++;
         for(i = 0; i < HTTP_RESPONSE_NUM; i++ )
         {
             if(memcmp(response_status[i].e, s, response_status[i].elen) == 0)
@@ -435,8 +436,9 @@ int http_charset_convert(char *content_type, char *content_encoding, char *data,
     int nout = 0; 
 #ifdef _HTTP_CHARSET_CONVERT
     char charset[CHARSET_MAX], *rawdata = NULL, *txtdata = NULL, *todata = NULL, 
-         *zdata = NULL, *p = NULL, *ps = NULL, *inbuf = NULL, *outbuf = NULL;
-    size_t nrawdata = 0, ntxtdata = 0, ntodata = 0, nzdata = 0, ninbuf = 0, noutbuf = 0;
+         *zdata = NULL, *p = NULL, *ps = NULL, *outbuf = NULL;
+    size_t nrawdata = 0, ntxtdata = 0, ntodata = 0, nzdata = 0, 
+           ninbuf = 0, noutbuf = 0, n = 0;
     chardet_t pdet = NULL;
     iconv_t cd = NULL;
 
@@ -446,7 +448,7 @@ int http_charset_convert(char *content_type, char *content_encoding, char *data,
         *out = NULL;
         if(strncasecmp(content_encoding, "gzip", 4) == 0)
         {
-            nrawdata =  ndata * 8 + Z_HEADER_SIZE;
+            nrawdata =  len * 8 + Z_HEADER_SIZE;
             if((rawdata = (char *)calloc(1, nrawdata)))
             {
                 if((httpgzdecompress((Bytef *)data, len, 
@@ -461,7 +463,7 @@ int http_charset_convert(char *content_type, char *content_encoding, char *data,
         }
         else if(strncasecmp(content_encoding, "deflate", 7) == 0)
         {
-            nrawdata =  ndata * 8 + Z_HEADER_SIZE;
+            nrawdata =  len * 8 + Z_HEADER_SIZE;
             if((rawdata = (char *)calloc(1, nrawdata)))
             {
                 if((zdecompress((Bytef *)data, len, (Bytef *)rawdata, (uLong *)&nrawdata)) == 0)
@@ -478,10 +480,11 @@ int http_charset_convert(char *content_type, char *content_encoding, char *data,
             txtdata = data;
             ntxtdata = len;
         }
+        memset(charset, 0, CHARSET_MAX);
         //charset detactor
         if(txtdata && ntxtdata > 0 && chardet_create(&pdet) == 0)
         {
-            if(chardet_handle_data(pdet, rawdata, nrawdata) == 0
+            if(chardet_handle_data(pdet, txtdata, ntxtdata) == 0
                     && chardet_data_end(pdet) == 0 )
             {
                 chardet_get_charset(pdet, charset, CHARSET_MAX);
@@ -518,7 +521,7 @@ int http_charset_convert(char *content_type, char *content_encoding, char *data,
                 todata = txtdata;
                 ntodata = ntxtdata;
             }
-        }goto err_end;
+        }else goto err_end;
         if(is_need_compress && todata && ntodata > 0)
         {
             nzdata = ntodata + Z_HEADER_SIZE;
