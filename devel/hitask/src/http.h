@@ -481,4 +481,9 @@ int http_argv_parse(char *p, char *end, HTTP_REQ *http_req);
 int http_response_parse(char *p, char *end, HTTP_RESPONSE *resp);
 /* return HTTP key/value */
 int http_kv(HTTP_KV *kv, char *line, int nline, char **name, char **key);
+/* HTTP charset convert */
+int http_charset_convert(char *content_type, char *content_encoding, char *data, int len, 
+        char *tocharset, int is_need_compress, char **out);
+/* HTTP charset convert data free*/
+void http_charset_convert_free(char *data);
 #endif

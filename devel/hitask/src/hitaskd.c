@@ -20,6 +20,7 @@
 #include "trie.h"
 #include "tm.h"
 #define PROXY_TIMEOUT 1000000
+static char *http_default_charset = "UTF-8";
 static char *httpd_home = NULL;
 static SBASE *sbase = NULL;
 static SERVICE *hitaskd = NULL, *histore = NULL, *adns = NULL;
@@ -262,6 +263,129 @@ void adns_heartbeat_handler(void *arg)
     }
 }
 
+/* packet reader */
+int http_proxy_packet_reader(CONN *conn, CB_DATA *buffer)
+{
+    char *p = NULL, *end = NULL, *s = NULL;
+    int n = -1;
+
+    if(conn && buffer && buffer->ndata > 0 && (p = buffer->data)
+        && (end = (buffer->data + buffer->ndata)))
+    {
+        //fprintf(stdout, "%d::%s\r\n", __LINE__, buffer->data);
+        if((s = strstr(p, "\r\n\r\n")))
+            n = s + 4 - p;
+    }
+    return n;
+}
+
+/* packet handler */
+int http_proxy_packet_handler(CONN *conn, CB_DATA *packet)
+{
+    char *p = NULL, *end = NULL;
+    HTTP_RESPONSE http_resp = {0};
+    CONN *parent = NULL;
+    int n = 0;
+
+    if(conn && packet && packet->ndata > 0 && (p = packet->data) 
+            && (end = packet->data + packet->ndata))
+    {
+        fprintf(stdout, "%d::%s\r\n", __LINE__, packet->data);
+        if(http_response_parse(p, end, &http_resp) == -1) goto err_end;
+        fprintf(stdout, "%d::%s\r\n", __LINE__, packet->data);
+        if((n = http_resp.headers[HEAD_ENT_CONTENT_LENGTH]) > 0 
+            && (p = http_resp.hlines + n) && (n = atoi(p)))
+        {
+            conn->save_cache(conn, &http_resp, sizeof(HTTP_RESPONSE));
+            return conn->recv_chunk(conn, n);
+        }
+        else
+        {
+            if(conn->session.parent
+                    && (parent = hitaskd->findconn(hitaskd, conn->session.parentid))
+                    && conn->session.parent == parent)
+            {
+                return parent->push_chunk(parent, packet->data, packet->ndata);
+            }
+        }
+err_end: 
+        conn->over(conn);
+    }
+    return -1;
+}
+
+/* data handler */
+int http_proxy_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
+{
+    char buf[HTTP_BUF_SIZE], *content_type = NULL, *content_encoding = NULL, 
+         *p = NULL, *out = NULL;
+    HTTP_RESPONSE *http_resp = NULL;
+    CONN *parent = NULL;
+    int n = 0;
+
+    if(conn && packet && packet->ndata > 0 && packet->data 
+            && cache && cache->ndata > 0 && (http_resp = (HTTP_RESPONSE *)cache->data) 
+            && chunk && chunk->ndata && chunk->data)
+    {
+        if((n = http_resp->headers[HEAD_ENT_CONTENT_ENCODING]))
+            content_encoding = http_resp->hlines + n;
+        else 
+            content_encoding = "";
+        if((n = http_resp->headers[HEAD_ENT_CONTENT_TYPE]) > 0 
+                && (content_type = http_resp->hlines + n)
+                && (n = http_charset_convert(content_type, content_encoding, 
+                        chunk->data, chunk->ndata, http_default_charset, 1, &out)) > 0)
+        {
+            //memcpy(buf, packet->data, (packet->ndata - 2));
+            //p = buf + packet->ndata - 2;
+            p += sprintf(p, "%s\r\n", http_resp->hlines);
+            for(i = 0; i < HTTP_HEADER_NUM; i++)
+            {
+               if(HEAD_ENT_CONTENT_ENCODING == i
+               || HEAD_ENT_CONTENT_LENGTH == i
+               || HEAD_RESP_SET_COOKIE == i)
+               {
+               continue;
+               }
+               else if((n = http_req->headers[i]) > 0 && (s = (http_req->hlines + n)))
+               {
+               p += sprintf(p, "%s %s\r\n", http_headers[i].e, s);
+               }
+            }
+            /*
+            */
+            p += sprintf(p, "%s deflate\r\n", http_headers[HEAD_ENT_CONTENT_ENCODING].e);
+            p += sprintf(p, "%s %d\r\n", http_headers[HEAD_ENT_CONTENT_LENGTH].e, n);
+            p += sprintf(p, "%s", "\r\n");
+            fprintf(stdout, "%d::%s\r\n", __LINE__, buf);
+            if(conn->session.parent
+                    && (parent = hitaskd->findconn(hitaskd, conn->session.parentid))
+                    && conn->session.parent == parent)
+            {
+                fprintf(stdout, "%d::%s\r\n", __LINE__, buf);
+                parent->push_chunk(parent, buf, (p - buf));
+                parent->push_chunk(parent, out, n);
+            }
+            http_charset_convert_free(out);
+            return 0;
+        }
+        else
+        {
+            if(conn->session.parent
+                    && (parent = hitaskd->findconn(hitaskd, conn->session.parentid))
+                    && conn->session.parent == parent)
+            {
+                fprintf(stdout, "%d::%s\r\n", __LINE__, packet->data);
+                parent->push_chunk(parent, packet->data, packet->ndata);
+                parent->push_chunk(parent, chunk->data, chunk->ndata);
+            }
+            return 0;
+        }
+    }
+    if(conn) conn->over(conn);
+    return -1;
+}
+
 /* bind proxy  */
 int hitaskd_bind_proxy(CONN *conn, char *host, int port) 
 {
@@ -292,7 +416,10 @@ int hitaskd_bind_proxy(CONN *conn, char *host, int port)
         }
         if(ip)
         {
-            session.packet_type = PACKET_PROXY;
+            session.packet_type = PACKET_CUSTOMIZED|PACKET_PROXY;
+            session.packet_reader = &http_proxy_packet_reader;
+            session.packet_handler = &http_proxy_packet_handler;
+            session.data_handler = &http_proxy_data_handler;
             session.timeout = proxy_timeout;
             if((new_conn = hitaskd->newproxy(hitaskd, conn, -1, -1, ip, port, &session)))
             {

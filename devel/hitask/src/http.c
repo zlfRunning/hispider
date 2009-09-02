@@ -1,4 +1,9 @@
 #include "http.h"
+#ifdef _HTTP_CHARSET_CONVERT
+#include <iconv.h>
+#include "chardet.h"
+#include "zstream.h"
+#endif
 static char *wdays[]={"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
 #ifndef _STATIS_YMON
 #define _STATIS_YMON
@@ -330,17 +335,19 @@ int http_response_parse(char *p, char *end, HTTP_RESPONSE *http_resp)
     {
         while(s < end && *s != 0x20 && *s != 0x09)++s;
         while(s < end && (*s == 0x20 || *s == 0x09))++s;
+        pp = http_resp->hlines;
+        epp = http_resp->hlines + HTTP_HEADER_MAX;
         for(i = 0; i < HTTP_RESPONSE_NUM; i++ )
         {
             if(memcmp(response_status[i].e, s, response_status[i].elen) == 0)
             {
                 http_resp->respid = i;
-                s += response_status[i].elen;
+                while(*s != '\r' && *s != '\n' && *s != '\0') *pp++ = *s++;
+                while(*s == '\r' || *s == '\n')++s;
                 break;
             }
         }
-        pp = http_resp->hlines + 1;
-        epp = http_resp->hlines + HTTP_HEADER_MAX;
+        *pp++ = '\0';
         cookie = &(http_resp->cookies[http_resp->ncookies]);
         ecookie = &(http_resp->cookies[HTTP_COOKIES_MAX + 1]);
         while(s < end)
@@ -421,7 +428,132 @@ int http_kv(HTTP_KV *kv, char *line, int nline, char **key, char **val)
     }
     return ret;
 }
+/* HTTP charset convert */
+int http_charset_convert(char *content_type, char *content_encoding, char *data, int len,   
+                char *tocharset, int is_need_compress, char **out)
+{
+    int nout = 0; 
+#ifdef _HTTP_CHARSET_CONVERT
+    char charset[CHARSET_MAX], *rawdata = NULL, *txtdata = NULL, *todata = NULL, 
+         *zdata = NULL, *p = NULL, *ps = NULL, *inbuf = NULL, *outbuf = NULL;
+    size_t nrawdata = 0, ntxtdata = 0, ntodata = 0, nzdata = 0, ninbuf = 0, noutbuf = 0;
+    chardet_t pdet = NULL;
+    iconv_t cd = NULL;
 
+    if(content_type && content_encoding && data && len > 0 && tocharset && out
+        && strncasecmp(content_type, "text", 4) == 0)
+    {
+        *out = NULL;
+        if(strncasecmp(content_encoding, "gzip", 4) == 0)
+        {
+            nrawdata =  ndata * 8 + Z_HEADER_SIZE;
+            if((rawdata = (char *)calloc(1, nrawdata)))
+            {
+                if((httpgzdecompress((Bytef *)data, len, 
+                    (Bytef *)rawdata, (uLong *)&nrawdata)) == 0)
+                {
+                    txtdata = rawdata;
+                    ntxtdata = nrawdata;
+                }
+                else goto err_end;
+            }
+            else goto err_end;
+        }
+        else if(strncasecmp(content_encoding, "deflate", 7) == 0)
+        {
+            nrawdata =  ndata * 8 + Z_HEADER_SIZE;
+            if((rawdata = (char *)calloc(1, nrawdata)))
+            {
+                if((zdecompress((Bytef *)data, len, (Bytef *)rawdata, (uLong *)&nrawdata)) == 0)
+                {
+                    txtdata = rawdata;
+                    ntxtdata = nrawdata;
+                }
+                else goto err_end;
+            }
+            else goto err_end;
+        }
+        else 
+        {
+            txtdata = data;
+            ntxtdata = len;
+        }
+        //charset detactor
+        if(txtdata && ntxtdata > 0 && chardet_create(&pdet) == 0)
+        {
+            if(chardet_handle_data(pdet, rawdata, nrawdata) == 0
+                    && chardet_data_end(pdet) == 0 )
+            {
+                chardet_get_charset(pdet, charset, CHARSET_MAX);
+            }
+            chardet_destroy(pdet);
+        }
+        //convert string charset 
+        if(txtdata && ntxtdata > 0)
+        {
+            if(strcasecmp(charset, tocharset) != 0 
+                    && (cd = iconv_open(tocharset, charset)) != (iconv_t)-1)
+            {
+                p = txtdata;
+                ninbuf = ntxtdata;
+                n = noutbuf = ninbuf * 8;
+                if((ps = outbuf = (char *)calloc(1, noutbuf)))
+                {
+                    if(iconv(cd, &p, &ninbuf, &ps, (size_t *)&n) == (size_t)-1)
+                    {
+                        free(outbuf);
+                        outbuf = NULL;
+                    }
+                    else
+                    {
+                        noutbuf -= n;
+                        todata = outbuf;
+                        ntodata = noutbuf;
+                    }
+                }
+                iconv_close(cd);
+            }
+            else
+            {
+                todata = txtdata;
+                ntodata = ntxtdata;
+            }
+        }goto err_end;
+        if(is_need_compress && todata && ntodata > 0)
+        {
+            nzdata = ntodata + Z_HEADER_SIZE;
+            if((zdata = (char *)calloc(1, nzdata)))
+            {
+                if(zcompress((Bytef *)todata, ntodata, 
+                    (Bytef *)zdata, (uLong * )&(nzdata)) != 0)
+                {
+                    free(zdata);
+                    zdata = NULL;
+                    nzdata = 0;
+                }
+            }
+        }
+err_end:
+        if(todata == data){todata = NULL;ntodata = 0;}
+        if(rawdata){free(rawdata); rawdata = NULL;}
+        if(zdata)
+        {
+            *out = zdata; nout = nzdata;
+            if(outbuf){free(outbuf);outbuf = NULL;}
+        }
+        else if(todata)
+        {
+            *out = todata; nout = ntodata;
+        }
+    }
+#endif
+    return nout;
+}
+/* HTTP charset convert data free*/
+void http_charset_convert_free(char *data)
+{
+    if(data) free(data);
+}
 #ifdef _DEBUG_HTTP
 int main(int argc, char **argv)
 {

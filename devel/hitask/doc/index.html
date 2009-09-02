@@ -33,6 +33,10 @@
             .vtask{font-size:12pt;font-weight:bold;}
             #database{position:absolute;background-color:#F4FBFF;display:none;
                 border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:100%;}
+            #urls{position:absolute;background-color:#F4FBFF;display:none;
+                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:100%;}
+            #data{position:absolute;background-color:#F4FBFF;display:none;
+                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:100%;}
             #dns{position:absolute;background-color:#F4FBFF;display:none;
                 border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:100%;}
             #proxy{position:absolute;background-color:#F4FBFF;display:none;
@@ -1206,8 +1210,6 @@
                 form['link_node'].options.length = 1;
                 form = document.forms['urlform'];
                 form['method'][0].checked = true;
-                form['url'].focus();
-                form['url'].value = 'http://';
             }
             function XTAdd(e, nodeid)
             {
@@ -1918,7 +1920,8 @@
             //database
             function selectView(div, e)
             {
-                var elist = new Array('taskinfo','database', 'template', 'dns', 'proxy');
+                var elist = new Array('taskinfo','database', 'template', 
+                    'urls', 'data', 'dns', 'proxy');
                 e = e || window.event;
                 var element = e.target || e.srcElement;
                 var oli = null, ob = null, odiv = null;
@@ -1958,6 +1961,14 @@
                         AddNode(-1,0,"Root",0);
                         Fold(document.getElementById('fold_0'));
                     }
+                }
+                else if(div == 'urls')
+                {
+
+                }
+                else if(div == 'data')
+                {
+
                 }
                 else if(div == 'dns' && ob.innerHTML == '')
                 {
@@ -2221,8 +2232,10 @@
         <li class='tab-selected' id='tab0' onclick="selectView('taskinfo',event)" >下载任务</li>
         <li id='tab1' onclick="selectView('database',event)" >数据库配置</li>
         <li id='tab2' onclick="selectView('template', event)" >模版配置</li>
-        <li id='tab3' onclick="selectView('dns', event)" >DNS</li>
-        <li id='tab4' onclick="selectView('proxy', event)" >代理</li>
+        <li id='tab3' onclick="selectView('urls', event)" >URL管理</li>
+        <li id='tab4' onclick="selectView('data', event)" >数据管理</li>
+        <li id='tab5' onclick="selectView('dns', event)" >DNS管理</li>
+        <li id='tab6' onclick="selectView('proxy', event)" >代理设置</li>
         </ul>
     </div>
     <div id='taskinfo'></div>
@@ -2235,8 +2248,6 @@
         </div>
         <div id='dbfields'></div>
     </div>
-    <div id='dns'></div>
-    <div id='proxy'></div>
     <div id='template'>
         <div id='treebody' level='0'></div>
         <div id='node-template'></div>
@@ -2310,6 +2321,10 @@
         </div>
         </div>
     </div>
+    <div id='urls'></div>
+    <div id='data'></div>
+    <div id='dns'></div>
+    <div id='proxy'></div>
 </div>
     <div id='txtform' class='formdiv'>
         <form name="editorform" action="javascript:void(0)" onsubmit="return EditNode(this);"> 
