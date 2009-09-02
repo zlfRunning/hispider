@@ -2195,8 +2195,10 @@
                                             {
                                                 baseurl = url.substring(0, pos+1);
                                             }
+                                            /*
                                             str = str.replace(/charset=.*?("|')/i, 
                                                 "charset=UTF-8$1");
+                                            */
                                             var basehref = "<head><base href='"+baseurl+"'>";
                                             htmlstr = str.replace(/<head>/i, basehref);
                                         }

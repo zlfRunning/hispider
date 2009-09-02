@@ -324,7 +324,7 @@ int http_proxy_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA
 {
     char buf[HTTP_BUF_SIZE], *content_type = NULL, *content_encoding = NULL, 
          *p = NULL, *out = NULL, *s = NULL;
-    int n = 0, i = 0, nout = 0, is_need_compress = 1;
+    int n = 0, i = 0, nout = 0, is_need_compress = 0;
     HTTP_RESPONSE *http_resp = NULL;
     CONN *parent = NULL;
 
@@ -342,12 +342,12 @@ int http_proxy_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA
                 chunk->data, chunk->ndata, http_default_charset, is_need_compress, &out)) > 0)
         {
             p = buf;
-            /*
             p += sprintf(p, "%s\r\n", http_resp->hlines);
             for(i = 0; i < HTTP_HEADER_NUM; i++)
             {
                if(HEAD_ENT_CONTENT_ENCODING == i
                || HEAD_ENT_CONTENT_LENGTH == i
+               || HEAD_ENT_CONTENT_TYPE == i
                || HEAD_RESP_SET_COOKIE == i)
                {
                     continue;
@@ -357,11 +357,14 @@ int http_proxy_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA
                     p += sprintf(p, "%s %s\r\n", http_headers[i].e, s);
                }
             }
-            */
+            /*
             memcpy(p, packet->data, packet->ndata - 2);
             p += packet->ndata - 2;
+            */
             if(is_need_compress)
                 p += sprintf(p, "%s deflate\r\n", http_headers[HEAD_ENT_CONTENT_ENCODING].e);
+            p += sprintf(p, "%s text/html;charset=%s\r\n", http_headers[HEAD_ENT_CONTENT_TYPE].e, 
+                        http_default_charset);
             p += sprintf(p, "%s %d\r\n", http_headers[HEAD_ENT_CONTENT_LENGTH].e, nout);
             p += sprintf(p, "%s", "\r\n");
             if(conn->session.parent
@@ -887,8 +890,9 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                             DEBUG_LOGGER(hitaskd_logger, "op:%d id:%d name:%s", op, nodeid, name);
                             id = hibase->update_pnode(hibase, nodeid, name);
                             n = sprintf(buf, "%d\r\n", id);
-                            n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
-                                    "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", n, id);
+                            n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html;charset=%s\r\n"
+                                    "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", 
+                                    n, id, http_default_charset);
                             conn->push_chunk(conn, buf, n);
                             goto end;
                         }else goto err_end;
@@ -899,8 +903,9 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                             DEBUG_LOGGER(hitaskd_logger, "op:%d id:%d", op, nodeid);
                             id = hibase->delete_pnode(hibase, nodeid);
                             n = sprintf(buf, "%d\r\n", id);
-                            n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
-                                    "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", n, id);
+                            n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html;charset=%s\r\n"
+                                    "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", 
+                                    n, id, http_default_charset);
                             conn->push_chunk(conn, buf, n);
                             goto end;
                         }else goto err_end;

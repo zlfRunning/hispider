@@ -538,14 +538,18 @@ int http_charset_convert(char *content_type, char *content_encoding, char *data,
         }
 err_end:
         if(todata == data){todata = NULL;ntodata = 0;}
-        if(rawdata){free(rawdata); rawdata = NULL;}
         if(zdata)
         {
             *out = zdata; nout = nzdata;
             if(outbuf){free(outbuf);outbuf = NULL;}
+            if(rawdata){free(rawdata); rawdata = NULL;}
         }
         else if(todata)
         {
+            if(rawdata && todata != rawdata)
+            {
+                free(rawdata); rawdata = NULL;
+            }
             *out = todata; nout = ntodata;
         }
     }
