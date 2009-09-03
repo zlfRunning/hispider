@@ -1575,12 +1575,13 @@ int main(int argc, char **argv)
     fprintf(stdout, "Initialized successed\n");
     //sbase->running(sbase, 0);
     //sbase->running(sbase, 3600);
-    sbase->running(sbase, 10000000);
+    sbase->running(sbase, 1000000);
     fprintf(stdout, "%d::OK\n", __LINE__);
     sbase->stop(sbase);
     fprintf(stdout, "%d::OK\n", __LINE__);
     sbase->clean(&sbase);
     fprintf(stdout, "%d::OK\n", __LINE__);
+    return 0;
     if(dict)iniparser_free(dict);
     fprintf(stdout, "%d::OK\n", __LINE__);
     if(hitaskd_logger){LOGGER_CLEAN(hitaskd_logger);}

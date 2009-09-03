@@ -1060,7 +1060,6 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
                     //fprintf(stdout, "%d::%s\n%s\n", __LINE__, ptemplate[x].pattern, pattern);
                     p += sprintf(p, "{id:'%d', flags:'%d', pattern:'%s', link:'%s',",
                             x, ptemplate[x].flags, pattern, ptemplate[x].link);
-             (ptemplate[x].flags & TMP_IS_LINK)
                     {
                         p += sprintf(p, "linkmap:{tableid:'%d', fieldid:'%d', "
                                 "nodeid:'%d', flag:'%d'},", 
