@@ -32,8 +32,10 @@
             .vtask{font-size:12pt;font-weight:bold;}
             #database{position:absolute;background-color:#F4FBFF;display:none;
                 border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:100%;}
-            #urls{position:absolute;background-color:#F4FBFF;display:none;
+            #urlblock{position:absolute;background-color:#F4FBFF;display:none;
                 border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:100%;}
+            #url-header{position:relative;background-color:#D0E9F7;color:#2F5FA1;
+                height:40px;width:100%;border:1px solid #FFFFFF;}
             #data{position:absolute;background-color:#F4FBFF;display:none;
                 border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:100%;}
             #dns{position:absolute;background-color:#F4FBFF;display:none;
@@ -1920,7 +1922,7 @@
             function selectView(div, e)
             {
                 var elist = new Array('taskinfo','database', 'template', 
-                    'urls', 'data', 'dns', 'proxy');
+                    'urlblock', 'data', 'dns', 'proxy');
                 e = e || window.event;
                 var element = e.target || e.srcElement;
                 var oli = null, ob = null, odiv = null;
@@ -1961,9 +1963,15 @@
                         Fold(document.getElementById('fold_0'));
                     }
                 }
-                else if(div == 'urls')
+                else if(div == 'urlblock')
                 {
-
+                    var urlblock = document.getElementById('urlblock');
+                    if(urlblock)
+                    {
+                        urlblock.style.display = 'inline';
+                        var form = document.forms['urlblockform'];
+                        ListRootNodes(form);
+                    }
                 }
                 else if(div == 'data')
                 {
@@ -2027,7 +2035,7 @@
 	                if(Doc)
 	                {
 	                    if(Doc.designMode) Doc.designMode = 'On';
-	                    //if(Doc.contentEditable) Doc.contentEditable = true;
+	                    if(Doc.contentEditable) Doc.contentEditable = true;
 	                }
 	            }
 	            return Doc;
@@ -2221,6 +2229,182 @@
 		        }
                 return ViewDatabase();
 		    }
+            function ListRootNodes(form)
+            {
+                if(form)
+                {
+                    var argv = "op=node_childs&nodeid=0";
+                    var xmlHttp = null;
+                    if(argv && (xmlHttp = CreateXMLHTTP()) != null)
+                    {
+                        xmlHttp.open('POST', '/', true);
+                        xmlHttp.setRequestHeader("Content-Length", argv.length);
+                        xmlHttp.setRequestHeader("Content-Type", 
+                        "application/x-www-form-urlencoded");
+                        xmlHttp.onreadystatechange=function()
+                        {
+                            if(xmlHttp.readyState==4)
+                            {
+                                if(xmlHttp.status == 200)
+                                {
+                                    alert(xmlHttp.responseText);
+                                    var tnode = eval(xmlHttp.responseText);
+                                    var oselect = form['nodeid'];
+                                    if(oselect)
+                                    {
+                                        oselect.options.length = 1;
+                                        var i = 0, x = 1;
+                                        for(i = 0; i < tnode['nchilds']; i++)
+                                        {
+                                            oselect.options[x] = new Option(
+                                                tnode['childs'][i]['name'],
+                                                tnode['childs'][i]['id']);
+                                            ++x;
+                                        }
+                                    }
+                                }   
+                            }
+                        }
+                        xmlHttp.send(argv);
+                    }
+                }
+                return true;
+            }
+            function ShowNodeURLs(txt)
+            {
+                var div = document.getElementById('url-list');
+                var urllist = null;
+                if(txt && div && (urllist = eval(txt)) != null)
+                {
+                    var htmlstr = "";
+                    if(htmlstr)
+                    {
+                        div.innerHTML = "";
+                        div.innerHTML = htmlstr;
+                    }
+                }
+            }
+            function AddNodeURL(form)
+            {
+                var nodeid = -1;
+                var level = -1;
+                var xmlHttp = null; 
+                if(form && (nodeid = form['nodeid'].value) > 0 
+                    && (url = form['url'].value)
+                    && (xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    var argv = "op=url_add&nodeid="+nodeid;
+                        argv += "&url="+encodeURIComponent(url);
+                    if((level = form['level']) >= 0)
+                        argv += "&level="+level;
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                ShowNodeURLs(xmlHttp.responseText);
+                            }
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+                return true;
+            }
+            function UpdateNodeURL(form)
+            {
+                var nodeid = -1;
+                var level = -1;
+                var xmlHttp = null; 
+                var url = "";
+                if(form && (nodeid = form['nodeid'].value) > 0 
+                    && (url = form['url'].value)
+                    && (xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    var argv = "op=url_update&nodeid="+nodeid;
+                        argv += "&url="+encodeURIComponent(url);
+                    if((level = form['level']) >= 0)
+                        argv += "&level="+level;
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                ShowNodeURLs(xmlHttp.responseText);
+                            }
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+                return true;
+            }
+            function DeleteNodeURL(form)
+            {
+                var nodeid = -1;
+                var level = -1;
+                var xmlHttp = null; 
+                var url = "";
+                if(form && (nodeid = form['nodeid'].value) > 0 
+                    && (url = form['url'].value)
+                    && (xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    var argv = "op=url_delete&nodeid="+nodeid;
+                        argv += "&url="+encodeURIComponent(url);
+                    if((level = form['level']) >= 0)
+                        argv += "&level="+level;
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                ShowNodeURLs(xmlHttp.responseText);
+                            }
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+                return true;
+            }
+            function ListNodeURLs(form)
+            {
+                var nodeid = -1;
+                var level = -1;
+                var xmlHttp = null; 
+                if(form && (nodeid = form['nodeid'].value) > 0 
+                    && (xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    var argv = "op=url_list&nodeid="+nodeid;
+                    if((level = form['level']) >= 0)
+                        argv += "&level="+level;
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                ShowNodeURLs(xmlHttp.responseText);
+                            }
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+                return true;
+            }
+
     </script>
     </head>
     <!-- <body onload='javascript:loadInit();'> -->
@@ -2231,7 +2415,7 @@
         <li class='tab-selected' id='tab0' onclick="selectView('taskinfo',event)" >下载任务</li>
         <li id='tab1' onclick="selectView('database',event)" >数据库配置</li>
         <li id='tab2' onclick="selectView('template', event)" >模版配置</li>
-        <li id='tab3' onclick="selectView('urls', event)" >URL管理</li>
+        <li id='tab3' onclick="selectView('urlblock', event)" >URL管理</li>
         <li id='tab4' onclick="selectView('data', event)" >数据管理</li>
         <li id='tab5' onclick="selectView('dns', event)" >DNS管理</li>
         <li id='tab6' onclick="selectView('proxy', event)" >代理设置</li>
@@ -2320,8 +2504,23 @@
         </div>
         </div>
     </div>
-    <div id='urls'>
+    <div id='urlblock'>
     <div id='url-header'>
+    <form name='urlblockform' action='javascript:void(0)' onsubmit='return AddURL(this)' >
+    <input type=hidden name='op'value='url_add' >
+    <select name='nodeid' onchange='ListURL(this.form)'>
+    <option value='-1' selected>选择节点</option>
+    </select>
+    &nbsp;&nbsp;
+    <select name='level' >
+    <option value='-1' selected>优先级</option>
+    <option value='0' >普通</option>
+    <option value='1' >紧急</option>
+    </select>
+    <input type=text size=64 value='http://' >
+    &nbsp;&nbsp;
+    <input type=submit name='submit' value='Add'>
+    </form>
     </div>
     <div id='url-list'></div>
     </div>
