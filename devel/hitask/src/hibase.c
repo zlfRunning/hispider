@@ -1060,7 +1060,7 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
                     //fprintf(stdout, "%d::%s\n%s\n", __LINE__, ptemplate[x].pattern, pattern);
                     p += sprintf(p, "{id:'%d', flags:'%d', pattern:'%s', link:'%s',",
                             x, ptemplate[x].flags, pattern, ptemplate[x].link);
-                    if(ptemplate[x].flags & TMP_IS_LINK)
+             (ptemplate[x].flags & TMP_IS_LINK)
                     {
                         p += sprintf(p, "linkmap:{tableid:'%d', fieldid:'%d', "
                                 "nodeid:'%d', flag:'%d'},", 
@@ -1103,25 +1103,36 @@ void hibase_clean(HIBASE **phibase)
     if(phibase && *phibase)
     {
         if((*phibase)->mdb) {TRIETAB_CLEAN((*phibase)->mdb);}
+        fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
         if((*phibase)->mpnode) {TRIETAB_CLEAN((*phibase)->mpnode);}
+        fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
         if((*phibase)->tableio.map && (*phibase)->tableio.size > 0)
         {
             _MUNMAP_((*phibase)->tableio.map, (*phibase)->tableio.size);
         }
+        fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
         if((*phibase)->templateio.map && (*phibase)->templateio.size > 0)
         {
             _MUNMAP_((*phibase)->templateio.map, (*phibase)->templateio.size);
         }
+    fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
         if((*phibase)->pnodeio.map && (*phibase)->pnodeio.size > 0)
         {
             _MUNMAP_((*phibase)->pnodeio.map, (*phibase)->pnodeio.size);
         }
+    fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
         if((*phibase)->tableio.fd > 0) close((*phibase)->tableio.fd);
+    fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
         if((*phibase)->templateio.fd > 0) close((*phibase)->templateio.fd);
+    fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
         if((*phibase)->pnodeio.fd > 0) close((*phibase)->pnodeio.fd);
+    fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
         if((*phibase)->qpnode){FQUEUE_CLEAN((*phibase)->qpnode);}
+    fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
         if((*phibase)->qtemplate){FQUEUE_CLEAN((*phibase)->qtemplate);}
+    fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
         if((*phibase)->mutex){MUTEX_DESTROY((*phibase)->mutex);}
+    fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
         free(*phibase);
         *phibase = NULL;
     }

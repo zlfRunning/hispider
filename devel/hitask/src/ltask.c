@@ -1694,7 +1694,8 @@ void ltask_clean(LTASK **ptask)
     if(ptask && *ptask)
     {
         if((*ptask)->mutex) {MUTEX_DESTROY((*ptask)->mutex);}
-        if((*ptask)->logger) {TIMER_CLEAN((*ptask)->logger);}
+        if((*ptask)->logger) {LOGGER_CLEAN((*ptask)->logger);}
+        if((*ptask)->errlogger) {LOGGER_CLEAN((*ptask)->errlogger);}
         if((*ptask)->timer) {TIMER_CLEAN((*ptask)->timer);}
         if((*ptask)->urlmap) {KVMAP_CLEAN((*ptask)->urlmap);}
         if((*ptask)->table) {TRIETAB_CLEAN((*ptask)->table);}

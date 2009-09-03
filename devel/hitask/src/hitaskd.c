@@ -1573,15 +1573,27 @@ int main(int argc, char **argv)
         return -1;
     }
     fprintf(stdout, "Initialized successed\n");
-    sbase->running(sbase, 0);
+    //sbase->running(sbase, 0);
     //sbase->running(sbase, 3600);
-    //sbase->running(sbase, 60000000);
+    sbase->running(sbase, 10000000);
+    fprintf(stdout, "%d::OK\n", __LINE__);
     sbase->stop(sbase);
+    fprintf(stdout, "%d::OK\n", __LINE__);
     sbase->clean(&sbase);
+    fprintf(stdout, "%d::OK\n", __LINE__);
     if(dict)iniparser_free(dict);
+    fprintf(stdout, "%d::OK\n", __LINE__);
     if(hitaskd_logger){LOGGER_CLEAN(hitaskd_logger);}
+    fprintf(stdout, "%d::OK\n", __LINE__);
     if(histore_logger){LOGGER_CLEAN(histore_logger);}
+    fprintf(stdout, "%d::OK\n", __LINE__);
     if(adns_logger){LOGGER_CLEAN(adns_logger);}
+    fprintf(stdout, "%d::OK\n", __LINE__);
     if(argvmap){TRIETAB_CLEAN(argvmap);}
+    fprintf(stdout, "%d::OK\n", __LINE__);
+    if(hibase) hibase->clean(&hibase);
+    fprintf(stdout, "%d::OK\n", __LINE__);
+    if(ltask) ltask->clean(&ltask);
+    fprintf(stdout, "%d::OK\n", __LINE__);
     return 0;
 }
