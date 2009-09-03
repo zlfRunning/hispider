@@ -293,17 +293,26 @@ int http_proxy_packet_handler(CONN *conn, CB_DATA *packet)
     char *p = NULL, *end = NULL;
     HTTP_RESPONSE http_resp = {0};
     CONN *parent = NULL;
-    int n = 0;
+    int n = 0, len = 0;
 
     if(conn && packet && packet->ndata > 0 && (p = packet->data) 
             && (end = packet->data + packet->ndata))
     {
         if(http_response_parse(p, end, &http_resp) == -1) goto err_end;
         conn->save_cache(conn, &http_resp, sizeof(HTTP_RESPONSE));
-        if((n = http_resp.headers[HEAD_ENT_CONTENT_LENGTH]) > 0 
-            && (p = http_resp.hlines + n) && (n = atoi(p)))
+        if((n = http_resp.headers[HEAD_ENT_CONTENT_TYPE])
+            && (p = http_resp.hlines + n) && strncasecmp(p, "text", 4) == 0)
         {
-            return conn->recv_chunk(conn, n);
+            if((n = http_resp.headers[HEAD_ENT_CONTENT_LENGTH]) > 0 
+                && (p = http_resp.hlines + n) && (n = atoi(p)))
+            {
+                len = n;
+            }
+            else
+            {
+                len = 1024 * 1024 * 16;
+            }
+            return conn->recv_chunk(conn, len);
         }
         else
         {
@@ -312,6 +321,7 @@ int http_proxy_packet_handler(CONN *conn, CB_DATA *packet)
                     && conn->session.parent == parent)
             {
                 //fprintf(stdout, "%d::OK:%d\n", __LINE__, packet->ndata);
+                conn->session.packet_type = PACKET_PROXY;
                 parent->push_chunk(parent, packet->data, packet->ndata);
                 //fprintf(stdout, "%d::OK:%d\n", __LINE__, packet->ndata);
                 return 0;
@@ -371,6 +381,8 @@ int http_proxy_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA
                         http_default_charset);
             p += sprintf(p, "%s %d\r\n", http_headers[HEAD_ENT_CONTENT_LENGTH].e, nout);
             p += sprintf(p, "%s", "\r\n");
+            //conn->push_exchange(conn, buf, (p - buf));
+            //conn->push_exchange(conn, out, nout);
             if(conn->session.parent
                     && (parent = hitaskd->findconn(hitaskd, conn->session.parentid))
                     && conn->session.parent == parent)
@@ -397,6 +409,24 @@ int http_proxy_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA
     return -1;
 }
 
+/* error handler */
+int http_proxy_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
+{
+    if(conn)
+    {
+        return http_proxy_data_handler(conn, packet, cache, chunk);
+    }
+    return -1;
+}
+/* timeout handler */
+int http_proxy_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
+{
+    if(conn)
+    {
+        return http_proxy_data_handler(conn, packet, cache, chunk);
+    }
+    return -1;
+}
 /* bind proxy  */
 int hitaskd_bind_proxy(CONN *conn, char *host, int port) 
 {
@@ -434,9 +464,12 @@ int hitaskd_bind_proxy(CONN *conn, char *host, int port)
             session.packet_reader = &http_proxy_packet_reader;
             session.packet_handler = &http_proxy_packet_handler;
             session.data_handler = &http_proxy_data_handler;
+            session.timeout_handler = &http_proxy_timeout_handler;
+            session.error_handler = &http_proxy_error_handler;
 #endif
             if((new_conn = hitaskd->newproxy(hitaskd, conn, -1, -1, ip, port, &session)))
             {
+                new_conn->start_cstate(new_conn);
                 return 0;
             }
         }
