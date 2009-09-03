@@ -1,7 +1,6 @@
 <html>
     <head>
         <title>Hitask Monitor</title>
-        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
         <style>
             body{
                 background:#000000;
@@ -2027,7 +2026,7 @@
 	                }
 	                if(Doc)
 	                {
-	                    if(Doc.designMode) Doc.designMode = 'On';
+	                    //if(Doc.designMode) Doc.designMode = 'On';
 	                    if(Doc.contentEditable) Doc.contentEditable = true;
 	                }
 	            }
@@ -2195,10 +2194,6 @@
                                             {
                                                 baseurl = url.substring(0, pos+1);
                                             }
-                                            /*
-                                            str = str.replace(/charset=.*?("|')/i, 
-                                                "charset=UTF-8$1");
-                                            */
                                             var basehref = "<head><base href='"+baseurl+"'>";
                                             htmlstr = str.replace(/<head>/i, basehref);
                                         }

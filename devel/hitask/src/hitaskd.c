@@ -640,8 +640,9 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
                     else
                     {
                         p = buf;
-                        p += sprintf(p, "HTTP/1.0 200 OK\r\nContent-Length:%lld\r\nLast-Modified:", 
-                                (long long int)(st.st_size)); 
+                        p += sprintf(p, "HTTP/1.0 200 OK\r\nContent-Length:%lld\r\n"
+                                "Content-Type: text/html;charset=%s\r\nLast-Modified:", 
+                                (long long int)(st.st_size), http_default_charset); 
                         p += GMTstrdate(st.st_mtime, p);
                         p += sprintf(p, "%s", "\r\n");//date end
                         p += sprintf(p, "%s", "\r\n");
