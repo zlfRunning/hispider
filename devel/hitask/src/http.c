@@ -17,24 +17,24 @@ static char *ymonths[]= {
 #define HEX2CH(c, x) ( ((x = (c - '0')) >= 0 && x < 10) \
         || ((x = (c - 'a')) >= 0 && (x += 10) < 16) \
         || ((x = (c - 'A')) >= 0 && (x += 10) < 16) )
-#define URLENCODE(dst, src)                                                     \
+#define URLENCODE(s, e, src)                                                    \
 do                                                                              \
 {                                                                               \
-    while(*src != '\0')                                                         \
+    while(*src != '\0' && s < e)                                                \
     {                                                                           \
         if(*src == 0x20)                                                        \
         {                                                                       \
-            *dst++ = '+';                                                       \
+            *s++ = '+';                                                         \
             ++src;                                                              \
         }                                                                       \
-        else if(*((unsigned char *)src) > 127)                                  \
+        else if(*((unsigned char *)src) > 127 && s < (e - 2))                   \
         {                                                                       \
-            dst += sprintf(dst, "%%%02X", *((unsigned char *)src));             \
+            s += sprintf(s, "%%%02X", *((unsigned char *)src));                 \
             ++src;                                                              \
         }                                                                       \
-        else *dst++ = *src++;                                                   \
+        else *s++ = *s++;                                                       \
     }                                                                           \
-    *dst = '\0';                                                                \
+    if(s < e) *s = '\0';                                                        \
 }while(0)
 #define URLDECODE(s, end, high, low, pp)                                            \
 do                                                                                  \
@@ -47,7 +47,7 @@ do                                                                              
     else *pp++ = *s++;                                                              \
 }while(0)
 
-int http_encode(char *src, int src_len, char *dst)
+int http_base64encode(char *src, int src_len, char *dst)
 {
     int i = 0, j = 0;
     char base64_map[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -78,7 +78,7 @@ int http_encode(char *src, int src_len, char *dst)
     return j;
 }
 
-int http_decode(unsigned char *src, int src_len, unsigned char *dst)
+int http_base64decode(unsigned char *src, int src_len, unsigned char *dst)
 {
     int i = 0, j = 0;
     char base64_decode_map[256] = {
@@ -140,6 +140,7 @@ int http_argv_parse(char *p, char *end, HTTP_REQ *http_req)
             else if(*s == '=')
             {
                 if(argv->k > 0) argv->nk = pp - http_req->line - argv->k;
+                if(pp >= epp) break;
                 *pp++ = '\0';
                 argv->v = pp - http_req->line;
                 ++s;
@@ -148,6 +149,7 @@ int http_argv_parse(char *p, char *end, HTTP_REQ *http_req)
                     //|| *s == 0x20 || *s == '\t')
             {
                 argv->nv = pp - http_req->line - argv->v;
+                if(pp >= epp) break;
                 *pp++ = '\0';
                 http_req->nline = pp - http_req->line;
                 http_req->nargvs++;
@@ -155,19 +157,23 @@ int http_argv_parse(char *p, char *end, HTTP_REQ *http_req)
                 if(*s++ == '&') argv->k = pp - http_req->line;
                 else break;
             }
-            else if(*s == '%' && s < (end - 2) && HEX2CH(*(s+1), high)  && HEX2CH(*(s+2), low))
+            else if(*s == '%' && s < (end - 2) && HEX2CH(*(s+1), high)  
+                    && HEX2CH(*(s+2), low))
             {
+                if(pp >= epp) break;
                 *pp++ = (high << 4) | low;
                 s += 3;
             }
             else if(argv->k || argv->v)
             {
+                if(pp >= epp) break;
                 *pp++ = *s++;
             }
             else ++s;
             if(s == end && argv < eargv && argv->k && argv->v)
             {
                 argv->nv = pp - http_req->line - argv->v;
+                if(pp >= epp) break;
                 *pp++ = '\0';
                 http_req->nline = pp - http_req->line;
                 http_req->nargvs++;
@@ -201,6 +207,7 @@ int http_cookie_parse(char *p, char *end, HTTP_REQ *http_req)
             else if(*s == '=')
             {
                 if(cookie->k > 0) cookie->nk = pp - http_req->hlines - cookie->k;
+                if(pp >= epp) break;
                 *pp++ = *s++;
                 cookie->v = pp - http_req->hlines;
             }
@@ -208,6 +215,7 @@ int http_cookie_parse(char *p, char *end, HTTP_REQ *http_req)
                     && cookie->k && cookie->v)
             {
                 cookie->nv = pp - http_req->hlines - cookie->v;
+                if(pp >= epp) break;
                 *pp++ = *s;
                 http_req->nhline = pp - http_req->hlines;
                 http_req->ncookies++;
@@ -217,11 +225,13 @@ int http_cookie_parse(char *p, char *end, HTTP_REQ *http_req)
             }
             else if(*s == '%' && s < (end - 2) && HEX2CH(*(s+1), high)  && HEX2CH(*(s+2), low))
             {
+                if(pp >= epp) break;
                 *pp++ = (high << 4) | low;
                 s += 3;
             }
             else if(cookie->k || cookie->v)
             {
+                if(pp >= epp) break;
                 *pp++ = *s++;
             }
             else ++s;
@@ -243,15 +253,17 @@ int http_cookie_parse(char *p, char *end, HTTP_REQ *http_req)
 /* HTTP HEADER parser */
 int http_request_parse(char *p, char *end, HTTP_REQ *http_req)
 {
-    char *s = p, *ps = NULL, *pp = NULL, *sp = NULL;
+    char *s = p, *ps = NULL, *eps = NULL, *pp = NULL, *epp = NULL, *sp = NULL;
     int i  = 0, ret = -1;
 
     if(p && end)
     {
         //request method
         //while(s < end && *s != 0x20 && *s != 0x09)++s;
+        pp = http_req->hlines + 1;
+        epp = pp + HTTP_HEADER_MAX;
         while(s < end && (*s == 0x20 || *s == 0x09))++s;
-        for(i = 0; i < HTTP_METHOD_NUM; i++ )
+        for(i = 0; i < HTTP_METHOD_NUM; i++)
         {
             if(strncasecmp(http_methods[i].e, s, http_methods[i].elen) == 0)
             {
@@ -261,15 +273,16 @@ int http_request_parse(char *p, char *end, HTTP_REQ *http_req)
             }
         }
         //path
-        while(s < end && *s == 0x20)s++;
+        while(s < end && *s == 0x20)++s;
         //fprintf(stdout, "%s:%d path:%s\n", __FILE__, __LINE__, s);
         ps = http_req->path;
-        while(s < end && *s != 0x20 && *s != '\r' && *s != '?')*ps++ = *s++;
+        eps = ps + HTTP_URL_PATH_MAX;
+        while(s < end && *s != 0x20 && *s != '\r' && *s != '?' && ps < eps)*ps++ = *s++;
+        if(ps >= eps ) goto end;
         *ps = '\0';
         if(*s == '?') s += http_argv_parse(s+1, end, http_req);
         while(s < end && *s != '\n')s++;
         s++;
-        pp = http_req->hlines + 1;
         while(s < end)
         {
             //parse response  code 
@@ -295,12 +308,12 @@ int http_request_parse(char *p, char *end, HTTP_REQ *http_req)
             }
             else if(i == HEAD_REQ_AUTHORIZATION && strncasecmp(s, "Basic", 5) == 0)
             {
-                while(s < end && *s != 0x20 && *s != '\r')*pp++ = *s++;
-                while(s < end && *s == 0x20) *pp++ = *s++;
+                while(s < end && *s != 0x20 && *s != '\r' && pp < epp)*pp++ = *s++;
+                while(s < end && *s == 0x20 && pp < epp) *pp++ = *s++;
                 sp = s;
                 while(s < end && *s != '\r' && *s != 0x20) ++s;
                 http_req->auth.k = pp - http_req->hlines;
-                pp += http_decode((unsigned char *)sp, (s - sp), (unsigned char *)pp);
+                pp += http_base64decode((unsigned char *)sp, (s - sp), (unsigned char *)pp);
                 sp = http_req->hlines + http_req->auth.k;
                 while(sp < pp && *sp != ':') sp++;
                 if(*sp == ':')
@@ -312,14 +325,16 @@ int http_request_parse(char *p, char *end, HTTP_REQ *http_req)
             }
             else
             {
-                while(s < end && *s != '\r')*pp++ = *s++;
+                while(s < end && *s != '\r' && pp < epp)*pp++ = *s++;
             }
+            if(pp >= epp) goto end;
             *pp++ = '\0';
             http_req->nhline = pp - http_req->hlines;
             ++s;
             while(s < end && *s != '\n')++s;
             ++s;
         }
+end:
         ret++;
     }
     return ret;
@@ -336,14 +351,14 @@ int http_response_parse(char *p, char *end, HTTP_RESPONSE *http_resp)
     {
         pp = http_resp->hlines;
         epp = http_resp->hlines + HTTP_HEADER_MAX;
-        while(s < end && *s != 0x20 && *s != 0x09)*pp++ = *s++;
-        while(s < end && (*s == 0x20 || *s == 0x09))*pp++ = *s++;
+        while(s < end && *s != 0x20 && *s != 0x09 && pp < epp)*pp++ = *s++;
+        while(s < end && (*s == 0x20 || *s == 0x09) && pp < epp)*pp++ = *s++;
         for(i = 0; i < HTTP_RESPONSE_NUM; i++ )
         {
             if(memcmp(response_status[i].e, s, response_status[i].elen) == 0)
             {
                 http_resp->respid = i;
-                while(*s != '\r' && *s != '\n' && *s != '\0') *pp++ = *s++;
+                while(*s != '\r' && *s != '\n' && *s != '\0' && pp < epp) *pp++ = *s++;
                 while(*s == '\r' || *s == '\n')++s;
                 break;
             }
@@ -397,12 +412,14 @@ int http_response_parse(char *p, char *end, HTTP_RESPONSE *http_resp)
             {
                 while(s < end && *s != '\r' && pp < epp)*pp++ = *s++;
             }
+            if(pp >= epp) goto end;
             *pp++ = '\0';
             http_resp->nhline = pp - http_resp->hlines;
             ++s;
             while(s < end && *s != '\n')++s;
             ++s;
         }
+end:
         ret++;
     }
     return ret;

@@ -66,21 +66,6 @@ do                                                                              
         mp = NULL;                                                                      \
     }                                                                                   \
 }while(0)
-#define URLENCODE(dst, src)                                                     \
-do                                                                              \
-{                                                                               \
-    while(*src != '\0')                                                         \
-    {                                                                           \
-        if(*((unsigned char *)src) > 127 || *src == 0x20)                       \
-        {                                                                       \
-            dst += sprintf(dst, "%%%02X", *((unsigned char *)src));             \
-            ++src;                                                              \
-        }                                                                       \
-        else *dst++ = *src++;                                                   \
-    }                                                                           \
-    *dst = '\0';                                                                \
-}while(0)
-
 static char *table_data_types[] = {"null", "int", "float", "null", "text",
     "null","null","null","blob"};
 /* mkdir */

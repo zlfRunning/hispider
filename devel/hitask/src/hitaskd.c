@@ -275,13 +275,14 @@ int http_proxy_packet_reader(CONN *conn, CB_DATA *buffer)
         //fprintf(stdout, "%d::%s\r\n", __LINE__, buffer->data);
         while(p < end)
         {
-            if(p < (end - 3) && p[0] == '\r' && p[1] == '\n' && p[2] == '\r' && p[3] == '\n')
+            if(p < (end - 3) && *p == '\r' && *(p+1) == '\n' && *(p+2) == '\r' && *(p+3) == '\n')
             {
                 n = p + 4 - buffer->data;
                 break;
             }
             else ++p;
         }
+        //fprintf(stdout, "%d::%d-%d\r\n", __LINE__, n, buffer->ndata);
     }
     return n;
 }
@@ -310,7 +311,10 @@ int http_proxy_packet_handler(CONN *conn, CB_DATA *packet)
                     && (parent = hitaskd->findconn(hitaskd, conn->session.parentid))
                     && conn->session.parent == parent)
             {
-                return parent->push_chunk(parent, packet->data, packet->ndata);
+                //fprintf(stdout, "%d::OK:%d\n", __LINE__, packet->ndata);
+                parent->push_chunk(parent, packet->data, packet->ndata);
+                //fprintf(stdout, "%d::OK:%d\n", __LINE__, packet->ndata);
+                return 0;
             }
         }
 err_end: 

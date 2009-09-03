@@ -2026,8 +2026,8 @@
 	                }
 	                if(Doc)
 	                {
-	                    //if(Doc.designMode) Doc.designMode = 'On';
-	                    if(Doc.contentEditable) Doc.contentEditable = true;
+	                    if(Doc.designMode) Doc.designMode = 'On';
+	                    //if(Doc.contentEditable) Doc.contentEditable = true;
 	                }
 	            }
 	            return Doc;
@@ -2320,7 +2320,11 @@
         </div>
         </div>
     </div>
-    <div id='urls'></div>
+    <div id='urls'>
+    <div id='url-header'>
+    </div>
+    <div id='url-list'></div>
+    </div>
     <div id='data'></div>
     <div id='dns'></div>
     <div id='proxy'></div>

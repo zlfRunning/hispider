@@ -486,4 +486,6 @@ int http_charset_convert(char *content_type, char *content_encoding, char *data,
         char *tocharset, int is_need_compress, char **out);
 /* HTTP charset convert data free*/
 void http_charset_convert_free(char *data);
+int http_base64encode(char *src, int src_len, char *dst);
+int http_base64decode(unsigned char *src, int src_len, unsigned char *dst);
 #endif
