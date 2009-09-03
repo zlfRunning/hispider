@@ -1581,7 +1581,6 @@ int main(int argc, char **argv)
     fprintf(stdout, "%d::OK\n", __LINE__);
     sbase->clean(&sbase);
     fprintf(stdout, "%d::OK\n", __LINE__);
-    return 0;
     if(dict)iniparser_free(dict);
     fprintf(stdout, "%d::OK\n", __LINE__);
     if(hitaskd_logger){LOGGER_CLEAN(hitaskd_logger);}
@@ -1592,6 +1591,7 @@ int main(int argc, char **argv)
     fprintf(stdout, "%d::OK\n", __LINE__);
     if(argvmap){TRIETAB_CLEAN(argvmap);}
     fprintf(stdout, "%d::OK\n", __LINE__);
+    return 0;
     if(hibase) hibase->clean(&hibase);
     fprintf(stdout, "%d::OK\n", __LINE__);
     if(ltask) ltask->clean(&ltask);
