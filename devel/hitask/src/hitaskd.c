@@ -930,7 +930,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                             n = sprintf(buf, "%d\r\n", id);
                             n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html;charset=%s\r\n"
                                     "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", 
-                                    n, id, http_default_charset);
+                                    http_default_charset, n, id);
                             conn->push_chunk(conn, buf, n);
                             goto end;
                         }else goto err_end;
@@ -943,7 +943,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                             n = sprintf(buf, "%d\r\n", id);
                             n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html;charset=%s\r\n"
                                     "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", 
-                                    n, id, http_default_charset);
+                                    http_default_charset, n, id);
                             conn->push_chunk(conn, buf, n);
                             goto end;
                         }else goto err_end;

@@ -104,7 +104,7 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
          *host = NULL, *path = NULL;// *cookie = NULL, *refer = NULL;
     HTTP_RESPONSE http_resp = {0};
     int taskid = 0, n = 0, c_id = 0, port = 0, pport = 0, 
-        sport = 0, is_use_proxy = 0, doctype = -1;
+        sport = 0, is_use_proxy = 0, doctype = -1, *px = NULL;
     struct hostent *hp = NULL;
 
     if(conn && tasklist && (c_id = conn->c_id) >= 0 && c_id < ntask)
@@ -155,7 +155,8 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
             {
                 conn->over_cstate(conn);
                 conn->over(conn);
-                QUEUE_PUSH(taskqueue, int, &c_id);
+                px = &c_id;
+                QUEUE_PUSH(taskqueue, int,  px);
                 tasklist[c_id].s_conn = NULL;
                 ERROR_LOGGER(logger, "Invalid http response from taskd");
                 return -1;
@@ -247,7 +248,7 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
 /* error handler */
 int hitask_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
-    int c_id = 0;
+    int c_id = 0, *px = NULL;
 
     if(conn && (c_id = conn->c_id) >= 0 && c_id < ntask)
     {
@@ -270,14 +271,16 @@ int hitask_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
         {
             ERROR_LOGGER(logger, "error_handler(%p) on remote[%s:%d] local[%s:%d] ", conn, 
                     conn->remote_ip, conn->remote_port, conn->local_ip, conn->local_port);
-            QUEUE_PUSH(taskqueue, int, &c_id);
+            px = &c_id;
+            QUEUE_PUSH(taskqueue, int, px);
             tasklist[c_id].s_conn = NULL;
         }
         else if(conn == tasklist[c_id].d_conn)
         {
             ERROR_LOGGER(logger, "error_handler(%p) on remote[%s:%d] local[%s:%d] ", conn, 
                     conn->remote_ip, conn->remote_port, conn->local_ip, conn->local_port);
-            QUEUE_PUSH(taskqueue, int, &c_id);
+            px = &c_id;
+            QUEUE_PUSH(taskqueue, int, px);
             tasklist[c_id].d_conn = NULL;
         }
     }
@@ -287,7 +290,7 @@ int hitask_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
 /* timeout handler */
 int hitask_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
-    int c_id = 0;
+    int c_id = 0, *px = NULL;
 
     if(conn && (c_id = conn->c_id) >= 0 && c_id < ntask)
     {
@@ -311,12 +314,14 @@ int hitask_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA 
         }
         else if(conn == tasklist[c_id].c_conn)
         {
-            QUEUE_PUSH(taskqueue, int, &c_id);
+            px = &c_id;
+            QUEUE_PUSH(taskqueue, int, px);
             tasklist[c_id].s_conn = NULL;
         }
         else if(conn == tasklist[c_id].d_conn)
         {
-            QUEUE_PUSH(taskqueue, int, &c_id);
+            px = &c_id;
+            QUEUE_PUSH(taskqueue, int, px);
             tasklist[c_id].d_conn = NULL;
         }
     }
@@ -611,7 +616,7 @@ int hitask_oob_handler(CONN *conn, CB_DATA *oob)
 /* heartbeat */
 void cb_heartbeat_handler(void *arg)
 {
-    int id = 0, total = 0, left = 0;
+    int id = 0, total = 0, left = 0, *px = NULL;
 
     if(arg == (void *)service)
     {
@@ -649,7 +654,11 @@ void cb_heartbeat_handler(void *arg)
                             histore_ip, histore_port, strerror(errno));
                     left = 1;
                 }
-                if(left){QUEUE_PUSH(taskqueue, int, &id);}
+                if(left)
+                {
+                    px = &id;
+                    QUEUE_PUSH(taskqueue, int, px);
+                }
             }
         }
     }
@@ -660,7 +669,7 @@ void cb_heartbeat_handler(void *arg)
 int sbase_initialize(SBASE *sbase, char *conf)
 {
     char *s = NULL, *p = NULL, *end = NULL;
-    int i = 0, interval = 0;
+    int i = 0, interval = 0, *px = NULL;
     if((dict = iniparser_new(conf)) == NULL)
     {
         fprintf(stderr, "Initializing conf:%s failed, %s\n", conf, strerror(errno));
@@ -739,7 +748,8 @@ int sbase_initialize(SBASE *sbase, char *conf)
     QUEUE_INIT(taskqueue);
     for(i = 0; i < ntask; i++)
     {
-        QUEUE_PUSH(taskqueue, int, &i);
+        px = &i;
+        QUEUE_PUSH(taskqueue, int, px);
     }
     LOGGER_INIT(logger, iniparser_getstr(dict, "HITASK:access_log"));
     fprintf(stdout, "Parsing for server...\n");

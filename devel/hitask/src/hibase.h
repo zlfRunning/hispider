@@ -198,7 +198,7 @@ typedef struct _HIBASE
     int     (*get_urlnode)(struct _HIBASE *, int urlnodeid, URLNODE *urlnode);
     int     (*get_urlnode_childs)(struct _HIBASE *, int urlnodeid, URLNODE **childs);
     int     (*get_pnode_urlnodes)(struct _HIBASE *, int nodeid, URLNODE **urlnodes);
-    int     (*free_urlnodes)(URLNODE *urlnodes);
+    void    (*free_urlnodes)(URLNODE *urlnodes);
     void 	(*clean)(struct _HIBASE **);	
 }HIBASE;
 /* hibase initialize */

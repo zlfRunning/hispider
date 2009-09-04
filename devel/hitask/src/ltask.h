@@ -237,6 +237,7 @@ typedef struct _LTASK
     int (*del_cookie)(struct _LTASK *, int hostid, char *cookies);
     int (*add_url)(struct _LTASK *, int parentid, int parent_depth, char *url);
     int (*pop_url)(struct _LTASK *, char *url, int *time, char *refer, char *cookie);
+    int (*get_url)(struct _LTASK *, int urlid, char *url);
     int (*set_url_status)(struct _LTASK *, int urlid, char *url, short status, short err);
     int (*set_url_level)(struct _LTASK *, int urlid, char *url, short level);
     int (*get_task)(struct _LTASK *, char *buf, int *nbuf);

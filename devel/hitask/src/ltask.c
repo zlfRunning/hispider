@@ -112,13 +112,13 @@ int ltask_set_basedir(LTASK *task, char *dir)
 {
     char path[HTTP_PATH_MAX], host[HTTP_HOST_MAX], *p = NULL, *pp = NULL, *end = NULL;
     void *dp = NULL, *olddp = NULL;
+    int n = 0, i = 0, *px = NULL;
     unsigned char *ip = NULL;
     LHOST *host_node = NULL;
-    struct stat st = {0};
     LPROXY *proxy = NULL;
-    LDNS *dns = NULL;
+    struct stat st = {0};
     LUSER *user = NULL;
-    int n = 0, i = 0;
+    LDNS *dns = NULL;
 
     if(task && dir)
     {
@@ -171,8 +171,10 @@ int ltask_set_basedir(LTASK *task, char *dir)
                         n = sprintf(host, "%d.%d.%d.%d:%d", ip[0], ip[1], 
                                 ip[2], ip[3], proxy->port);
                         dp = (void *)((long)(i + 1));
-                        TRIETAB_ADD(task->table, host, n, dp);
-                        QUEUE_PUSH(task->qproxy, int, &i);
+                        p = host;
+                        TRIETAB_ADD(task->table, p, n, dp);
+                        px = &i;
+                        QUEUE_PUSH(task->qproxy, int, px);
                     }
                     else
                     {
@@ -187,7 +189,8 @@ int ltask_set_basedir(LTASK *task, char *dir)
             _EXIT_("open %s failed, %s\n", path, strerror(errno));
         }
         sprintf(path, "%s/%s", dir, L_TASK_NAME);
-        FQUEUE_INIT(task->qtask, path, LNODE);
+        p = path;
+        FQUEUE_INIT(task->qtask, p, LNODE);
         /* host/key/ip/url/domain/document */
         sprintf(path, "%s/%s", dir, L_KEY_NAME);
         if((task->key_fd = open(path, O_CREAT|O_RDWR|O_APPEND, 0644)) < 0)
@@ -377,7 +380,7 @@ int ltask_set_state_proxy(LTASK *task, int state)
 int ltask_add_proxy(LTASK *task, char *host)
 {
     char *p = NULL, *e = NULL, *pp = NULL, *ps = NULL, ip[HTTP_HOST_MAX];
-    int n = 0, i = 0, ret = -1;
+    int n = 0, i = 0, ret = -1, *px = NULL;
     struct stat st = {0};
     LPROXY *proxy = NULL;
     void *dp = NULL;
@@ -407,7 +410,8 @@ int ltask_add_proxy(LTASK *task, char *host)
                     {
                         dp = (void *)((long)(i+1));
                         TRIETAB_ADD(task->table, host, n, dp);
-                        QUEUE_PUSH(task->qproxy, int, &i);
+                        px = &i;
+                        QUEUE_PUSH(task->qproxy, int, px);
                         proxy->status = (short)PROXY_STATUS_OK;
                         *e = '\0';
                         proxy->ip = (int)inet_addr(ip);
@@ -660,7 +664,7 @@ int ltask_set_host_level(LTASK *task, int hostid, char *host, short level)
 {
     int id = 0, n = 0, ret = -1;
     LHOST *host_node = NULL;
-    LNODE node = {0};
+    LNODE node = {0}, *pnode = NULL;
     void *dp = NULL;
 
     if(task)
@@ -679,7 +683,8 @@ int ltask_set_host_level(LTASK *task, int hostid, char *host, short level)
             {
                 node.type = Q_TYPE_HOST;
                 node.id = id;
-                FQUEUE_PUSH(task->qtask, LNODE, &node);
+                pnode = &node;
+                FQUEUE_PUSH(task->qtask, LNODE, pnode);
             }
             host_node->level = level;
             ret = 0;
@@ -828,7 +833,7 @@ int ltask_pop_url(LTASK *task, char *url, int *itime, char *refer, char *cookie)
 {
     int urlid = -1, n = -1, x = 0;
     LHOST *host_node = NULL;
-    LNODE node = {0};
+    LNODE node = {0}, *pnode = NULL;
     LMETA meta = {0};
 
     if(task && url)
@@ -842,7 +847,8 @@ int ltask_pop_url(LTASK *task, char *url, int *itime, char *refer, char *cookie)
                 urlid = host_node->url_current_id;
                 if(host_node->url_left > 1)
                 {
-                    FQUEUE_PUSH(task->qtask, LNODE, &node);
+                    pnode = &node;
+                    FQUEUE_PUSH(task->qtask, LNODE, pnode);
                 }
             }
             else if(node.type == Q_TYPE_URL && node.id >= 0)
@@ -911,6 +917,29 @@ end:
     return urlid;
 }
 
+/* get url */
+int ltask_get_url(LTASK *task, int urlid, char *url)
+{
+    int ret = -1, n = 0;
+    LMETA meta = {0};
+
+    if(task && urlid >= 0 && url)
+    {
+        MUTEX_LOCK(task->mutex);
+        if(task->meta_fd > 0 && pread(task->meta_fd, &meta, sizeof(LMETA), 
+                (off_t)(urlid * sizeof(LMETA))) > 0 
+                && meta.url_len < HTTP_URL_MAX && meta.status >= 0 
+                && (n = pread(task->url_fd, url, meta.url_len, meta.url_off)) > 0)
+        {
+            ret = meta.url_len;
+            url[n] = '\0';
+        }
+        MUTEX_UNLOCK(task->mutex);
+
+    }
+    return ret;
+}
+
 /* set url status */
 int ltask_set_url_status(LTASK *task, int urlid, char *url, short status, short err)
 {
@@ -958,7 +987,7 @@ int ltask_set_url_level(LTASK *task, int urlid, char *url, short level)
     char newurl[HTTP_URL_MAX], *p = NULL, *pp = NULL;
     unsigned char key[MD5_LEN];
     int n = 0, id = -1, ret = -1;
-    LNODE node = {0};
+    LNODE node = {0}, *pnode = NULL;
     void *dp = NULL;
 
     if(task)
@@ -987,7 +1016,8 @@ int ltask_set_url_level(LTASK *task, int urlid, char *url, short level)
             pwrite(task->meta_fd, &level, sizeof(short), id * sizeof(LMETA) + sizeof(short)*2); 
             node.type = Q_TYPE_URL;
             node.id = id;
-            FQUEUE_PUSH(task->qtask, LNODE, &node);
+            pnode = &node;
+            FQUEUE_PUSH(task->qtask, LNODE, pnode);
             ret = 0;
         }
         MUTEX_UNLOCK(task->mutex);
@@ -1509,7 +1539,7 @@ end:
 #define URLTOEND(start, up, eup, flag, dpp)                             \
 do                                                                      \
 {                                                                       \
-    while(up < eup && dpp < (start + HTTP_URL_MAX - 1))                     \
+    while(up < eup && dpp < (start + HTTP_URL_MAX - 1))                 \
     {                                                                   \
         if(*up == 0x20 && (*(up+1) == 0x20 || *(up+1) == '\''           \
                     || *(up+1) == '"' ))break;                          \
@@ -1525,7 +1555,7 @@ do                                                                      \
             else if(*up == '\r' || *up == '\n' || *up == '\t')++up;     \
             else if(*up == '/' && *(up+1) == '/' && *(up-1) != ':')     \
             {                                                           \
-                *dpp++ == '/';up+=2;                                    \
+                *dpp++ = '/'; up+=2;                                    \
             }                                                           \
             else if(*((unsigned char *)up) > 127 || *up == 0x20)        \
             {                                                           \
@@ -1778,6 +1808,7 @@ LTASK *ltask_init()
         task->set_url_status        = ltask_set_url_status;
         task->set_url_level         = ltask_set_url_level;
         task->pop_url               = ltask_pop_url;
+        task->get_url               = ltask_get_url;
         task->get_task              = ltask_get_task;
         task->add_user              = ltask_add_user;
         task->del_user              = ltask_del_user;
