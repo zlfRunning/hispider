@@ -742,11 +742,12 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
         nurl = (p - url);
         if(e == NULL)
         {
-            e = pp++; 
+            e = pp; 
             *e = '/'; 
             sprintf(URL, "%s/", url);
             purl = URL;
             nurl++;
+            ++pp;
         }
         /* check/add host */
         DEBUG_LOGGER(task->logger, "Ready for adding url:%s", purl);
