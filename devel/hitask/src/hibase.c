@@ -13,8 +13,10 @@
 #define  HIBASE_TABLE_NAME   		"hibase.table"
 #define  HIBASE_TEMPLATE_NAME 		"hibase.template"
 #define  HIBASE_PNODE_NAME 		    "hibase.pnode"
+#define  HIBASE_URLNODE_NAME 		"hibase.urlnode"
 #define  HIBASE_QPNODE_NAME 		"hibase.qpnode"
 #define  HIBASE_QTEMPLATE_NAME 		"hibase.qtemplate"
+#define  HIBASE_QURLNODE_NAME 		"hibase.qurlnode"
 #define _EXIT_(format...)                                                               \
 do                                                                                      \
 {                                                                                       \
@@ -22,32 +24,31 @@ do                                                                              
     fprintf(stderr, format);                                                            \
     _exit(-1);                                                                          \
 }while(0)
-
-#define _MMAP_(io, st, type, incre_num)                                                 \
+#define HIO_INCRE(io, type, incre_num)                                                  \
+do                                                                                      \
+{                                                                                       \
+    if(io.fd  > 0 && incre_num > 0)                                                     \
+    {                                                                                   \
+        io.size += ((off_t)sizeof(type) * (off_t)incre_num);                            \
+        ftruncate(io.fd, io.size);                                                      \
+        io.left += incre_num;                                                           \
+        io.total = io.size/(off_t)sizeof(type);                                         \
+    }                                                                                   \
+}while(0)
+#define HIO_MMAP(io, type, incre_num)                                                   \
 do                                                                                      \
 {                                                                                       \
     if(io.fd > 0 && incre_num > 0)                                                      \
     {                                                                                   \
-        if(io.map && io.size > 0)                                                       \
+        if(io.map && io.map != (void *)(-1))                                            \
         {                                                                               \
             msync(io.map, io.size, MS_SYNC);                                            \
             munmap(io.map, io.size);                                                    \
-        }                                                                               \
-        else                                                                            \
-        {                                                                               \
-            if(fstat(io.fd, &st) != 0)                                                  \
-            {                                                                           \
-                _EXIT_("fstat(%d) failed, %s\n", io.fd, strerror(errno));               \
-            }                                                                           \
-            io.size = st.st_size;                                                       \
-        }                                                                               \
-        if(io.size == 0 || io.map)                                                      \
-        {                                                                               \
             io.size += ((off_t)sizeof(type) * (off_t)incre_num);                        \
             ftruncate(io.fd, io.size);                                                  \
             io.left += incre_num;                                                       \
+            io.total = io.size/(off_t)sizeof(type);                                     \
         }                                                                               \
-        io.total = io.size/(off_t)sizeof(type);                                         \
         if((io.map = mmap(NULL, io.size, PROT_READ|PROT_WRITE, MAP_SHARED,              \
                         io.fd, 0)) == (void *)-1)                                       \
         {                                                                               \
@@ -56,16 +57,49 @@ do                                                                              
         }                                                                               \
     }                                                                                   \
 }while(0)
-#define _MUNMAP_(mp, size)                                                              \
+#define HIO_MAP(io, type) ((io.map && io.map != (void *)-1)?(type *)io.map : NULL)
+#define HIO_MUNMAP(io)                                                                  \
 do                                                                                      \
 {                                                                                       \
-    if(mp && size > 0)                                                                  \
+    if(io.map && io.size > 0)                                                           \
     {                                                                                   \
-        msync(mp, size, MS_SYNC);                                                       \
-        munmap(mp, size);                                                               \
-        mp = NULL;                                                                      \
+        msync(io.map, io.size, MS_SYNC);                                                \
+        munmap(io.map, io.size);                                                        \
+        io.map = NULL;                                                                  \
     }                                                                                   \
 }while(0)
+#define HIO_INIT(io, file, st, type)                                                    \
+do                                                                                      \
+{                                                                                       \
+    if(file && (io.fd = open(file, O_CREAT|O_RDWR, 0644)) > 0                           \
+            && fstat(io.fd, &st) == 0)                                                  \
+    {                                                                                   \
+        io.size = st.st_size;                                                           \
+        io.total = (st.st_size/(off_t)sizeof(type));                                    \
+    }                                                                                   \
+    else                                                                                \
+    {                                                                                   \
+        _EXIT_("initialize file(%s) failed, %s", file, strerror(errno));                \
+    }                                                                                   \
+}while(0)
+#define HIO_CLEAN(io)                                                                   \
+{                                                                                       \
+    if(io.map && io.size > 0)                                                           \
+    {                                                                                   \
+        msync(io.map, io.size, MS_SYNC);                                                \
+        munmap(io.map, io.size);                                                        \
+        io.map = NULL;                                                                  \
+    }                                                                                   \
+    if(io.fd > 0)                                                                       \
+    {                                                                                   \
+        close(io.fd);                                                                   \
+        io.fd = 0;                                                                      \
+        io.left = 0;                                                                    \
+        io.total = 0;                                                                   \
+    }                                                                                   \
+    io.size = 0;                                                                        \
+}
+//tables
 static char *table_data_types[] = {"null", "int", "float", "null", "text",
     "null","null","null","blob"};
 /* mkdir */
@@ -109,6 +143,7 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
     ITEMPLATE *template = NULL;
     ITABLE *table = NULL;
     PNODE *pnode = NULL;
+    URLNODE *urlnode = NULL;
     struct stat st = {0};
     int i = 0, j = 0, n = 0;
     void *dp = NULL;
@@ -118,11 +153,12 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
         n = sprintf(hibase->basedir, "%s/", dir);
         hibase_mkdir(hibase->basedir, 0755);
         //resume table
+        p = path;
         sprintf(path, "%s%s", hibase->basedir, HIBASE_TABLE_NAME);	
-        if((hibase->tableio.fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
+        HIO_INIT(hibase->tableio, p, st, ITABLE);
+        HIO_MMAP(hibase->tableio, ITABLE, TABLE_INCRE_NUM); 
+        if(hibase->tableio.fd > 0 && (table = HIO_MAP(hibase->tableio, ITABLE)))
         {
-            _MMAP_(hibase->tableio, st, ITABLE, TABLE_INCRE_NUM); 
-            table = (ITABLE *)hibase->tableio.map;
             hibase->tableio.left = 0;
             for(i = 0; i < hibase->tableio.total; i++)
             {
@@ -152,10 +188,10 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
         p = path;
         FQUEUE_INIT(hibase->qtemplate, p, int);
         sprintf(path, "%s%s", hibase->basedir, HIBASE_TEMPLATE_NAME);	
-        if((hibase->templateio.fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
+        HIO_INIT(hibase->templateio, p, st, ITEMPLATE);
+        HIO_MMAP(hibase->templateio, ITEMPLATE, TEMPLATE_INCRE_NUM); 
+        if(hibase->templateio.fd > 0 && (template = HIO_MAP(hibase->templateio, ITEMPLATE)))
         {
-            _MMAP_(hibase->templateio, st, ITEMPLATE, TEMPLATE_INCRE_NUM); 
-            template = (ITEMPLATE *)hibase->templateio.map;
             hibase->templateio.left = 0;
             for(i = 1; i < hibase->templateio.total; i++)
             {
@@ -171,10 +207,10 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
         p = path;
         FQUEUE_INIT(hibase->qpnode, p, int);
         sprintf(path, "%s%s", hibase->basedir, HIBASE_PNODE_NAME);	
-        if((hibase->pnodeio.fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
+        HIO_INIT(hibase->pnodeio, p, st, PNODE);
+        HIO_MMAP(hibase->pnodeio, PNODE, PNODE_INCRE_NUM); 
+        if(hibase->pnodeio.fd  > 0 && (pnode = HIO_MAP(hibase->pnodeio, PNODE)))
         {
-            _MMAP_(hibase->pnodeio, st, PNODE, PNODE_INCRE_NUM); 
-            pnode = (PNODE *)hibase->pnodeio.map;
             hibase->pnodeio.left = 0;
             for(i = 1; i < hibase->pnodeio.total; i++)
             {
@@ -190,7 +226,29 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
                 else hibase->pnodeio.left++;
             }
         }
-
+        //resume urlnode
+        sprintf(path, "%s%s", hibase->basedir, HIBASE_QURLNODE_NAME);
+        p = path;
+        FQUEUE_INIT(hibase->qurlnode, p, int);
+        sprintf(path, "%s%s", hibase->basedir, HIBASE_URLNODE_NAME);
+        HIO_INIT(hibase->urlnodeio, p, st, URLNODE);
+        HIO_MMAP(hibase->urlnodeio, URLNODE, URLNODE_INCRE_NUM);
+        if(hibase->urlnodeio.fd  > 0 && (urlnode = HIO_MAP(hibase->urlnodeio, URLNODE)))
+        {
+            hibase->urlnodeio.left = 0;
+            for(i = 1; i < hibase->urlnodeio.total; i++)
+            {
+                if(urlnode[i].status)
+                {
+                    hibase->urlnodeio.current = i;
+                }
+                else
+                {
+                    hibase->urlnodeio.left++;
+                }
+            }
+            //HIO_MUNMAP(hibase->urlnodeio);
+        }
     }
     return -1;
 }
@@ -237,7 +295,6 @@ int hibase_db_uid_exists(HIBASE *hibase, int tableid, char *name, int len)
 int hibase_add_table(HIBASE *hibase, char *table_name)
 {
     int id = -1, uid = -1, i = 0, n = 0;
-    struct stat st = {0};
     ITABLE *tab = NULL;
     void *dp = NULL;
 
@@ -245,9 +302,11 @@ int hibase_add_table(HIBASE *hibase, char *table_name)
     {
         uid = hibase_db_uid_exists(hibase, -1, table_name, n);
         MUTEX_LOCK(hibase->mutex);
-        if(hibase->tableio.left == 0){_MMAP_(hibase->tableio, st, ITABLE, TABLE_INCRE_NUM);}        
-        if(hibase->tableio.left > 0 && (tab = (ITABLE *)hibase->tableio.map) 
-                && tab != (ITABLE *)-1)
+        if(hibase->tableio.left == 0)
+        {
+            HIO_MMAP(hibase->tableio, ITABLE, TABLE_INCRE_NUM);
+        }        
+        if(hibase->tableio.left > 0 && (tab = HIO_MAP(hibase->tableio, ITABLE))) 
         {
             for(i = 0; i < hibase->tableio.total; i++)
             {
@@ -653,7 +712,6 @@ int hibase_pnode_exists(HIBASE *hibase, int parentid, char *name, int len)
 int hibase_add_pnode(HIBASE *hibase, int parentid, char *name)
 {
     int pnodeid = -1, uid = -1, n = 0, *px = NULL, x = 0;
-    struct stat st = {0};
     PNODE *pnode = NULL, *pparent = NULL;
 
     if(hibase && name && (n = strlen(name))  > 0 
@@ -661,7 +719,7 @@ int hibase_add_pnode(HIBASE *hibase, int parentid, char *name)
     {
         MUTEX_LOCK(hibase->mutex);
         if(hibase->pnodeio.left == 0)
-        {_MMAP_(hibase->pnodeio, st, PNODE, PNODE_INCRE_NUM);}
+        {HIO_MMAP(hibase->pnodeio, PNODE, PNODE_INCRE_NUM);}
         px = &x;
         if(FQUEUE_POP(hibase->qpnode, int, px) == 0)
             pnodeid = x;
@@ -669,7 +727,7 @@ int hibase_add_pnode(HIBASE *hibase, int parentid, char *name)
             pnodeid = ++(hibase->pnodeio.current);
         if(parentid >= 0 && parentid < hibase->pnodeio.total 
                 && pnodeid >= 0  && pnodeid < hibase->pnodeio.total 
-                && (pnode = (PNODE *)hibase->pnodeio.map) && pnode != (PNODE *)-1)
+                && (pnode = HIO_MAP(hibase->pnodeio, PNODE)))
         {
             memset(&(pnode[pnodeid]), 0, sizeof(PNODE));
             memcpy(pnode[pnodeid].name, name, n); 
@@ -913,14 +971,13 @@ int hibase_add_template(HIBASE *hibase, int pnodeid, ITEMPLATE *template)
 {
     int templateid = -1, x = 0, *px = NULL;
     ITEMPLATE *ptemplate = NULL;
-    struct stat st = {0};
     PNODE *pnode = NULL;
 
     if(hibase && pnodeid >= 0 && pnodeid < hibase->pnodeio.total)
     {
         MUTEX_LOCK(hibase->mutex);
         if(hibase->templateio.left == 0)
-        {_MMAP_(hibase->templateio, st, ITEMPLATE, TEMPLATE_INCRE_NUM);}
+        {HIO_MMAP(hibase->templateio, ITEMPLATE, TEMPLATE_INCRE_NUM);}
         px = &x;
         if(FQUEUE_POP(hibase->qtemplate, int, px) == 0)
             templateid = x;
@@ -928,7 +985,7 @@ int hibase_add_template(HIBASE *hibase, int pnodeid, ITEMPLATE *template)
             templateid = ++(hibase->templateio.current);
         if((pnode = (PNODE *)(hibase->pnodeio.map)) && pnode != (PNODE *)-1
             && templateid >= 0 && templateid < hibase->templateio.total
-            && (ptemplate = (ITEMPLATE *)(hibase->templateio.map)) && ptemplate != (ITEMPLATE *)-1)
+            && (ptemplate = HIO_MAP(hibase->templateio, ITEMPLATE)))
         {
             memcpy(&(ptemplate[templateid]), template, sizeof(ITEMPLATE));
             ptemplate[templateid].status = TEMPLATE_STATUS_OK;
@@ -1053,7 +1110,7 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
                     if((n = strlen(ptemplate[x].pattern)) > 0
                         && (HI_BUF_SIZE > BASE64_LEN(n)))
                     {
-                        base64_encode(xbuf, ptemplate[x].pattern, n);
+                        base64_encode(xbuf, (unsigned char *)ptemplate[x].pattern, n);
                         pattern = xbuf;
                     }
                     else pattern = "";
@@ -1094,44 +1151,213 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
     return n;
 }
 
+/* addd url node */
+int hibase_add_urlnode(HIBASE *hibase, int nodeid, int parentid, int urlid, int level)
+{
+    int urlnodeid = -1, x = 0, *px = NULL;
+    URLNODE *urlnode = NULL, *purlnode = NULL;
+    PNODE *pnode = NULL;
 
+    if(hibase && parentid >= 0 && urlid >= 0)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if(hibase->urlnodeio.left == 0)
+        {
+            HIO_MMAP(hibase->urlnodeio, ITEMPLATE, TEMPLATE_INCRE_NUM);
+        }
+        px = &x;
+        if(FQUEUE_POP(hibase->qurlnode, int, px) == 0)
+            urlnodeid = x;
+        else
+            urlnodeid = ++(hibase->urlnodeio.current);
+        if((urlnode = HIO_MAP(hibase->urlnodeio, URLNODE))
+            && urlnodeid > 0 && urlnodeid < hibase->urlnodeio.total)
+        {
+            urlnode[urlnodeid].status = URLNODE_STATUS_OK;
+            if(level > 0)urlnode[urlnodeid].level = level;
+            urlnode[urlnodeid].parentid = parentid;
+            urlnode[urlnodeid].urlid = urlid;
+            urlnode[urlnodeid].nodeid = nodeid;
+            if(parentid >= 0 && parentid < hibase->urlnodeio.total)
+            {
+                purlnode = &(urlnode[parentid]);
+                if(purlnode->nchilds == 0)
+                {
+                    purlnode->first = purlnode->last = urlnodeid;
+                }
+                else
+                {
+                    x = purlnode->last;
+                    urlnode[x].next = urlnodeid;
+                    urlnode[urlnodeid].prev = x;
+                }
+                purlnode->nchilds++;
+            }
+            if(nodeid > 0 && nodeid < hibase->pnodeio.total
+                && (pnode = HIO_MAP(hibase->pnodeio, PNODE)))
+            {
+                if(pnode[nodeid].urlnode_first == 0)
+                    pnode[nodeid].urlnode_first = urlnodeid;
+                pnode[nodeid].nurlnodes++;
+            }
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return  urlnodeid;
+}
+
+/* update urlnode level */
+int hibase_update_urlnode(HIBASE *hibase, int urlnodeid, int urlid, int level)
+{
+    URLNODE *urlnode = NULL;
+    int ret = -1;
+    if(hibase && urlnodeid > 0 && urlnodeid < hibase->urlnodeio.total && level >= 0)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if((urlnode = HIO_MAP(hibase->urlnodeio, URLNODE)))
+        {
+            if(level >= 0)urlnode[urlnodeid].level = level;
+            urlnode[urlnodeid].urlid = urlid;
+            ret = urlnodeid;
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return ret;
+}
+
+/* reset urlnode */
+int hibase_reset_urlnode(HIBASE *hibase, URLNODE *urlnodes, int urlnodeid)
+{
+    int x = 0, z = 0, *px = NULL, nodeid = 0;
+    PNODE *pnode = NULL;
+
+    if(urlnodes && urlnodeid > 0 && urlnodeid < hibase->urlnodeio.total)
+    {
+        if(urlnodes[urlnodeid].nchilds > 0)
+        {
+            x = urlnodes[urlnodeid].first;
+            while(x > 0 && x < hibase->urlnodeio.total)
+            {
+                if(urlnodes[x].nchilds > 0) 
+                    hibase_reset_urlnode(hibase, urlnodes, x);
+                x = urlnodes[x].next;
+            }
+        }
+        if((x = urlnodes[urlnodeid].next) > 0 && x < hibase->urlnodeio.total)
+        {
+            urlnodes[x].prev = urlnodes[urlnodeid].prev;
+        }
+        if((x = urlnodes[urlnodeid].prev) > 0 && x < hibase->urlnodeio.total)
+        {
+            urlnodes[x].next = urlnodes[urlnodeid].next;
+        }
+        z = urlnodes[urlnodeid].parentid;
+        if(urlnodes[z].first == urlnodeid)
+            urlnodes[z].first = urlnodes[urlnodeid].next;
+        if(urlnodes[z].last == urlnodeid)
+            urlnodes[z].last = urlnodes[urlnodeid].prev;
+        urlnodes[z].nchilds--;
+        if((nodeid = urlnodes[urlnodeid].nodeid) > 0 
+                && nodeid < hibase->pnodeio.total
+                && (pnode = HIO_MAP(hibase->pnodeio, PNODE)))
+        {
+            if(pnode[nodeid].urlnode_first == urlnodeid)
+                pnode[nodeid].urlnode_first = urlnodes[urlnodeid].next;
+            pnode[nodeid].nurlnodes--;
+        }
+        memset(&urlnodes[urlnodeid], 0, sizeof(URLNODE));
+        px = &urlnodeid;
+        FQUEUE_PUSH(hibase->qurlnode, int, px);
+    }
+    return urlnodeid;
+}
+/* delete urlnode */
+int hibase_delete_urlnode(HIBASE *hibase, int urlnodeid)
+{
+    URLNODE *urlnode = NULL;
+    int ret = -1;
+    if(hibase && urlnodeid > 0 && urlnodeid < hibase->urlnodeio.total)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if((urlnode = HIO_MAP(hibase->urlnodeio, URLNODE)))
+        {
+            hibase_reset_urlnode(hibase, urlnode, urlnodeid);
+            ret = urlnodeid;
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return ret;
+}
+/* get urlnode */
+int hibase_get_urlnode(HIBASE *hibase, int urlnodeid, URLNODE *urlnode)
+{
+    URLNODE *urlnodes = NULL;
+    int ret = -1;
+
+    if(hibase && urlnode && urlnodeid >= 0 && urlnodeid < hibase->urlnodeio.total)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if((urlnodes = HIO_MAP(hibase->urlnodeio, URLNODE)))
+        {
+            memcpy(&(urlnodes[urlnodeid]), urlnode, sizeof(URLNODE));
+            ret = urlnodeid;
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return ret;
+}
+
+/* get urlnode childs */
+int hibase_get_urlnode_childs(HIBASE *hibase, int urlnodeid, URLNODE **childs)
+{
+    URLNODE *urlnodes = NULL, *p = NULL;
+    int n = -1, x = 0;
+
+    if(hibase && childs && urlnodeid >= 0 && urlnodeid < hibase->urlnodeio.total)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if((urlnodes = HIO_MAP(hibase->urlnodeio, URLNODE))
+            && urlnodes[urlnodeid].nchilds > 0 
+            && (p = *childs = (URLNODE *)calloc(urlnodes[urlnodeid].nchilds, sizeof(URLNODE))))
+        {
+            x = urlnodes[urlnodeid].first;
+            n = 0;
+            while(x > 0 && n < urlnodes[urlnodeid].nchilds)
+            {
+                memcpy(p, &(urlnodes[x]), sizeof(URLNODE));
+                x = urlnodes[x].next;
+                ++p;
+                ++n;
+            }
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return n;
+}
+
+/* free urlnodes childs */
+void hibase_free_urlnode_childs(URLNODE *childs)
+{
+    if(childs) free(childs);
+    return ;
+}
 
 /* clean */
 void hibase_clean(HIBASE **phibase)
 {
     if(phibase && *phibase)
     {
-        if((*phibase)->mdb) {TRIETAB_CLEAN((*phibase)->mdb);}
+        TRIETAB_CLEAN((*phibase)->mdb);
+        TRIETAB_CLEAN((*phibase)->mpnode);
+        HIO_CLEAN((*phibase)->tableio);
+        HIO_CLEAN((*phibase)->templateio);
+        HIO_CLEAN((*phibase)->pnodeio);
+        HIO_CLEAN((*phibase)->urlnodeio);
+        FQUEUE_CLEAN((*phibase)->qpnode);
+        FQUEUE_CLEAN((*phibase)->qtemplate);
+        FQUEUE_CLEAN((*phibase)->qurlnode);
+        MUTEX_DESTROY((*phibase)->mutex);
         fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
-        if((*phibase)->mpnode) {TRIETAB_CLEAN((*phibase)->mpnode);}
-        fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
-        if((*phibase)->tableio.map && (*phibase)->tableio.size > 0)
-        {
-            _MUNMAP_((*phibase)->tableio.map, (*phibase)->tableio.size);
-        }
-        fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
-        if((*phibase)->templateio.map && (*phibase)->templateio.size > 0)
-        {
-            _MUNMAP_((*phibase)->templateio.map, (*phibase)->templateio.size);
-        }
-    fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
-        if((*phibase)->pnodeio.map && (*phibase)->pnodeio.size > 0)
-        {
-            _MUNMAP_((*phibase)->pnodeio.map, (*phibase)->pnodeio.size);
-        }
-    fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
-        if((*phibase)->tableio.fd > 0) close((*phibase)->tableio.fd);
-    fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
-        if((*phibase)->templateio.fd > 0) close((*phibase)->templateio.fd);
-    fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
-        if((*phibase)->pnodeio.fd > 0) close((*phibase)->pnodeio.fd);
-    fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
-        if((*phibase)->qpnode){FQUEUE_CLEAN((*phibase)->qpnode);}
-    fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
-        if((*phibase)->qtemplate){FQUEUE_CLEAN((*phibase)->qtemplate);}
-    fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
-        if((*phibase)->mutex){MUTEX_DESTROY((*phibase)->mutex);}
-    fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
         free(*phibase);
         *phibase = NULL;
     }

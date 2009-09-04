@@ -21,6 +21,7 @@ extern "C" {
 #define TABLE_INCRE_NUM         256
 #define TEMPLATE_INCRE_NUM      10000
 #define PNODE_INCRE_NUM         10000
+#define URLNODE_INCRE_NUM       10000
 #define PNODE_CHILDS_MAX        10000
 #define TAB_STATUS_ERR          -1
 #define TAB_STATUS_INIT         0
@@ -28,7 +29,11 @@ extern "C" {
 #define FIELD_STATUS_INIT       0
 #define FIELD_STATUS_OK         1
 #define TEMPLATE_STATUS_ERR     -1
+#define TEMPLATE_STATUS_INIT    0
 #define TEMPLATE_STATUS_OK      1
+#define URLNODE_STATUS_ERR      -1
+#define URLNODE_STATUS_INIT     0
+#define URLNODE_STATUS_OK       1
 #ifndef HI_URL_MAX
 #define HI_URL_MAX              4096
 #endif
@@ -71,19 +76,23 @@ typedef struct _PNODE
     int ntemplates;
     int template_first;
     int template_last;
+    int nurlnodes;
+    int urlnode_first;
     char name[PNODE_NAME_MAX];
 }PNODE;
-typedef struct _IURL
+typedef struct _URLNODE
 {
     short status;
     short level;
-    int rootid;
+    int nodeid;
     int parentid;
     int nchilds;
     int urlid;
+    int first;
+    int last;
     int prev;
     int next;
-}IURL;
+}URLNODE;
 #define REG_IS_URL               0x01
 #define REG_IS_IMG               0x02
 #define REG_IS_NEED_CLEARHTML    0x04
@@ -140,6 +149,9 @@ typedef struct _HIBASE
     HIO     templateio;
     void    *qtemplate;
     int     template_id_max;
+    HIO     urlnodeio;
+    void    *qurlnode;
+    int     urlnode_id_max;
     void    *logger;
     void    *mutex;
     char    basedir[HIBASE_PATH_MAX];
@@ -177,8 +189,8 @@ typedef struct _HIBASE
     int     (*view_pnode_childs)(struct _HIBASE *, int id, char *block);
     int     (*update_pnode)(struct _HIBASE *, int id, char *name);
     int     (*delete_pnode)(struct _HIBASE *, int id);
-    int     (*add_urlnode)(struct _HIBASE *, int parentid, int urlid, int level);
-    int     (*update_urlnode)(struct _HIBASE *, int parentid, int urlid, int level);
+    int     (*add_urlnode)(struct _HIBASE *, int nodeid, int parentid, int urlid, int level);
+    int     (*update_urlnode)(struct _HIBASE *, int urlnodeid, int urlid, int level);
     int     (*delete_urlnode)(struct _HIBASE *, int urlnodeid);
     int     (*view_urlnodes)(struct _HIBASE *, int urlnodeid, int level);
     void 	(*clean)(struct _HIBASE **);	
