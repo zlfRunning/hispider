@@ -358,7 +358,8 @@ int main(int argc, char **argv)
     file = argv[1];
     if(file && (fp = fopen(file, "r")))
     {
-        if((urlmap = KVMAP_INIT()))
+        KVMAP_INIT(urlmap);
+        if(urlmap)
         {
             TIMER_INIT(timer);
             while(fgets((char *)url, HTTP_URL_MAX, fp))

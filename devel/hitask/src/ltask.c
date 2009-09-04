@@ -742,7 +742,7 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
         nurl = (p - url);
         if(e == NULL)
         {
-            e = pp; 
+            e = pp++; 
             *e = '/'; 
             sprintf(URL, "%s/", url);
             purl = URL;
@@ -790,6 +790,9 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
         KVMAP_ADD(task->urlmap, key, dp, olddp); 
         if(olddp == NULL)
         {
+            //fprintf(stdout, "%d::url:%s id:%d md5:", __LINE__, newurl, id);
+            //MD5OUT(key, stdout);
+            //fprintf(stdout, "\n");
             if(fstat(task->url_fd, &st) != 0) goto err;
             if((n = sprintf(newurl, "%s\n", purl)) > 0 
                     &&  write(task->url_fd, newurl, n) > 0 
@@ -825,6 +828,9 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
         else
         {
             ret = id = (int)((long)olddp - 0);
+            //fprintf(stdout, "%d::url:%s id:%d md5:", __LINE__, newurl, id);
+            //MD5OUT(key, stdout);
+            //fprintf(stdout, "\n");
         }
 err: 
         MUTEX_UNLOCK(task->mutex);

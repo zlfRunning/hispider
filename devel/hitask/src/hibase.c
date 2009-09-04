@@ -1151,6 +1151,55 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
     return n;
 }
 
+/* hibase check urlid exist */
+int hibase_exists_urlnode(HIBASE *hibase, int nodeid, int parentid, int urlid)
+{
+    int urlnodeid = -1, x = 0, z = 0;
+    URLNODE *urlnode = NULL;
+    PNODE *pnode = NULL;
+
+    if(hibase && urlid >= 0)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if((urlnode = HIO_MAP(hibase->urlnodeio, URLNODE)))
+        {
+            if(parentid > 0 && parentid < hibase->urlnodeio.total 
+                && urlnode[parentid].nchilds > 0) 
+                    x = urlnode[parentid].first;
+            if(nodeid > 0 && nodeid < hibase->pnodeio.total
+                    && (pnode = HIO_MAP(hibase->pnodeio, PNODE)) 
+                    && pnode[nodeid].nurlnodes > 0)
+                    z = pnode[nodeid].urlnode_first;
+            while(x > 0 || z > 0)
+            {
+                if(x > 0)
+                {
+                    if(urlnode[x].urlid == urlid)
+                    {
+                        urlnodeid = x;
+                        goto end;
+                        break;
+                    }
+                    else x = urlnode[x].node_next;
+                }
+                if(z > 0)
+                {
+                    if(urlnode[z].urlid == urlid)
+                    {
+                        urlnodeid = z;
+                        goto end;
+                        break;
+                    }
+                    else z = urlnode[z].next;
+                }
+            }
+        }   
+end:
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return urlnodeid;
+}
+
 /* addd url node */
 int hibase_add_urlnode(HIBASE *hibase, int nodeid, int parentid, int urlid, int level)
 {
@@ -1158,9 +1207,11 @@ int hibase_add_urlnode(HIBASE *hibase, int nodeid, int parentid, int urlid, int 
     URLNODE *urlnode = NULL, *purlnode = NULL;
     PNODE *pnode = NULL;
 
-    if(hibase && parentid >= 0 && urlid >= 0)
+    if(hibase && nodeid > 0 && parentid >= 0 && urlid >= 0 
+            && hibase_exists_urlnode(hibase, nodeid, parentid, urlid) < 0)
     {
         MUTEX_LOCK(hibase->mutex);
+        //fprintf(stdout, "%d::nodeid:%d parentid:%d urlid:%d level:%d\n", __LINE__, nodeid, parentid, urlid, level);
         if(hibase->urlnodeio.left == 0)
         {
             HIO_MMAP(hibase->urlnodeio, ITEMPLATE, TEMPLATE_INCRE_NUM);
@@ -1174,7 +1225,7 @@ int hibase_add_urlnode(HIBASE *hibase, int nodeid, int parentid, int urlid, int 
             && urlnodeid > 0 && urlnodeid < hibase->urlnodeio.total)
         {
             urlnode[urlnodeid].status = URLNODE_STATUS_OK;
-            if(level > 0)urlnode[urlnodeid].level = level;
+            if(level >= 0) urlnode[urlnodeid].level = level;
             urlnode[urlnodeid].id = urlnodeid;
             urlnode[urlnodeid].parentid = parentid;
             urlnode[urlnodeid].urlid = urlid;
@@ -1191,6 +1242,7 @@ int hibase_add_urlnode(HIBASE *hibase, int nodeid, int parentid, int urlid, int 
                     x = purlnode->last;
                     urlnode[x].next = urlnodeid;
                     urlnode[urlnodeid].prev = x;
+                    purlnode->last = urlnodeid;
                 }
                 purlnode->nchilds++;
             }
@@ -1204,6 +1256,7 @@ int hibase_add_urlnode(HIBASE *hibase, int nodeid, int parentid, int urlid, int 
                     x = pnode[nodeid].urlnode_last;
                     urlnode[x].node_next = urlnodeid;
                     urlnode[urlnodeid].node_prev = x;
+                    pnode[nodeid].urlnode_last = urlnodeid;
                 }
                 pnode[nodeid].nurlnodes++;
             }
@@ -1214,17 +1267,17 @@ int hibase_add_urlnode(HIBASE *hibase, int nodeid, int parentid, int urlid, int 
 }
 
 /* update urlnode level */
-int hibase_update_urlnode(HIBASE *hibase, int urlnodeid, int urlid, int level)
+int hibase_update_urlnode(HIBASE *hibase, int urlnodeid, int level)
 {
     URLNODE *urlnode = NULL;
     int ret = -1;
+
     if(hibase && urlnodeid > 0 && urlnodeid < hibase->urlnodeio.total && level >= 0)
     {
         MUTEX_LOCK(hibase->mutex);
         if((urlnode = HIO_MAP(hibase->urlnodeio, URLNODE)))
         {
-            if(level >= 0)urlnode[urlnodeid].level = level;
-            urlnode[urlnodeid].urlid = urlid;
+            if(level >= 0) urlnode[urlnodeid].level = level;
             ret = urlnodeid;
         }
         MUTEX_UNLOCK(hibase->mutex);
@@ -1274,7 +1327,7 @@ int hibase_reset_urlnode(HIBASE *hibase, URLNODE *urlnodes, int urlnodeid)
                 pnode[nodeid].urlnode_last = urlnodes[urlnodeid].node_prev;
             pnode[nodeid].nurlnodes--;
         }
-        memset(&urlnodes[urlnodeid], 0, sizeof(URLNODE));
+        memset(&(urlnodes[urlnodeid]), 0, sizeof(URLNODE));
         px = &urlnodeid;
         FQUEUE_PUSH(hibase->qurlnode, int, px);
     }
@@ -1398,7 +1451,7 @@ void hibase_clean(HIBASE **phibase)
         FQUEUE_CLEAN((*phibase)->qtemplate);
         FQUEUE_CLEAN((*phibase)->qurlnode);
         MUTEX_DESTROY((*phibase)->mutex);
-        fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
+        //fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
         free(*phibase);
         *phibase = NULL;
     }

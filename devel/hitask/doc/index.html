@@ -38,7 +38,7 @@
             .url-li{background-color:#D0E9F7;cursor: pointer;}
             .url-li-selected{background-color:#F4FBFF;cursor: pointer;}
             #url-header{position:relative;background-color:#D0E9F7;color:#2F5FA1;
-                height:40px;width:100%;border:1px solid #FFFFFF;}
+                height:40px;width:996px;border:1px solid #FFFFFF;}
             #data{position:absolute;background-color:#F4FBFF;display:none;
                 border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:100%;}
             #dns{position:absolute;background-color:#F4FBFF;display:none;
@@ -714,11 +714,11 @@
                     xmlHttp.send(argv);
                 }
             }
-            function onTab(div, cssName)
+            function onDiv(div, cssName)
             {
                 div.className = cssName;
             }
-            function outTab(div, cssName)
+            function outDiv(div, cssName)
             {
                 div.className = cssName;
             }
@@ -1980,8 +1980,7 @@
                     if(urlblock)
                     {
                         urlblock.style.display = 'inline';
-                        var form = document.forms['urlblockform'];
-                        ListRootNodes(form);
+                        ListRootNodes();
                     }
                 }
                 else if(div == 'data')
@@ -2240,8 +2239,21 @@
 		        }
                 return ViewDatabase();
 		    }
-            function ListRootNodes(form)
+            function ResetURLList()
             {
+                var form = document.forms['urlblockform'];
+                if(form)
+                {
+                    var div = document.getElementById('url-list');
+                    if(div) div.innerHTML = '';
+                    form['level'].options[0].selected = true;
+                    form['url'].focus();
+                    form['url'].value = 'http://';
+                }
+            }
+            function ListRootNodes()
+            {
+                var form = document.forms['urlblockform'];
                 if(form)
                 {
                     var argv = "op=node_childs&nodeid=0";
@@ -2258,7 +2270,8 @@
                             {
                                 if(xmlHttp.status == 200)
                                 {
-                                    alert(xmlHttp.responseText);
+                                    ResetURLList(); 
+                                    //alert(xmlHttp.responseText);
                                     var tnode = eval(xmlHttp.responseText);
                                     var oselect = form['nodeid'];
                                     if(oselect)
@@ -2287,20 +2300,25 @@
                 var urllist = null;
                 if(txt && div && (urllist = eval(txt)) != null)
                 {
+                    ResetURLList(); 
                     var urlitem = null;
+                    var nodeid = -1;
+                    var urlnodeid = -1;
                     var htmlstr = "<ul class='url-ul'>";
                     for(x in urllist['urlnodes'])
                     {
                         urlitem = urllist['urlnodes'][x];
-                        htmlstr += "<li class='url-li' onmouseout=\"outTab(this, 'url-li')\" ";
-                        htmlstr += " onmouseout=\"onTab(this, 'url-li-selected')\" >"
-                        htmlstr += "<form action='javascript:void(0);'>";
-                        htmlstr += "<input type='hidden'  name='id' value='"+urlitem['id']+"'>";
+                        nodeid = urlitem['nodeid'];
+                        urlnodeid = urlitem['id'];
+                        htmlstr += "<li class='url-li' onmouseout=\"outDiv(this, 'url-li')\" ";
+                        htmlstr += " onmousemove=\"onDiv(this, 'url-li-selected')\" >";
                         htmlstr += "<a href='"+urlitem['url']+"'>"+urlitem['url']+"</a>";
                         htmlstr += "&nbsp;&nbsp;";
                         htmlstr += "["+urlitem['nchilds']+"]";
                         htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
-                        htmlstr += "<select name='level' onchange='UpdateURLNode(this.form)'>";
+                        htmlstr += "<select name='level' onchange=\"UpdateNodeURL(";
+                        htmlstr += nodeid+","+urlnodeid+", this)\">";
+                        htmlstr += "<option value='-1' selected>优先级</option>";
                         htmlstr += "<option value='0' ";
                         if(urlitem['level'] == 0) htmlstr += "selected";
                         htmlstr += ">普通</option>";
@@ -2310,15 +2328,12 @@
                         htmlstr += "</select>";
                         htmlstr += "&nbsp;&nbsp;";
                         htmlstr += "<span class='edelete' title='Delete' ";
-                        htmlstr += "onclick='DeleteURLNode("+urlitem['id']+")'>✘</span>";
-                        htmlstr += "</form></li><hr>";
+                        htmlstr += "onclick=\"DeleteNodeURL("+nodeid+", "+urlnodeid+",";
+                        htmlstr += "'"+urlitem['url']+"')\">✘</span>";
+                        htmlstr += "</li>";
                     }
                     htmlstr += "</ul>";
-                    if(htmlstr)
-                    {
-                        div.innerHTML = "";
-                        div.innerHTML = htmlstr;
-                    }
+                    div.innerHTML = htmlstr;
                 }
             }
             function AddNodeURL(form)
@@ -2332,7 +2347,7 @@
                 {
                     var argv = "op=urlnode_add&nodeid="+nodeid;
                         argv += "&url="+encodeURIComponent(url);
-                    if((level = form['level']) >= 0)
+                    if((level = form['level'].value) >= 0)
                         argv += "&level="+level;
                     xmlHttp.open('POST', '/', true);
                     xmlHttp.setRequestHeader("Content-Length", argv.length);
@@ -2343,7 +2358,7 @@
                         {
                             if(xmlHttp.status == 200)
                             {
-                                alert(xmlHttp.responseText);
+                                alert(argv);
                                 ShowNodeURLs(xmlHttp.responseText);
                             }
                         }
@@ -2352,20 +2367,18 @@
                 }
                 return true;
             }
-            function UpdateNodeURL(form)
+            function UpdateNodeURL(nodeid, urlnodeid, oselect)
             {
-                var nodeid = -1;
-                var level = -1;
                 var xmlHttp = null; 
-                var url = "";
-                if(form && (nodeid = form['nodeid'].value) > 0 
-                    && (url = form['url'].value)
-                    && (xmlHttp = CreateXMLHTTP()) != null)
+                var index = (oselect) ? oselect.selectedIndex : 0;
+                var level = (index >= 0) ? oselect.options[index].value : -1;
+                var text = (index >= 0)? oselect.options[index].text : "";
+                if(nodeid > 0 && urlnodeid > 0 && level >= 0
+                    && confirm("您确认修改优先级为["+text+"]?")
+                    &&(xmlHttp = CreateXMLHTTP()) != null)
                 {
-                    var argv = "op=urlnode_update&nodeid="+nodeid;
-                        argv += "&url="+encodeURIComponent(url);
-                    if((level = form['level']) >= 0)
-                        argv += "&level="+level;
+                    var argv = "op=urlnode_update&nodeid="+nodeid+"&urlnodeid="
+                        +urlnodeid+"&level="+level;
                     xmlHttp.open('POST', '/', true);
                     xmlHttp.setRequestHeader("Content-Length", argv.length);
                     xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
@@ -2383,20 +2396,14 @@
                 }
                 return true;
             }
-            function DeleteNodeURL(form)
+            function DeleteNodeURL(nodeid, urlnodeid, url)
             {
-                var nodeid = -1;
-                var level = -1;
                 var xmlHttp = null; 
-                var url = "";
-                if(form && (nodeid = form['nodeid'].value) > 0 
-                    && (url = form['url'].value)
-                    && (xmlHttp = CreateXMLHTTP()) != null)
+                if(nodeid > 0 && urlnodeid > 0 
+                    && confirm("您确认删除URL["+url+"] ?")
+                    &&(xmlHttp = CreateXMLHTTP()) != null)
                 {
-                    var argv = "op=urlnode_delete&nodeid="+nodeid;
-                        argv += "&url="+encodeURIComponent(url);
-                    if((level = form['level']) >= 0)
-                        argv += "&level="+level;
+                    var argv = "op=urlnode_delete&nodeid="+nodeid+"&urlnodeid="+urlnodeid;
                     xmlHttp.open('POST', '/', true);
                     xmlHttp.setRequestHeader("Content-Length", argv.length);
                     xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
@@ -2419,6 +2426,7 @@
                 var nodeid = -1;
                 var level = -1;
                 var xmlHttp = null; 
+                ResetURLList();
                 if(form && (nodeid = form['nodeid'].value) > 0 
                     && (xmlHttp = CreateXMLHTTP()) != null)
                 {
@@ -2434,6 +2442,7 @@
                         {
                             if(xmlHttp.status == 200)
                             {
+                                //alert(xmlHttp.responseText);
                                 ShowNodeURLs(xmlHttp.responseText);
                             }
                         }

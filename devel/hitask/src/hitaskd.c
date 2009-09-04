@@ -777,13 +777,14 @@ do                                                                              
         --p;                                                                                    \
         p += sprintf(p, "%s", "}})");                                                           \
         count = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html;charset=%s\r\n"            \
-                "Content-Length:%d\r\nConnection:close\r\n\r\n",                                \
-                http_default_charset, (p - pp));                                                \
+                "Content-Length:%ld\r\nConnection:close\r\n\r\n",                               \
+                http_default_charset, (long)(p - pp));                                          \
         conn->push_chunk(conn, buf, count);                                                     \
         conn->push_chunk(conn, pp, (p - pp));                                                   \
         free(pp); pp = NULL;                                                                    \
     }                                                                                           \
 }while(0)
+
 /*  data handler */
 int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
@@ -1174,6 +1175,37 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                             fprintf(stdout, "%d::%d:%s %d\n", __LINE__, urlid, url, urlnodeid);
                             goto err_end;
                         }
+                        break;
+                    case E_OP_URLNODE_UPDATE:
+                        if(nodeid >= 0 && urlnodeid > 0 && level >= 0 
+                            && hibase->update_urlnode(hibase, urlnodeid, level)> 0
+                            && (n = hibase->get_pnode_urlnodes(hibase, nodeid, &urlnodes)) > 0)
+                        {
+                            VIEW_URLNODES(conn, pp, p, buf, nodeid, urlnodes, i, n);
+                            hibase->free_urlnodes(urlnodes);
+                            goto end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_URLNODE_DELETE:
+                        if(nodeid >= 0 && urlnodeid > 0 
+                            && hibase->delete_urlnode(hibase, urlnodeid) > 0
+                            && (n = hibase->get_pnode_urlnodes(hibase, nodeid, &urlnodes)) > 0)
+                        {
+                            VIEW_URLNODES(conn, pp, p, buf, nodeid, urlnodes, i, n);
+                            hibase->free_urlnodes(urlnodes);
+                            goto end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_URLNODE_CHILDS:
+                        if(urlnodeid > 0 && hibase->get_urlnode_childs(hibase, 
+                                    urlnodeid, &urlnodes)> 0)
+                        {
+                            nodeid = urlnodes[0].nodeid;
+                            VIEW_URLNODES(conn, pp, p, buf, nodeid, urlnodes, i, n);
+                            hibase->free_urlnodes(urlnodes);
+                            goto end;
+                        }else goto err_end;
+                        break;
                     case E_OP_URLNODE_LIST:
                         if(nodeid >= 0 && (n = hibase->get_pnode_urlnodes(hibase, 
                                         nodeid, &urlnodes)) > 0)
@@ -1643,24 +1675,15 @@ int main(int argc, char **argv)
     sbase->running(sbase, 0);
     //sbase->running(sbase, 3600);
     //sbase->running(sbase, 1000000);
-    fprintf(stdout, "%d::OK\n", __LINE__);
+    //fprintf(stdout, "%d::OK\n", __LINE__);
     sbase->stop(sbase);
-    fprintf(stdout, "%d::OK\n", __LINE__);
     sbase->clean(&sbase);
-    fprintf(stdout, "%d::OK\n", __LINE__);
     if(dict)iniparser_free(dict);
-    fprintf(stdout, "%d::OK\n", __LINE__);
     if(hitaskd_logger){LOGGER_CLEAN(hitaskd_logger);}
-    fprintf(stdout, "%d::OK\n", __LINE__);
     if(histore_logger){LOGGER_CLEAN(histore_logger);}
-    fprintf(stdout, "%d::OK\n", __LINE__);
     if(adns_logger){LOGGER_CLEAN(adns_logger);}
-    fprintf(stdout, "%d::OK\n", __LINE__);
     if(argvmap){TRIETAB_CLEAN(argvmap);}
-    fprintf(stdout, "%d::OK\n", __LINE__);
     if(hibase) hibase->clean(&hibase);
-    fprintf(stdout, "%d::OK\n", __LINE__);
     if(ltask) ltask->clean(&ltask);
-    fprintf(stdout, "%d::OK\n", __LINE__);
     return 0;
 }
