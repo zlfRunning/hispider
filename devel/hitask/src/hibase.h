@@ -78,16 +78,19 @@ typedef struct _PNODE
     int template_last;
     int nurlnodes;
     int urlnode_first;
+    int urlnode_last;
     char name[PNODE_NAME_MAX];
 }PNODE;
 typedef struct _URLNODE
 {
     short status;
     short level;
-    int nodeid;
     int parentid;
     int nchilds;
     int urlid;
+    int nodeid;
+    int node_prev;
+    int node_next;
     int first;
     int last;
     int prev;
@@ -192,7 +195,10 @@ typedef struct _HIBASE
     int     (*add_urlnode)(struct _HIBASE *, int nodeid, int parentid, int urlid, int level);
     int     (*update_urlnode)(struct _HIBASE *, int urlnodeid, int urlid, int level);
     int     (*delete_urlnode)(struct _HIBASE *, int urlnodeid);
-    int     (*view_urlnodes)(struct _HIBASE *, int urlnodeid, int level);
+    int     (*get_urlnode)(struct _HIBASE *, int urlnodeid, URLNODE *urlnode);
+    int     (*get_urlnode_childs)(struct _HIBASE *, int urlnodeid, URLNODE **childs);
+    int     (*get_pnode_urlnodes)(struct _HIBASE *, int nodeid, URLNODE **urlnodes);
+    int     (*free_urlnodes)(URLNODE *urlnodes);
     void 	(*clean)(struct _HIBASE **);	
 }HIBASE;
 /* hibase initialize */

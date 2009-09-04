@@ -1196,8 +1196,14 @@ int hibase_add_urlnode(HIBASE *hibase, int nodeid, int parentid, int urlid, int 
             if(nodeid > 0 && nodeid < hibase->pnodeio.total
                 && (pnode = HIO_MAP(hibase->pnodeio, PNODE)))
             {
-                if(pnode[nodeid].urlnode_first == 0)
-                    pnode[nodeid].urlnode_first = urlnodeid;
+                if(pnode[nodeid].nurlnodes == 0)
+                    pnode[nodeid].urlnode_first = pnode[nodeid].urlnode_last = urlnodeid;
+                else
+                {
+                    x = pnode[nodeid].urlnode_last;
+                    urlnode[x].node_next = urlnodeid;
+                    urlnode[urlnodeid].node_prev = x;
+                }
                 pnode[nodeid].nurlnodes++;
             }
         }
@@ -1262,7 +1268,9 @@ int hibase_reset_urlnode(HIBASE *hibase, URLNODE *urlnodes, int urlnodeid)
                 && (pnode = HIO_MAP(hibase->pnodeio, PNODE)))
         {
             if(pnode[nodeid].urlnode_first == urlnodeid)
-                pnode[nodeid].urlnode_first = urlnodes[urlnodeid].next;
+                pnode[nodeid].urlnode_first = urlnodes[urlnodeid].node_next;
+            if(pnode[nodeid].urlnode_last == urlnodeid)
+                pnode[nodeid].urlnode_last = urlnodes[urlnodeid].node_prev;
             pnode[nodeid].nurlnodes--;
         }
         memset(&urlnodes[urlnodeid], 0, sizeof(URLNODE));
@@ -1271,6 +1279,7 @@ int hibase_reset_urlnode(HIBASE *hibase, URLNODE *urlnodes, int urlnodeid)
     }
     return urlnodeid;
 }
+
 /* delete urlnode */
 int hibase_delete_urlnode(HIBASE *hibase, int urlnodeid)
 {
@@ -1288,6 +1297,7 @@ int hibase_delete_urlnode(HIBASE *hibase, int urlnodeid)
     }
     return ret;
 }
+
 /* get urlnode */
 int hibase_get_urlnode(HIBASE *hibase, int urlnodeid, URLNODE *urlnode)
 {
@@ -1336,10 +1346,40 @@ int hibase_get_urlnode_childs(HIBASE *hibase, int urlnodeid, URLNODE **childs)
 }
 
 /* free urlnodes childs */
-void hibase_free_urlnode_childs(URLNODE *childs)
+void hibase_free_urlnodes(URLNODE *urlnodes)
 {
-    if(childs) free(childs);
+    if(urlnodes) free(urlnodes);
     return ;
+}
+
+/* get urlnodes with pnodeid */
+int hibase_get_pnode_urlnodes(HIBASE *hibase, int nodeid, URLNODE **purlnodes)
+{
+    PNODE *pnodes = NULL;
+    URLNODE *urlnodes = NULL, *p = NULL;
+    int n = -1, x = 0;
+
+    if(hibase && nodeid > 0 && nodeid < hibase->pnodeio.total)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if((pnodes = HIO_MAP(hibase->pnodeio, PNODE)) && pnodes[nodeid].nurlnodes > 0
+            && (x = pnodes[nodeid].urlnode_first) > 0
+            && x < hibase->urlnodeio.total
+            && (urlnodes = HIO_MAP(hibase->urlnodeio, URLNODE))
+            && (p = *purlnodes = (URLNODE *)calloc(pnodes[nodeid].nurlnodes, sizeof(URLNODE))))
+        {
+            n = 0;
+            while(x > 0 && n < pnodes[nodeid].nurlnodes)
+            {
+                memcpy(p, &(urlnodes[x]), sizeof(URLNODE));
+                x = urlnodes[x].node_next;
+                ++p;
+                ++n;
+            }
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return n;
 }
 
 /* clean */
@@ -1392,11 +1432,18 @@ HIBASE * hibase_init()
         hibase->view_pnode_childs   = hibase_view_pnode_childs;
         hibase->update_pnode        = hibase_update_pnode;
         hibase->delete_pnode        = hibase_delete_pnode;
-        hibase->add_template       = hibase_add_template;
+        hibase->add_template        = hibase_add_template;
         hibase->get_template        = hibase_get_template;
         hibase->update_template     = hibase_update_template;
         hibase->delete_template     = hibase_delete_template;
         hibase->view_templates      = hibase_view_templates;
+        hibase->add_urlnode         = hibase_add_urlnode;
+        hibase->update_urlnode      = hibase_update_urlnode;
+        hibase->delete_urlnode      = hibase_delete_urlnode;
+        hibase->get_urlnode         = hibase_get_urlnode;
+        hibase->get_urlnode_childs  = hibase_get_urlnode_childs;
+        hibase->get_pnode_urlnodes  = hibase_get_pnode_urlnodes;
+        hibase->free_urlnodes       = hibase_free_urlnodes;
         hibase->clean               = hibase_clean;
     }
     return hibase;
