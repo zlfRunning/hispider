@@ -819,8 +819,12 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
                 host_node->url_total++;
                 pwrite(task->meta_fd, &meta, sizeof(LMETA), (off_t)id * (off_t)sizeof(LMETA));
                 if(task->state) task->state->url_total++;
-                ret = 0;
+                ret = id;
             }
+        }
+        else
+        {
+            ret = id = (int)((long)olddp - 0);
         }
 err: 
         MUTEX_UNLOCK(task->mutex);

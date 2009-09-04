@@ -44,11 +44,11 @@ do                                                                              
         {                                                                               \
             msync(io.map, io.size, MS_SYNC);                                            \
             munmap(io.map, io.size);                                                    \
-            io.size += ((off_t)sizeof(type) * (off_t)incre_num);                        \
-            ftruncate(io.fd, io.size);                                                  \
-            io.left += incre_num;                                                       \
-            io.total = io.size/(off_t)sizeof(type);                                     \
         }                                                                               \
+        io.size += ((off_t)sizeof(type) * (off_t)incre_num);                            \
+        ftruncate(io.fd, io.size);                                                      \
+        io.left += incre_num;                                                           \
+        io.total = io.size/(off_t)sizeof(type);                                         \
         if((io.map = mmap(NULL, io.size, PROT_READ|PROT_WRITE, MAP_SHARED,              \
                         io.fd, 0)) == (void *)-1)                                       \
         {                                                                               \
@@ -1175,6 +1175,7 @@ int hibase_add_urlnode(HIBASE *hibase, int nodeid, int parentid, int urlid, int 
         {
             urlnode[urlnodeid].status = URLNODE_STATUS_OK;
             if(level > 0)urlnode[urlnodeid].level = level;
+            urlnode[urlnodeid].id = urlnodeid;
             urlnode[urlnodeid].parentid = parentid;
             urlnode[urlnodeid].urlid = urlid;
             urlnode[urlnodeid].nodeid = nodeid;

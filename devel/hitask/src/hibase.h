@@ -85,6 +85,7 @@ typedef struct _URLNODE
 {
     short status;
     short level;
+    int id;
     int parentid;
     int nchilds;
     int urlid;

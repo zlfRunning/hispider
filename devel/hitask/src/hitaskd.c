@@ -66,10 +66,14 @@ static char *e_argvs[] =
 #define E_ARGV_MAP      14
     "link",
 #define E_ARGV_LINK     15
-    "linkmap"
+    "linkmap",
 #define E_ARGV_LINKMAP  16
+    "urlnodeid",
+#define E_ARGV_URLNODEID 17
+    "level"
+#define E_ARGV_LEVEL    18
 };
-#define E_ARGV_NUM      17
+#define E_ARGV_NUM      19
 static char *e_ops[]=
 {
     "host_up",
@@ -114,10 +118,20 @@ static char *e_ops[]=
 #define E_OP_TEMPLATE_DELETE    19
     "template_list",
 #define E_OP_TEMPLATE_LIST      20
-    "database_view"
+    "database_view",
 #define E_OP_DATABASE_VIEW      21
+    "urlnode_add",
+#define E_OP_URLNODE_ADD        22
+    "urlnode_update",
+#define E_OP_URLNODE_UPDATE     23
+    "urlnode_delete",
+#define E_OP_URLNODE_DELETE     24
+    "urlnode_childs",
+#define E_OP_URLNODE_CHILDS     25
+    "urlnode_list"
+#define E_OP_URLNODE_LIST       26
 };
-#define E_OP_NUM 22
+#define E_OP_NUM 27
 
 /* dns packet reader */
 int adns_packet_reader(CONN *conn, CB_DATA *buffer)
@@ -745,18 +759,43 @@ err_end:
     conn->push_chunk(conn, HTTP_BAD_REQUEST, strlen(HTTP_BAD_REQUEST));
     return -1;
 }
-
+#define URLNODE_BLOCK_MAX 1024 * 1024 * 8
+#define VIEW_URLNODES(conn, pp, p, buf, node_id, urlnodes, i, count)                            \
+do                                                                                              \
+{                                                                                               \
+    if((p = pp = (char *)calloc(1, URLNODE_BLOCK_MAX)))                                         \
+    {                                                                                           \
+        p += sprintf(p, "({nodeid:'%d', nurlnodes:'%d', urlnodes:{", node_id, count);           \
+        for(i = 0; i < count; i++)                                                              \
+        {                                                                                       \
+            buf[0] = '\0';                                                                      \
+            ltask->get_url(ltask, urlnodes[i].urlid, buf);                                      \
+            p += sprintf(p, "%d:{id:'%d', nodeid:'%d', level:'%d', "                            \
+                    "nchilds:'%d', url:'%s'}, ", urlnodes[i].id, urlnodes[i].id,                \
+                    urlnodes[i].nodeid, urlnodes[i].level, urlnodes[i].nchilds, buf);           \
+        }                                                                                       \
+        --p;                                                                                    \
+        p += sprintf(p, "%s", "}})");                                                           \
+        count = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html;charset=%s\r\n"            \
+                "Content-Length:%d\r\nConnection:close\r\n\r\n",                                \
+                http_default_charset, (p - pp));                                                \
+        conn->push_chunk(conn, buf, count);                                                     \
+        conn->push_chunk(conn, pp, (p - pp));                                                   \
+        free(pp); pp = NULL;                                                                    \
+    }                                                                                           \
+}while(0)
 /*  data handler */
 int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
     int i = 0, id = 0, n = 0, op = -1, nodeid = -1, x = -1, fieldid = -1,
-        parentid = -1, urlid = -1, hostid = -1, tableid = -1, 
-        type = -1, flag = -1, templateid = -1;
+        parentid = -1, urlid = -1, hostid = -1, tableid = -1, type = -1, 
+        flag = -1, templateid = -1, urlnodeid = -1, level = -1;
     char *p = NULL, *end = NULL, *name = NULL, *host = NULL, *url = NULL, *link = NULL, 
-         *pattern = NULL, *map = NULL, *linkmap = NULL, 
+         *pattern = NULL, *map = NULL, *linkmap = NULL, *pp = NULL, 
          buf[HTTP_BUF_SIZE], block[HTTP_BUF_SIZE];
     HTTP_REQ httpRQ = {0}, *http_req = NULL;
     ITEMPLATE template = {0};
+    URLNODE *urlnodes = NULL;
     void *dp = NULL;
 
     if(conn && packet && cache && chunk && chunk->ndata > 0)
@@ -836,6 +875,12 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                                     break;
                                 case E_ARGV_LINKMAP:
                                     linkmap = p;
+                                    break;
+                                case E_ARGV_URLNODEID:
+                                    urlnodeid = atoi(p);
+                                    break;
+                                case E_ARGV_LEVEL:
+                                    level = atoi(p);
                                     break;
                                 default:
                                     break;
@@ -1114,6 +1159,28 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                             conn->push_chunk(conn, block, n);
                             goto end;
                         }else goto err_end;
+                        break;
+                    case E_OP_URLNODE_ADD:
+                        if(nodeid >= 0 && url && (urlid = ltask->add_url(ltask, -1, 0, url)) > 0
+                            && (urlnodeid = hibase->add_urlnode(hibase, nodeid, 0, urlid,level))> 0
+                            && (n = hibase->get_pnode_urlnodes(hibase, nodeid, &urlnodes)) > 0)
+                        {
+                            VIEW_URLNODES(conn, pp, p, buf, nodeid, urlnodes, i, n);
+                            hibase->free_urlnodes(urlnodes);
+                            goto end;
+                        }
+                        else 
+                        {
+                            fprintf(stdout, "%d::%d:%s %d\n", __LINE__, urlid, url, urlnodeid);
+                            goto err_end;
+                        }
+                    case E_OP_URLNODE_LIST:
+                        if(nodeid >= 0 && (n = hibase->get_pnode_urlnodes(hibase, 
+                                        nodeid, &urlnodes)) > 0)
+                        {
+                            VIEW_URLNODES(conn, pp, p, buf, nodeid, urlnodes, i, n);
+                            hibase->free_urlnodes(urlnodes);
+                        }
                         break;
                     default:
                         goto err_end;

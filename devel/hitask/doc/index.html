@@ -34,6 +34,9 @@
                 border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:100%;}
             #urlblock{position:absolute;background-color:#F4FBFF;display:none;
                 border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:100%;}
+            .url-ul{list-style:none;padding:0;margin:0;}
+            .url-li{background-color:#D0E9F7;cursor: pointer;}
+            .url-li-selected{background-color:#F4FBFF;cursor: pointer;}
             #url-header{position:relative;background-color:#D0E9F7;color:#2F5FA1;
                 height:40px;width:100%;border:1px solid #FFFFFF;}
             #data{position:absolute;background-color:#F4FBFF;display:none;
@@ -710,6 +713,14 @@
                     }
                     xmlHttp.send(argv);
                 }
+            }
+            function onTab(div, cssName)
+            {
+                div.className = cssName;
+            }
+            function outTab(div, cssName)
+            {
+                div.className = cssName;
             }
             function selectTab(element)
             {
@@ -2276,7 +2287,33 @@
                 var urllist = null;
                 if(txt && div && (urllist = eval(txt)) != null)
                 {
-                    var htmlstr = "";
+                    var urlitem = null;
+                    var htmlstr = "<ul class='url-ul'>";
+                    for(x in urllist['urlnodes'])
+                    {
+                        urlitem = urllist['urlnodes'][x];
+                        htmlstr += "<li class='url-li' onmouseout=\"outTab(this, 'url-li')\" ";
+                        htmlstr += " onmouseout=\"onTab(this, 'url-li-selected')\" >"
+                        htmlstr += "<form action='javascript:void(0);'>";
+                        htmlstr += "<input type='hidden'  name='id' value='"+urlitem['id']+"'>";
+                        htmlstr += "<a href='"+urlitem['url']+"'>"+urlitem['url']+"</a>";
+                        htmlstr += "&nbsp;&nbsp;";
+                        htmlstr += "["+urlitem['nchilds']+"]";
+                        htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
+                        htmlstr += "<select name='level' onchange='UpdateURLNode(this.form)'>";
+                        htmlstr += "<option value='0' ";
+                        if(urlitem['level'] == 0) htmlstr += "selected";
+                        htmlstr += ">普通</option>";
+                        htmlstr += "<option value='1'";
+                        if(urlitem['level'] == 1) htmlstr += "selected";
+                        htmlstr += ">紧急</option>";
+                        htmlstr += "</select>";
+                        htmlstr += "&nbsp;&nbsp;";
+                        htmlstr += "<span class='edelete' title='Delete' ";
+                        htmlstr += "onclick='DeleteURLNode("+urlitem['id']+")'>✘</span>";
+                        htmlstr += "</form></li><hr>";
+                    }
+                    htmlstr += "</ul>";
                     if(htmlstr)
                     {
                         div.innerHTML = "";
@@ -2293,7 +2330,7 @@
                     && (url = form['url'].value)
                     && (xmlHttp = CreateXMLHTTP()) != null)
                 {
-                    var argv = "op=url_add&nodeid="+nodeid;
+                    var argv = "op=urlnode_add&nodeid="+nodeid;
                         argv += "&url="+encodeURIComponent(url);
                     if((level = form['level']) >= 0)
                         argv += "&level="+level;
@@ -2306,6 +2343,7 @@
                         {
                             if(xmlHttp.status == 200)
                             {
+                                alert(xmlHttp.responseText);
                                 ShowNodeURLs(xmlHttp.responseText);
                             }
                         }
@@ -2324,7 +2362,7 @@
                     && (url = form['url'].value)
                     && (xmlHttp = CreateXMLHTTP()) != null)
                 {
-                    var argv = "op=url_update&nodeid="+nodeid;
+                    var argv = "op=urlnode_update&nodeid="+nodeid;
                         argv += "&url="+encodeURIComponent(url);
                     if((level = form['level']) >= 0)
                         argv += "&level="+level;
@@ -2355,7 +2393,7 @@
                     && (url = form['url'].value)
                     && (xmlHttp = CreateXMLHTTP()) != null)
                 {
-                    var argv = "op=url_delete&nodeid="+nodeid;
+                    var argv = "op=urlnode_delete&nodeid="+nodeid;
                         argv += "&url="+encodeURIComponent(url);
                     if((level = form['level']) >= 0)
                         argv += "&level="+level;
@@ -2384,7 +2422,7 @@
                 if(form && (nodeid = form['nodeid'].value) > 0 
                     && (xmlHttp = CreateXMLHTTP()) != null)
                 {
-                    var argv = "op=url_list&nodeid="+nodeid;
+                    var argv = "op=urlnode_list&nodeid="+nodeid;
                     if((level = form['level']) >= 0)
                         argv += "&level="+level;
                     xmlHttp.open('POST', '/', true);
@@ -2506,9 +2544,9 @@
     </div>
     <div id='urlblock'>
     <div id='url-header'>
-    <form name='urlblockform' action='javascript:void(0)' onsubmit='return AddURL(this)' >
+    <form name='urlblockform' action='javascript:void(0)' onsubmit='return AddNodeURL(this)' >
     <input type=hidden name='op'value='url_add' >
-    <select name='nodeid' onchange='ListURL(this.form)'>
+    <select name='nodeid' onchange='ListNodeURLs(this.form)'>
     <option value='-1' selected>选择节点</option>
     </select>
     &nbsp;&nbsp;
@@ -2517,7 +2555,7 @@
     <option value='0' >普通</option>
     <option value='1' >紧急</option>
     </select>
-    <input type=text size=64 value='http://' >
+    <input type=text name=url size=64 value='http://' >
     &nbsp;&nbsp;
     <input type=submit name='submit' value='Add'>
     </form>
