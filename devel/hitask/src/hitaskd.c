@@ -1162,7 +1162,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         }else goto err_end;
                         break;
                     case E_OP_URLNODE_ADD:
-                        if(nodeid >= 0 && url && (urlid = ltask->add_url(ltask, -1, 0, url)) > 0
+                        if(nodeid >= 0 && url && (urlid = ltask->add_url(ltask, -1, 0, url)) >= 0
                             && (urlnodeid = hibase->add_urlnode(hibase, nodeid, 0, urlid,level))> 0
                             && (n = hibase->get_pnode_urlnodes(hibase, nodeid, &urlnodes)) > 0)
                         {
@@ -1398,7 +1398,8 @@ int histore_oob_handler(CONN *conn, CB_DATA *oob)
 /* Initialize from ini file */
 int sbase_initialize(SBASE *sbase, char *conf)
 {
-    char *s = NULL, *p = NULL, *basedir = NULL, *start = NULL;
+    char *s = NULL, *p = NULL, *basedir = NULL;
+    //*start = NULL;
     //*ep = NULL, *whitelist = NULL, *whost = NULL, 
     //*host = NULL, *path = NULL;
     int interval = 0, i = 0, n = 0;
@@ -1484,11 +1485,11 @@ int sbase_initialize(SBASE *sbase, char *conf)
     if((ltask = ltask_init()))
     {
         basedir = iniparser_getstr(dict, "HITASKD:basedir");
-        start = iniparser_getstr(dict, "HITASKD:start");
         ltask->set_basedir(ltask, basedir);
-        ltask->add_url(ltask, -1, 0, start);
-        //ltable->set_logger(ltable, NULL, logger);
+        //start = iniparser_getstr(dict, "HITASKD:start");
+        //ltask->add_url(ltask, -1, 0, start);
         /*
+           ltable->set_logger(ltable, NULL, logger);
            host = iniparser_getstr(dict, "HITASKD:host");
            path = iniparser_getstr(dict, "HITASKD:path");
            whitelist = iniparser_getstr(dict, "HITASKD:whitelist");

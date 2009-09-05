@@ -787,7 +787,7 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
         md5((unsigned char *)newurl, n, key);
         if(fstat(task->meta_fd, &st) != 0) goto err;
         id = (st.st_size/(off_t)sizeof(LMETA));
-        dp = (void *)((long)id);
+        dp = (void *)((long)id + 1);
         KVMAP_ADD(task->urlmap, key, dp, olddp); 
         if(olddp == NULL)
         {
@@ -828,7 +828,7 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
         }
         else
         {
-            ret = id = (int)((long)olddp - 0);
+            ret = id = (int)((long)olddp - 1);
             //fprintf(stdout, "%d::url:%s id:%d md5:", __LINE__, newurl, id);
             //MD5OUT(key, stdout);
             //fprintf(stdout, "\n");
