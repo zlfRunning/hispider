@@ -1793,51 +1793,42 @@ void ltask_clean(LTASK **ptask)
         if((*ptask)->mutex) {MUTEX_DESTROY((*ptask)->mutex);}
         if((*ptask)->logger) {LOGGER_CLEAN((*ptask)->logger);}
         if((*ptask)->errlogger) {LOGGER_CLEAN((*ptask)->errlogger);}
+	fprintf(stdout, "%d::OK\n", __LINE__);
         if((*ptask)->timer) {TIMER_CLEAN((*ptask)->timer);}
+	fprintf(stdout, "%d::OK\n", __LINE__);
         if((*ptask)->urlmap) {KVMAP_CLEAN((*ptask)->urlmap);}
+	fprintf(stdout, "%d::OK\n", __LINE__);
         if((*ptask)->table) {TRIETAB_CLEAN((*ptask)->table);}
+	fprintf(stdout, "%d::OK\n", __LINE__);
         if((*ptask)->users) {TRIETAB_CLEAN((*ptask)->users);}
+	fprintf(stdout, "%d::OK\n", __LINE__);
         if((*ptask)->cookies) {TRIETAB_CLEAN((*ptask)->cookies);}
+	fprintf(stdout, "%d::OK\n", __LINE__);
         if((*ptask)->qtask){FQUEUE_CLEAN((*ptask)->qtask);}
+	fprintf(stdout, "%d::OK\n", __LINE__);
         if((*ptask)->qproxy){QUEUE_CLEAN((*ptask)->qproxy);}
+	fprintf(stdout, "%d::OK\n", __LINE__);
         if((*ptask)->key_fd > 0) close((*ptask)->key_fd);
         if((*ptask)->url_fd > 0) close((*ptask)->url_fd);
         if((*ptask)->domain_fd > 0) close((*ptask)->domain_fd);
         if((*ptask)->doc_fd > 0) close((*ptask)->doc_fd);
         if((*ptask)->cookie_fd > 0) close((*ptask)->cookie_fd);
+	fprintf(stdout, "%d::OK\n", __LINE__);
         if((*ptask)->state_fd > 0) 
         {
-            _MUNMAP_((*ptask)->state, sizeof(LSTATE));
+	    msync((*ptask)->state, sizeof(LSTATE), MS_SYNC);
+	    munmap((*ptask)->state, sizeof(LSTATE));
             close((*ptask)->state_fd);
         }
-        if((*ptask)->proxyio.fd > 0)
-        {
-            _MUNMAP_((*ptask)->proxyio.map, (*ptask)->proxyio.size);
-            close((*ptask)->proxyio.fd);
-        }
-        if((*ptask)->hostio.fd > 0)
-        {
-            _MUNMAP_((*ptask)->hostio.map, (*ptask)->hostio.size);
-            close((*ptask)->hostio.fd);
-        }
-        if((*ptask)->ipio.fd > 0)
-        {
-            _MUNMAP_((*ptask)->ipio.map, (*ptask)->ipio.size);
-            close((*ptask)->ipio.fd);
-        }
-        if((*ptask)->dnsio.fd > 0)
-        {
-            _MUNMAP_((*ptask)->dnsio.map, (*ptask)->dnsio.size);
-            close((*ptask)->dnsio.fd);
-        }
-        if((*ptask)->userio.fd > 0)
-        {
-            _MUNMAP_((*ptask)->userio.map, (*ptask)->userio.size);
-            close((*ptask)->userio.fd);
-        }
+	HIO_CLEAN((*ptask)->proxyio);
+	HIO_CLEAN((*ptask)->hostio);
+	HIO_CLEAN((*ptask)->ipio);
+	HIO_CLEAN((*ptask)->dnsio);
+	HIO_CLEAN((*ptask)->userio);
         free(*ptask);
         *ptask = NULL;
     }
+    return ;
 }
 
 /* initialize */
