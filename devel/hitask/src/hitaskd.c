@@ -1227,7 +1227,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         }
                         break;
                     case E_OP_DNS_ADD:
-                        if(name && ltask->add_dns(ltask, name) >= 0 
+                        if(host && ltask->add_dns(ltask, host) >= 0 
                                 && (n = ltask->view_dnslist(ltask, block)) > 0)
                         {
                             conn->push_chunk(conn, block, n);

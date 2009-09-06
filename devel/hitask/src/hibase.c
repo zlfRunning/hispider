@@ -10,6 +10,7 @@
 #include "timer.h"
 #include "logger.h"
 #include "base64.h"
+#include "hio.h"
 #define  HIBASE_TABLE_NAME   		"hibase.table"
 #define  HIBASE_TEMPLATE_NAME 		"hibase.template"
 #define  HIBASE_PNODE_NAME 		    "hibase.pnode"

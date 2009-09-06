@@ -17,60 +17,11 @@
 #include "fqueue.h"
 #include "logger.h"
 #include "tm.h"
+#include "hio.h"
 #ifndef LI
 #define LI(_x_) ((long int)_x_)
 #endif
 #define HTTP_PREF  "http://"
-#define _EXIT_(format...)                                                               \
-do                                                                                      \
-{                                                                                       \
-    fprintf(stderr, "%s::%d ", __FILE__, __LINE__);                                     \
-    fprintf(stderr, format);                                                            \
-    _exit(-1);                                                                          \
-}while(0)
-#define _MMAP_(io, st, type, incre_num)                                                 \
-do                                                                                      \
-{                                                                                       \
-    if(io.fd > 0 && incre_num > 0)                                                      \
-    {                                                                                   \
-        if(io.map && io.size > 0)                                                       \
-        {                                                                               \
-            msync(io.map, io.size, MS_SYNC);                                            \
-            munmap(io.map, io.size);                                                    \
-        }                                                                               \
-        else                                                                            \
-        {                                                                               \
-            if(fstat(io.fd, &st) != 0)                                                  \
-            {                                                                           \
-                _EXIT_("fstat(%d) failed, %s\n", io.fd, strerror(errno));               \
-            }                                                                           \
-            io.size = st.st_size;                                                       \
-        }                                                                               \
-        if(io.size == 0 || io.map)                                                      \
-        {                                                                               \
-            io.size += ((off_t)sizeof(type) * (off_t)incre_num);                        \
-            ftruncate(io.fd, io.size);                                                  \
-            io.left += incre_num;                                                       \
-        }                                                                               \
-        io.total = io.size/(off_t)sizeof(type);                                         \
-        if((io.map = mmap(NULL, io.size, PROT_READ|PROT_WRITE, MAP_SHARED,              \
-                        io.fd, 0)) == (void *)-1)                                       \
-        {                                                                               \
-            _EXIT_("mmap %d size:%lld failed, %s\n", io.fd,                             \
-                    (long long int)io.size, strerror(errno));                           \
-        }                                                                               \
-    }                                                                                   \
-}while(0)
-#define _MUNMAP_(mp, size)                                                              \
-do                                                                                      \
-{                                                                                       \
-    if(mp && size > 0)                                                                  \
-    {                                                                                   \
-        msync(mp, size, MS_SYNC);                                                       \
-        munmap(mp, size);                                                               \
-        mp = NULL;                                                                      \
-    }                                                                                   \
-}while(0)
 #define ISALPHA(p) ((*p >= '0' && *p <= '9') ||(*p >= 'A' && *p <= 'Z')||(*p >= 'a' && *p <= 'z'))
 static const char *running_ops[] = {"running", "stop"};
 /* mkdir */
@@ -156,33 +107,32 @@ int ltask_set_basedir(LTASK *task, char *dir)
         }
         /* proxy/task */
         sprintf(path, "%s/%s", dir, L_PROXY_NAME);
-        if((task->proxyio.fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
+        p = path;
+        HIO_INIT(task->proxyio, p, st, LPROXY);
+        HIO_MMAP(task->proxyio, LPROXY, PROXY_INCRE_NUM);
+        if(task->proxyio.fd > 0 && (proxy = HIO_MAP(task->proxyio, LPROXY)))
         {
-            _MMAP_(task->proxyio, st, LPROXY, PROXY_INCRE_NUM);
-            if((proxy = (LPROXY *)task->proxyio.map) && task->proxyio.total > 0)
+            task->proxyio.left = 0;
+            i = 0;
+            do
             {
-                task->proxyio.left = 0;
-                i = 0;
-                do
+                if(proxy->status == PROXY_STATUS_OK)
                 {
-                    if(proxy->status == PROXY_STATUS_OK)
-                    {
-                        ip = (unsigned char *)&(proxy->ip);
-                        n = sprintf(host, "%d.%d.%d.%d:%d", ip[0], ip[1], 
-                                ip[2], ip[3], proxy->port);
-                        dp = (void *)((long)(i + 1));
-                        p = host;
-                        TRIETAB_ADD(task->table, p, n, dp);
-                        px = &i;
-                        QUEUE_PUSH(task->qproxy, int, px);
-                    }
-                    else
-                    {
-                       task->proxyio.left++;
-                    }
-                    ++proxy;
-                }while(i++ < task->proxyio.total);
-            }
+                    ip = (unsigned char *)&(proxy->ip);
+                    n = sprintf(host, "%d.%d.%d.%d:%d", ip[0], ip[1], 
+                            ip[2], ip[3], proxy->port);
+                    dp = (void *)((long)(i + 1));
+                    p = host;
+                    TRIETAB_ADD(task->table, p, n, dp);
+                    px = &i;
+                    QUEUE_PUSH(task->qproxy, int, px);
+                }
+                else
+                {
+                    task->proxyio.left++;
+                }
+                ++proxy;
+            }while(++i < task->proxyio.total);
         }
         else
         {
@@ -218,18 +168,22 @@ int ltask_set_basedir(LTASK *task, char *dir)
             _EXIT_("open %s failed, %s\n", path, strerror(errno));
         }
         sprintf(path, "%s/%s", dir, L_HOST_NAME);
-        if((task->hostio.fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
+        p = path;
+        HIO_INIT(task->hostio, p, st, LHOST);
+        if(task->hostio.fd  > 0)
         {
-            _MMAP_(task->hostio, st, LHOST, HOST_INCRE_NUM);
+            HIO_MMAP(task->hostio, LHOST, HOST_INCRE_NUM);
         }
         else
         {
             _EXIT_("open %s failed, %s\n", path, strerror(errno));
         }
         sprintf(path, "%s/%s", dir, L_IP_NAME);
-        if((task->ipio.fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
+        p = path;
+        HIO_INIT(task->ipio, p, st, int);
+        if(task->ipio.fd  > 0)
         {
-            _MMAP_(task->ipio, st, int, IP_INCRE_NUM);
+            HIO_MMAP(task->ipio, int, IP_INCRE_NUM);
         }
         else
         {
@@ -242,7 +196,7 @@ int ltask_set_basedir(LTASK *task, char *dir)
         {
             _EXIT_("open %s failed, %s\n", path, strerror(errno));
         }
-        if(task->hostio.total > 0 && (host_node = (LHOST *)(task->hostio.map))
+        if(task->hostio.total > 0 && (host_node = HIO_MAP(task->hostio, LHOST))
                 && fstat(task->domain_fd, &st) == 0 && st.st_size > 0)
         {
             if((pp = (char *)mmap(NULL, st.st_size, PROT_READ, 
@@ -265,7 +219,7 @@ int ltask_set_basedir(LTASK *task, char *dir)
                     n = host_node->ip_off + host_node->ip_count * sizeof(int);
                     if(n > task->ipio.end) task->ipio.end = n;
                     ++host_node;
-                }while(i++ < task->hostio.total);
+                }while(++i < task->hostio.total);
                 munmap(pp, st.st_size);
             }
             else
@@ -275,15 +229,17 @@ int ltask_set_basedir(LTASK *task, char *dir)
         }
         /* dns */
         sprintf(path, "%s/%s", dir, L_DNS_NAME);
-        if((task->dnsio.fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
+        p = path;
+        HIO_INIT(task->dnsio, p, st, LDNS);
+        if(task->dnsio.fd > 0)
         {
-            _MMAP_(task->dnsio, st, LDNS, DNS_INCRE_NUM);
+            HIO_MMAP(task->dnsio, LDNS, DNS_INCRE_NUM);
         }
         else
         {
             _EXIT_("open %s failed, %s\n", path, strerror(errno));
         }
-        if(task->dnsio.total > 0 && (dns = (LDNS *)(task->dnsio.map)))
+        if(task->dnsio.total > 0 && (dns = HIO_MAP(task->dnsio, LDNS)))
         {
             i = 0;
             do
@@ -297,19 +253,21 @@ int ltask_set_basedir(LTASK *task, char *dir)
                 }
                 else task->dnsio.left++;
                 ++dns;
-            }while(i++ < task->dnsio.total);
+            }while(++i < task->dnsio.total);
         }
         /* user */
         sprintf(path, "%s/%s", dir, L_USER_NAME);
-        if((task->userio.fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
+        p = path;
+        HIO_INIT(task->userio, p, st, LUSER);
+        if(task->userio.fd > 0)
         {
-            _MMAP_(task->userio, st, LUSER, USER_INCRE_NUM);
+           HIO_MMAP(task->userio, LUSER, USER_INCRE_NUM);
         }
         else
         {
             _EXIT_("open %s failed, %s\n", path, strerror(errno));
         }
-        if(task->userio.total > 0 && (user = (LUSER *)(task->userio.map)))
+        if(task->userio.total > 0 && (user = HIO_MAP(task->userio, LUSER)))
         {
             i = 0;
             do
@@ -322,7 +280,7 @@ int ltask_set_basedir(LTASK *task, char *dir)
                 }
                 else task->userio.left++;
                 ++user;
-            }while(i++ < task->userio.total);
+            }while(++i < task->userio.total);
         }
         /* urlmap */
          if(fstat(task->key_fd, &st) == 0 && st.st_size > 0)
@@ -381,7 +339,6 @@ int ltask_add_proxy(LTASK *task, char *host)
 {
     char *p = NULL, *e = NULL, *pp = NULL, *ps = NULL, ip[HTTP_HOST_MAX];
     int n = 0, i = 0, ret = -1, *px = NULL;
-    struct stat st = {0};
     LPROXY *proxy = NULL;
     void *dp = NULL;
 
@@ -400,15 +357,17 @@ int ltask_add_proxy(LTASK *task, char *host)
         TRIETAB_GET(task->table, host, n, dp);
         if(e && dp == NULL)
         {
-            if(task->proxyio.left == 0){_MMAP_(task->proxyio, st, LPROXY, PROXY_INCRE_NUM);}
-            if(task->proxyio.left > 0 && (proxy = (LPROXY *)(task->proxyio.map)) 
-                    && proxy != (LPROXY *)-1)
+            fprintf(stdout, "%d:%s:%s\n", __LINE__, ip, pp);
+            if(task->proxyio.left == 0){HIO_MMAP(task->proxyio, LPROXY, PROXY_INCRE_NUM);}
+            if(task->proxyio.left > 0 && (proxy = HIO_MAP(task->proxyio, LPROXY)))
             {
+                fprintf(stdout, "%d:%s:%s\n", __LINE__, ip, pp);
                 i = 0;
                 do
                 {
                     if(proxy->status != (short)PROXY_STATUS_OK)
                     {
+                        fprintf(stdout, "%d:%s:%s:%d\n", __LINE__, ip, pp, task->proxyio.left);
                         dp = (void *)((long)(i+1));
                         TRIETAB_ADD(task->table, host, n, dp);
                         px = &i;
@@ -417,14 +376,15 @@ int ltask_add_proxy(LTASK *task, char *host)
                         *e = '\0';
                         proxy->ip = (int)inet_addr(ip);
                         proxy->port = (unsigned short)atoi(pp);
-                        /*
                         unsigned char *s = (unsigned char *)&(proxy->ip);
-                        fprintf(stdout, "%d::%s %d:%d.%d.%d.%d:%d\n", 
-                                __LINE__, host, proxy->ip, 
-                        s[0], s[1], s[2], s[3], proxy->port);
-                        */
+                        /*
+                           fprintf(stdout, "%d::%s %d:%d.%d.%d.%d:%d\n", 
+                           __LINE__, host, proxy->ip, 
+                           s[0], s[1], s[2], s[3], proxy->port);
+                           */
                         task->proxyio.left--;
-                        ret = 0;
+                        ret = i;
+                        fprintf(stdout, "%d:%s:%s:%d:%d\n", __LINE__, ip, pp, task->proxyio.left, i);
                         break;
                     }
                     ++proxy;
@@ -515,12 +475,14 @@ int ltask_del_proxy(LTASK *task, int hostid, char *host)
             if(dp) id = (long)dp - 1;
         }
         else id = hostid;
+        fprintf(stdout, "id:%d\n", id);
         if(id >= 0 && id < task->proxyio.total 
                 && (proxy = (LPROXY *)(task->proxyio.map)) && proxy != (LPROXY *)-1)
         {
             memset(&(proxy[id]), 0, sizeof(LPROXY));
             task->proxyio.left++;
             ret = id;
+        fprintf(stdout, "ret:%d\n", ret);
         }
         MUTEX_UNLOCK(task->mutex);
     }
@@ -535,16 +497,19 @@ int ltask_view_proxylist(LTASK *task, char *block)
     unsigned char *sip = NULL;
     LPROXY *proxy = NULL;
 
+        fprintf(stdout, "%d::count:%d left:%d\n", __LINE__, task->proxyio.left, task->proxyio.total);
     if(task && block && task->proxyio.total  > 0 
             && (count = task->proxyio.total - task->proxyio.left) > 0)
     {
-        MUTEX_UNLOCK(task->mutex);
+        fprintf(stdout, "%d::count:%d\n", __LINE__, count);
+        MUTEX_LOCK(task->mutex);
+        fprintf(stdout, "%d::count:%d\n", __LINE__, count);
         if((proxy = (LPROXY *)(task->proxyio.map)) && proxy != (LPROXY *)-1)
         {
             p = buf;
             p += sprintf(p, "%s", "({");
             pp = p;
-            for(i = 0; i < task->proxyio.left; i++)
+            for(i = 0; i < task->proxyio.total; i++)
             {
                 if(proxy[i].status)
                 {
@@ -602,7 +567,6 @@ int ltask_set_host_ip(LTASK *task, char *host, int *ips, int nips)
 {
     LHOST *host_node = NULL;
     int i = 0, n = 0, ret = -1;
-    struct stat st = {0};
     void *dp = NULL;
 
     if(task && host && (n = strlen(host)) > 0)
@@ -614,7 +578,7 @@ int ltask_set_host_ip(LTASK *task, char *host, int *ips, int nips)
         {
             if((task->ipio.end + nips * sizeof(int)) >= task->ipio.size)
             {
-                _MMAP_(task->ipio, st, int, IP_INCRE_NUM);
+                HIO_MMAP(task->ipio, int, IP_INCRE_NUM);
             }
             if(task->ipio.map && task->ipio.map != (void *)-1)
             {
@@ -827,7 +791,7 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
         if(dp == NULL)
         {
             if(task->hostio.end >= task->hostio.size)
-            {_MMAP_(task->hostio, st, LHOST, HOST_INCRE_NUM);}
+            {HIO_MMAP(task->hostio, LHOST, HOST_INCRE_NUM);}
             host_id = task->hostio.end/(off_t)sizeof(LHOST);
             host_node = (LHOST *)(task->hostio.map + task->hostio.end);
 	        DEBUG_LOGGER(task->logger, "%d:url[%d:%s] URL[%d:%s] path[%s]", 
@@ -1169,7 +1133,6 @@ int ltask_add_dns(LTASK *task, char *dns_ip)
 {
     int n = 0, id = -1, i = 0;
     void *dp = NULL;
-    struct stat st = {0};
     LDNS *dns = NULL;
 
     if(task && dns_ip && (n = strlen(dns_ip)) > 0)
@@ -1179,8 +1142,8 @@ int ltask_add_dns(LTASK *task, char *dns_ip)
         if((id = ((long)dp - 1)) < 0)
         {
             if(task->dnsio.left <= 0)
-            {_MMAP_(task->dnsio, st, LDNS, DNS_INCRE_NUM);}
-            if((dns = (LDNS *)(task->dnsio.map)) && dns != (LDNS *)-1)
+            {HIO_MMAP(task->dnsio, LDNS, DNS_INCRE_NUM);}
+            if((dns = HIO_MAP(task->dnsio, LDNS)))
             {
                 while(i < task->dnsio.total)
                 {
@@ -1337,8 +1300,8 @@ int ltask_add_user(LTASK *task, char *name, char *passwd)
         if((id = ((long)dp - 1)) < 0)
         {
             if(task->userio.left <= 0)
-            {_MMAP_(task->userio, st, LUSER, USER_INCRE_NUM);}
-            if((user = (LUSER *)(task->userio.map)) && user != (LUSER *)-1)
+            {HIO_MMAP(task->userio, LUSER, USER_INCRE_NUM);}
+            if((user = HIO_MAP(task->userio, LUSER)))
             {
                 while(i < task->userio.total)
                 {
