@@ -1216,16 +1216,36 @@ int ltask_pop_dns(LTASK *task, char *dns_ip)
     return id;
 }
 
-/* list dns  */
-int ltask_list_dns(LTASK *task, char *block, int *nblock)
+/* view dns  */
+int ltask_view_dns(LTASK *task, char *block)
 {
-    int n = *nblock;
+    char buf[HTTP_BUF_SIZE], *p = NULL, *pp = NULL;
+    LDNS *dns = NULL;
+    int n = -1, i = 0;
 
-    if(task && block)
+    if(task && block && task->dnsio.current > 0 
+            && (dns = (LDNS *)(task->dnsio.map)) 
+            && dns != (LDNS *)-1 )
     {
-       return n; 
+        MUTEX_LOCK(task->mutex);
+        p = buf;
+        p += sprintf(p, "({");
+        p = pp;
+        for(i = 0; i < task->dnsio.total; i++)
+        {
+            if(dns[i].status != 0)
+            {
+                p += sprintf(p, "%d:{id:'%d', name:'%s', status:'%d'},",
+                        i,  i, dns[i].name, dns[i].status);
+            }
+        }
+        if(p != pp) --p;
+        p += sprintf(p, "%s", "})");
+        n = sprintf(block, "HTTP/1.0 200 OK\r\nContent-Length:%ld\r\n"
+                "Connection:close\r\n\r\n%s", (long)(p - buf), buf);
+        MUTEX_UNLOCK(task->mutex);
     }
-    return 0;
+    return n;
 }
 
 /* add user host */
@@ -1809,7 +1829,7 @@ LTASK *ltask_init()
         task->del_dns               = ltask_del_dns;
         task->set_dns_status        = ltask_set_dns_status;
         task->pop_dns               = ltask_pop_dns;
-        task->list_dns              = ltask_list_dns;
+        task->view_dns              = ltask_view_dns;
         task->set_host_ip           = ltask_set_host_ip;
         task->get_host_ip           = ltask_get_host_ip;
         task->list_host_ip          = ltask_list_host_ip;

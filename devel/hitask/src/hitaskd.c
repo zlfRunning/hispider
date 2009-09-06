@@ -70,10 +70,12 @@ static char *e_argvs[] =
 #define E_ARGV_LINKMAP  16
     "urlnodeid",
 #define E_ARGV_URLNODEID 17
-    "level"
+    "level",
 #define E_ARGV_LEVEL    18
+    "dnsid"
+#define E_ARGV_DNSID    19
 };
-#define E_ARGV_NUM      19
+#define E_ARGV_NUM      20
 static char *e_ops[]=
 {
     "host_up",
@@ -128,10 +130,22 @@ static char *e_ops[]=
 #define E_OP_URLNODE_DELETE     24
     "urlnode_childs",
 #define E_OP_URLNODE_CHILDS     25
-    "urlnode_list"
+    "urlnode_list",
 #define E_OP_URLNODE_LIST       26
+    "dns_add",
+#define E_OP_DNS_ADD            27
+    "dns_delete",
+#define E_OP_DNS_DELETE         28
+    "dns_list",
+#define E_OP_DNS_LIST           29
+    "proxy_add",
+#define E_OP_PROXY_ADD          30
+    "proxy_delete",
+#define E_OP_PROXY_DELETE       31
+    "proxy_list"
+#define E_OP_PROXY_LIST         32
 };
-#define E_OP_NUM 27
+#define E_OP_NUM 33
 
 /* dns packet reader */
 int adns_packet_reader(CONN *conn, CB_DATA *buffer)
@@ -790,7 +804,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
 {
     int i = 0, id = 0, n = 0, op = -1, nodeid = -1, x = -1, fieldid = -1,
         parentid = -1, urlid = -1, hostid = -1, tableid = -1, type = -1, 
-        flag = -1, templateid = -1, urlnodeid = -1, level = -1;
+        flag = -1, templateid = -1, urlnodeid = -1, level = -1, dnsid = -1;
     char *p = NULL, *end = NULL, *name = NULL, *host = NULL, *url = NULL, *link = NULL, 
          *pattern = NULL, *map = NULL, *linkmap = NULL, *pp = NULL, 
          buf[HTTP_BUF_SIZE], block[HTTP_BUF_SIZE];
@@ -882,6 +896,9 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                                     break;
                                 case E_ARGV_LEVEL:
                                     level = atoi(p);
+                                    break;
+                                case E_ARGV_DNSID:
+                                    dnsid = atoi(p);
                                     break;
                                 default:
                                     break;
@@ -1213,6 +1230,29 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                             VIEW_URLNODES(conn, pp, p, buf, nodeid, urlnodes, i, n);
                             hibase->free_urlnodes(urlnodes);
                         }
+                        break;
+                    case E_OP_DNS_ADD:
+                        if(name && ltask->add_dns(ltask, name) >= 0 
+                                && (n = ltask->view_dns(ltask, block)) > 0)
+                        {
+                            conn->push_chunk(conn, block, n);
+                            goto end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_DNS_DELETE:
+                        if(dnsid >= 0 && ltask->del_dns(ltask, dnsid, NULL) >= 0 
+                                && (n = ltask->view_dns(ltask, block)) > 0)
+                        {
+                            conn->push_chunk(conn, block, n);
+                            goto end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_DNS_LIST:
+                        if((n = ltask->view_dns(ltask, block)) > 0)
+                        {
+                            conn->push_chunk(conn, block, n);
+                            goto end;
+                        }else goto err_end;
                         break;
                     default:
                         goto err_end;

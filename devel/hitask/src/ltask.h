@@ -225,7 +225,7 @@ typedef struct _LTASK
     int (*del_dns)(struct _LTASK *, int dnsid, char *dns_ip);
     int (*set_dns_status)(struct _LTASK *, int dnsid, char *dns_ip, int status);
     int (*pop_dns)(struct _LTASK *, char *dns_ip);
-    int (*list_dns)(struct _LTASK *, char *block, int *nblock);
+    int (*view_dns)(struct _LTASK *, char *block);
     int (*pop_host)(struct _LTASK *, char *host);
     int (*set_host_ip)(struct _LTASK *, char *host, int *ips, int nip);
     int (*get_host_ip)(struct _LTASK *, char *host);
