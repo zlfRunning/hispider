@@ -1793,27 +1793,18 @@ void ltask_clean(LTASK **ptask)
         if((*ptask)->mutex) {MUTEX_DESTROY((*ptask)->mutex);}
         if((*ptask)->logger) {LOGGER_CLEAN((*ptask)->logger);}
         if((*ptask)->errlogger) {LOGGER_CLEAN((*ptask)->errlogger);}
-	fprintf(stdout, "%d::OK\n", __LINE__);
         if((*ptask)->timer) {TIMER_CLEAN((*ptask)->timer);}
-	fprintf(stdout, "%d::OK\n", __LINE__);
         if((*ptask)->urlmap) {KVMAP_CLEAN((*ptask)->urlmap);}
-	fprintf(stdout, "%d::OK\n", __LINE__);
         if((*ptask)->table) {TRIETAB_CLEAN((*ptask)->table);}
-	fprintf(stdout, "%d::OK\n", __LINE__);
         if((*ptask)->users) {TRIETAB_CLEAN((*ptask)->users);}
-	fprintf(stdout, "%d::OK\n", __LINE__);
         if((*ptask)->cookies) {TRIETAB_CLEAN((*ptask)->cookies);}
-	fprintf(stdout, "%d::OK\n", __LINE__);
         if((*ptask)->qtask){FQUEUE_CLEAN((*ptask)->qtask);}
-	fprintf(stdout, "%d::OK\n", __LINE__);
         if((*ptask)->qproxy){QUEUE_CLEAN((*ptask)->qproxy);}
-	fprintf(stdout, "%d::OK\n", __LINE__);
         if((*ptask)->key_fd > 0) close((*ptask)->key_fd);
         if((*ptask)->url_fd > 0) close((*ptask)->url_fd);
         if((*ptask)->domain_fd > 0) close((*ptask)->domain_fd);
         if((*ptask)->doc_fd > 0) close((*ptask)->doc_fd);
         if((*ptask)->cookie_fd > 0) close((*ptask)->cookie_fd);
-	fprintf(stdout, "%d::OK\n", __LINE__);
         if((*ptask)->state_fd > 0) 
         {
 	    msync((*ptask)->state, sizeof(LSTATE), MS_SYNC);
