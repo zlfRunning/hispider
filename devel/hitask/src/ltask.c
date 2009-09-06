@@ -241,6 +241,7 @@ int ltask_set_basedir(LTASK *task, char *dir)
         }
         if(task->dnsio.total > 0 && (dns = HIO_MAP(task->dnsio, LDNS)))
         {
+            task->dnsio.left = 0;
             i = 0;
             do
             {
@@ -497,13 +498,10 @@ int ltask_view_proxylist(LTASK *task, char *block)
     unsigned char *sip = NULL;
     LPROXY *proxy = NULL;
 
-        fprintf(stdout, "%d::count:%d left:%d\n", __LINE__, task->proxyio.left, task->proxyio.total);
     if(task && block && task->proxyio.total  > 0 
             && (count = task->proxyio.total - task->proxyio.left) > 0)
     {
-        fprintf(stdout, "%d::count:%d\n", __LINE__, count);
         MUTEX_LOCK(task->mutex);
-        fprintf(stdout, "%d::count:%d\n", __LINE__, count);
         if((proxy = (LPROXY *)(task->proxyio.map)) && proxy != (LPROXY *)-1)
         {
             p = buf;
@@ -1141,7 +1139,7 @@ int ltask_add_dns(LTASK *task, char *dns_ip)
         TRIETAB_GET(task->table, dns_ip, n, dp);
         if((id = ((long)dp - 1)) < 0)
         {
-            if(task->dnsio.left <= 0)
+            if(task->dnsio.left == 0)
             {HIO_MMAP(task->dnsio, LDNS, DNS_INCRE_NUM);}
             if((dns = HIO_MAP(task->dnsio, LDNS)))
             {
