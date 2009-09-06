@@ -401,7 +401,8 @@ int ltask_add_proxy(LTASK *task, char *host)
         if(e && dp == NULL)
         {
             if(task->proxyio.left == 0){_MMAP_(task->proxyio, st, LPROXY, PROXY_INCRE_NUM);}
-            if(task->proxyio.left > 0 && (proxy = (LPROXY *)(task->proxyio.map)))
+            if(task->proxyio.left > 0 && (proxy = (LPROXY *)(task->proxyio.map)) 
+                    && proxy != (LPROXY *)-1)
             {
                 i = 0;
                 do
@@ -448,12 +449,12 @@ int ltask_get_proxy(LTASK *task, LPROXY *proxy)
         {
             do
             {
-                if(QUEUE_POP(task->qproxy, int, &id) == 0)
+                if(QUEUE_POP(task->qproxy, int, &id) == 0 && id >= 0 && id < task->proxyio.total
+                    && (node = (LPROXY *)(task->proxyio.map)) && node != (LPROXY *)-1)
                 {
-                    node = (LPROXY *)(task->proxyio.map + id * sizeof(LPROXY));
-                    if(node->status == PROXY_STATUS_OK)
+                    if(node[id].status == PROXY_STATUS_OK)
                     {
-                        memcpy(proxy, node, sizeof(LPROXY));
+                        memcpy(proxy, &(node[id]), sizeof(LPROXY));
                         break;
                     }
                     else 
@@ -469,31 +470,99 @@ int ltask_get_proxy(LTASK *task, LPROXY *proxy)
     return ret;
 }
 
-/* delete proxy */
-int ltask_set_proxy_status(LTASK *task, int id, char *host, short status)
+/* set proxy status */
+int ltask_set_proxy_status(LTASK *task, int hostid, char *host, short status)
 {
-    int ret = -1, n = 0, i = -1;
+    int ret = -1, n = 0, id = -1, count = 0;
     LPROXY *proxy = NULL;
     void *dp = NULL;
 
-    if(task && (id >= 0  || host))
+    if(task && (hostid >= 0  || host) && (count = task->proxyio.total - task->proxyio.left) > 0)
     {
         MUTEX_LOCK(task->mutex);
         if(host)
         {
             n = strlen(host);
             TRIETAB_GET(task->table, host, n, dp);
-            if(dp) i = (long)dp - 1;
+            if(dp) id = (long)dp - 1;
         }
-        else i = id;
-        if(i >= 0 && i < task->proxyio.total)
+        else id = hostid;
+        if(id >= 0 && id < task->proxyio.total 
+                && (proxy = (LPROXY *)(task->proxyio.map)) && proxy != (LPROXY *)-1)
         {
-            proxy = (LPROXY *)(task->proxyio.map + i * sizeof(LPROXY));
-            proxy->status = status;
+            proxy[id].status = status;
+            ret = id;
         }
         MUTEX_UNLOCK(task->mutex);
     }
     return ret;
+}
+
+/* delete proxy */
+int ltask_del_proxy(LTASK *task, int hostid, char *host)
+{
+    int ret = -1, n = 0, id = -1, count = 0;
+    LPROXY *proxy = NULL;
+    void *dp = NULL;
+
+    if(task && (hostid >= 0  || host) && (count = task->proxyio.total - task->proxyio.left) > 0)
+    {
+        MUTEX_LOCK(task->mutex);
+        if(host)
+        {
+            n = strlen(host);
+            TRIETAB_GET(task->table, host, n, dp);
+            if(dp) id = (long)dp - 1;
+        }
+        else id = hostid;
+        if(id >= 0 && id < task->proxyio.total 
+                && (proxy = (LPROXY *)(task->proxyio.map)) && proxy != (LPROXY *)-1)
+        {
+            memset(&(proxy[id]), 0, sizeof(LPROXY));
+            task->proxyio.left++;
+            ret = id;
+        }
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return ret;
+}
+
+/* view proxy host */
+int ltask_view_proxylist(LTASK *task, char *block)
+{
+    char buf[HTTP_BUF_SIZE], *p = NULL, *pp = NULL;
+    int n = -1, i = 0, count = 0;
+    unsigned char *sip = NULL;
+    LPROXY *proxy = NULL;
+
+    if(task && block && task->proxyio.total  > 0 
+            && (count = task->proxyio.total - task->proxyio.left) > 0)
+    {
+        MUTEX_UNLOCK(task->mutex);
+        if((proxy = (LPROXY *)(task->proxyio.map)) && proxy != (LPROXY *)-1)
+        {
+            p = buf;
+            p += sprintf(p, "%s", "({");
+            pp = p;
+            for(i = 0; i < task->proxyio.left; i++)
+            {
+                if(proxy[i].status)
+                {
+                    sip = (unsigned char *)&(proxy[i].ip);
+                    p += sprintf(p, "%s", "({");
+                    p += sprintf(p, "%d:{id:'%d', host:'%d.%d.%d.%d:%d', status:'%d'},", 
+                            i, i, sip[0], sip[1], sip[2], sip[3], 
+                            proxy[i].port, proxy[i].status);
+                }
+            }
+            if(pp != p) --p;
+            p += sprintf(p, "%s", "})");
+            n = sprintf(block, "HTTP/1.0 200 OK\r\nContent-Length:%ld\r\n"
+                    "Connection:close\r\n\r\n%s", (long)(p - buf), buf);
+        }
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return n;
 }
 
 /* pop host for DNS resolving */
@@ -1193,22 +1262,25 @@ int ltask_set_dns_status(LTASK *task, int dns_id, char *dns_ip, int status)
 /* pop dns */
 int ltask_pop_dns(LTASK *task, char *dns_ip)
 {
-    int id = -1, i = 0;
+    int id = -1, i = 0, count = 0;
     LDNS *dns = NULL;
 
-    if(task && dns_ip && task->dnsio.current > 0 
-            && (dns = (LDNS *)(task->dnsio.map)) && dns != (LDNS *)-1 )
+    if(task && dns_ip && task->dnsio.current > 0  
+            && (count = task->dnsio.total - task->dnsio.left) > 0)
     {
         MUTEX_LOCK(task->mutex);
-        for(i = 0; i < task->dnsio.total; i++)
+        if((dns = (LDNS *)(task->dnsio.map)) && dns != (LDNS *)-1 )
         {
-            if(dns[i].status == DNS_STATUS_READY)
+            for(i = 0; i < task->dnsio.total; i++)
             {
-                id = i;
-                strcpy(dns_ip, dns[i].name);
-                dns[i].status = DNS_STATUS_OK;
-                task->dnsio.current--;
-                break;
+                if(dns[i].status == DNS_STATUS_READY)
+                {
+                    id = i;
+                    strcpy(dns_ip, dns[i].name);
+                    dns[i].status = DNS_STATUS_OK;
+                    task->dnsio.current--;
+                    break;
+                }
             }
         }
         MUTEX_UNLOCK(task->mutex);
@@ -1217,32 +1289,33 @@ int ltask_pop_dns(LTASK *task, char *dns_ip)
 }
 
 /* view dns  */
-int ltask_view_dns(LTASK *task, char *block)
+int ltask_view_dnslist(LTASK *task, char *block)
 {
     char buf[HTTP_BUF_SIZE], *p = NULL, *pp = NULL;
+    int n = -1, i = 0, count = 0;
     LDNS *dns = NULL;
-    int n = -1, i = 0;
 
-    if(task && block && task->dnsio.current > 0 
-            && (dns = (LDNS *)(task->dnsio.map)) 
-            && dns != (LDNS *)-1 )
+    if(task && block && (count = task->dnsio.total - task->dnsio.left) > 0)
     {
         MUTEX_LOCK(task->mutex);
-        p = buf;
-        p += sprintf(p, "({");
-        p = pp;
-        for(i = 0; i < task->dnsio.total; i++)
+        if((dns = (LDNS *)(task->dnsio.map)) && dns != (LDNS *)-1)
         {
-            if(dns[i].status != 0)
+            p = buf;
+            p += sprintf(p, "%s", "({");
+            pp = p;
+            for(i = 0; i < task->dnsio.total; i++)
             {
-                p += sprintf(p, "%d:{id:'%d', name:'%s', status:'%d'},",
-                        i,  i, dns[i].name, dns[i].status);
+                if(dns[i].status != 0)
+                {
+                    p += sprintf(p, "%d:{id:'%d', host:'%s', status:'%d'},",
+                            i,  i, dns[i].name, dns[i].status);
+                }
             }
+            if(p != pp) --p;
+            p += sprintf(p, "%s", "})");
+            n = sprintf(block, "HTTP/1.0 200 OK\r\nContent-Length:%ld\r\n"
+                    "Connection:close\r\n\r\n%s", (long)(p - buf), buf);
         }
-        if(p != pp) --p;
-        p += sprintf(p, "%s", "})");
-        n = sprintf(block, "HTTP/1.0 200 OK\r\nContent-Length:%ld\r\n"
-                "Connection:close\r\n\r\n%s", (long)(p - buf), buf);
         MUTEX_UNLOCK(task->mutex);
     }
     return n;
@@ -1824,12 +1897,14 @@ LTASK *ltask_init()
         task->add_proxy             = ltask_add_proxy;
         task->get_proxy             = ltask_get_proxy;
         task->set_proxy_status      = ltask_set_proxy_status;
+        task->del_proxy             = ltask_del_proxy;
+        task->view_proxylist        = ltask_view_proxylist;
         task->pop_host              = ltask_pop_host;
         task->add_dns               = ltask_add_dns;
         task->del_dns               = ltask_del_dns;
         task->set_dns_status        = ltask_set_dns_status;
         task->pop_dns               = ltask_pop_dns;
-        task->view_dns              = ltask_view_dns;
+        task->view_dnslist          = ltask_view_dnslist;
         task->set_host_ip           = ltask_set_host_ip;
         task->get_host_ip           = ltask_get_host_ip;
         task->list_host_ip          = ltask_list_host_ip;

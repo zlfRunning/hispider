@@ -221,11 +221,13 @@ typedef struct _LTASK
     int (*add_proxy)(struct _LTASK *, char *host);
     int (*get_proxy)(struct _LTASK *, LPROXY *proxy);
     int (*set_proxy_status)(struct _LTASK *, int id, char *host, short status);
+    int (*del_proxy)(struct _LTASK *, int id, char *host);
+    int (*view_proxylist)(struct _LTASK *, char *block);
     int (*add_dns)(struct _LTASK *, char *dns_ip);
     int (*del_dns)(struct _LTASK *, int dnsid, char *dns_ip);
     int (*set_dns_status)(struct _LTASK *, int dnsid, char *dns_ip, int status);
     int (*pop_dns)(struct _LTASK *, char *dns_ip);
-    int (*view_dns)(struct _LTASK *, char *block);
+    int (*view_dnslist)(struct _LTASK *, char *block);
     int (*pop_host)(struct _LTASK *, char *host);
     int (*set_host_ip)(struct _LTASK *, char *host, int *ips, int nip);
     int (*get_host_ip)(struct _LTASK *, char *host);

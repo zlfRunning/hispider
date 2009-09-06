@@ -70,12 +70,10 @@ static char *e_argvs[] =
 #define E_ARGV_LINKMAP  16
     "urlnodeid",
 #define E_ARGV_URLNODEID 17
-    "level",
-#define E_ARGV_LEVEL    18
-    "dnsid"
-#define E_ARGV_DNSID    19
+    "level"
+#define E_ARGV_LEVEL     18
 };
-#define E_ARGV_NUM      20
+#define E_ARGV_NUM       19
 static char *e_ops[]=
 {
     "host_up",
@@ -804,7 +802,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
 {
     int i = 0, id = 0, n = 0, op = -1, nodeid = -1, x = -1, fieldid = -1,
         parentid = -1, urlid = -1, hostid = -1, tableid = -1, type = -1, 
-        flag = -1, templateid = -1, urlnodeid = -1, level = -1, dnsid = -1;
+        flag = -1, templateid = -1, urlnodeid = -1, level = -1, port = -1;
     char *p = NULL, *end = NULL, *name = NULL, *host = NULL, *url = NULL, *link = NULL, 
          *pattern = NULL, *map = NULL, *linkmap = NULL, *pp = NULL, 
          buf[HTTP_BUF_SIZE], block[HTTP_BUF_SIZE];
@@ -896,9 +894,6 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                                     break;
                                 case E_ARGV_LEVEL:
                                     level = atoi(p);
-                                    break;
-                                case E_ARGV_DNSID:
-                                    dnsid = atoi(p);
                                     break;
                                 default:
                                     break;
@@ -1233,22 +1228,45 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         break;
                     case E_OP_DNS_ADD:
                         if(name && ltask->add_dns(ltask, name) >= 0 
-                                && (n = ltask->view_dns(ltask, block)) > 0)
+                                && (n = ltask->view_dnslist(ltask, block)) > 0)
                         {
                             conn->push_chunk(conn, block, n);
                             goto end;
                         }else goto err_end;
                         break;
                     case E_OP_DNS_DELETE:
-                        if(dnsid >= 0 && ltask->del_dns(ltask, dnsid, NULL) >= 0 
-                                && (n = ltask->view_dns(ltask, block)) > 0)
+                        if(hostid >= 0 && ltask->del_dns(ltask, hostid, NULL) >= 0 
+                                && (n = ltask->view_dnslist(ltask, block)) > 0)
                         {
                             conn->push_chunk(conn, block, n);
                             goto end;
                         }else goto err_end;
                         break;
                     case E_OP_DNS_LIST:
-                        if((n = ltask->view_dns(ltask, block)) > 0)
+                        if((n = ltask->view_dnslist(ltask, block)) > 0)
+                        {
+                            conn->push_chunk(conn, block, n);
+                            goto end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_PROXY_ADD:
+                        if(host && ltask->add_proxy(ltask, host) >= 0
+                                && (n = ltask->view_proxylist(ltask, block)) > 0)
+                        {
+                            conn->push_chunk(conn, block, n);
+                            goto end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_PROXY_DELETE:
+                        if(hostid >= 0 && ltask->del_proxy(ltask, hostid, NULL) >= 0 
+                                && (n = ltask->view_proxylist(ltask, block)) > 0)
+                        {
+                            conn->push_chunk(conn, block, n);
+                            goto end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_PROXY_LIST:
+                        if((n = ltask->view_proxylist(ltask, block)) > 0)
                         {
                             conn->push_chunk(conn, block, n);
                             goto end;
