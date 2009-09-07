@@ -519,8 +519,8 @@ int ltask_view_proxylist(LTASK *task, char *block)
             }
             if(pp != p) --p;
             p += sprintf(p, "%s", "})");
-            n = sprintf(block, "HTTP/1.0 200 OK\r\nContent-Length:%ld\r\n"
-                    "Connection:close\r\n\r\n%s", (long)(p - buf), buf);
+            n = sprintf(block, "HTTP/1.0 200 OK\r\nContent-Type:text/html\r\n"
+                    "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (long)(p - buf), buf);
         }
         MUTEX_UNLOCK(task->mutex);
     }
@@ -1273,8 +1273,8 @@ int ltask_view_dnslist(LTASK *task, char *block)
             }
             if(p != pp) --p;
             p += sprintf(p, "%s", "}})");
-            n = sprintf(block, "HTTP/1.0 200 OK\r\nContent-Length:%ld\r\n"
-                    "Connection:close\r\n\r\n%s", (long)(p - buf), buf);
+            n = sprintf(block, "HTTP/1.0 200 OK\r\nContent-Type:text/html\r\n"
+                    "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (long)(p - buf), buf);
         }
         MUTEX_UNLOCK(task->mutex);
     }
