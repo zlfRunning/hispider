@@ -802,7 +802,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
 {
     int i = 0, id = 0, n = 0, op = -1, nodeid = -1, x = -1, fieldid = -1,
         parentid = -1, urlid = -1, hostid = -1, tableid = -1, type = -1, 
-        flag = -1, templateid = -1, urlnodeid = -1, level = -1, port = -1;
+        flag = -1, templateid = -1, urlnodeid = -1, level = -1;
     char *p = NULL, *end = NULL, *name = NULL, *host = NULL, *url = NULL, *link = NULL, 
          *pattern = NULL, *map = NULL, *linkmap = NULL, *pp = NULL, 
          buf[HTTP_BUF_SIZE], block[HTTP_BUF_SIZE];
