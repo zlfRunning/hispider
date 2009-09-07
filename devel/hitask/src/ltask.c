@@ -358,34 +358,34 @@ int ltask_add_proxy(LTASK *task, char *host)
         TRIETAB_GET(task->table, host, n, dp);
         if(e && dp == NULL)
         {
-            fprintf(stdout, "%d:%s:%s\n", __LINE__, ip, pp);
+            //fprintf(stdout, "%d:%s:%s\n", __LINE__, ip, pp);
             if(task->proxyio.left == 0){HIO_MMAP(task->proxyio, LPROXY, PROXY_INCRE_NUM);}
             if(task->proxyio.left > 0 && (proxy = HIO_MAP(task->proxyio, LPROXY)))
             {
-                fprintf(stdout, "%d:%s:%s\n", __LINE__, ip, pp);
+                //fprintf(stdout, "%d:%s:%s\n", __LINE__, ip, pp);
                 i = 0;
                 do
                 {
                     if(proxy->status != (short)PROXY_STATUS_OK)
                     {
-                        fprintf(stdout, "%d:%s:%s:%d\n", __LINE__, ip, pp, task->proxyio.left);
                         dp = (void *)((long)(i+1));
                         TRIETAB_ADD(task->table, host, n, dp);
                         px = &i;
                         QUEUE_PUSH(task->qproxy, int, px);
                         proxy->status = (short)PROXY_STATUS_OK;
                         *e = '\0';
+                        //fprintf(stdout, "%d:%s:%s:%d\n", __LINE__, ip, pp, task->proxyio.left);
                         proxy->ip = (int)inet_addr(ip);
                         proxy->port = (unsigned short)atoi(pp);
-                        unsigned char *s = (unsigned char *)&(proxy->ip);
                         /*
+                        unsigned char *s = (unsigned char *)&(proxy->ip);
                            fprintf(stdout, "%d::%s %d:%d.%d.%d.%d:%d\n", 
                            __LINE__, host, proxy->ip, 
                            s[0], s[1], s[2], s[3], proxy->port);
                            */
                         task->proxyio.left--;
                         ret = i;
-                        fprintf(stdout, "%d:%s:%s:%d:%d\n", __LINE__, ip, pp, task->proxyio.left, i);
+                        //fprintf(stdout, "%d:%s:%s:%d:%d\n", __LINE__, ip, pp, task->proxyio.left, i);
                         break;
                     }
                     ++proxy;
@@ -512,7 +512,6 @@ int ltask_view_proxylist(LTASK *task, char *block)
                 if(proxy[i].status)
                 {
                     sip = (unsigned char *)&(proxy[i].ip);
-                    p += sprintf(p, "%s", "({");
                     p += sprintf(p, "%d:{id:'%d', host:'%d.%d.%d.%d:%d', status:'%d'},", 
                             i, i, sip[0], sip[1], sip[2], sip[3], 
                             proxy[i].port, proxy[i].status);
@@ -1262,18 +1261,18 @@ int ltask_view_dnslist(LTASK *task, char *block)
         if((dns = (LDNS *)(task->dnsio.map)) && dns != (LDNS *)-1)
         {
             p = buf;
-            p += sprintf(p, "%s", "({");
+            p += sprintf(p, "%s", "({dnslist:{");
             pp = p;
             for(i = 0; i < task->dnsio.total; i++)
             {
                 if(dns[i].status != 0)
                 {
                     p += sprintf(p, "%d:{id:'%d', host:'%s', status:'%d'},",
-                            i,  i, dns[i].name, dns[i].status);
+                            i, i, dns[i].name, dns[i].status);
                 }
             }
             if(p != pp) --p;
-            p += sprintf(p, "%s", "})");
+            p += sprintf(p, "%s", "}})");
             n = sprintf(block, "HTTP/1.0 200 OK\r\nContent-Length:%ld\r\n"
                     "Connection:close\r\n\r\n%s", (long)(p - buf), buf);
         }
@@ -1287,7 +1286,6 @@ int ltask_add_user(LTASK *task, char *name, char *passwd)
 {
     int n = 0, id = -1, i = 0, x = 0;
     void *dp = NULL;
-    struct stat st = {0};
     LUSER *user = NULL;
     unsigned char key[MD5_LEN];
 
