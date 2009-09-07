@@ -464,6 +464,8 @@ int ltask_del_proxy(LTASK *task, int hostid, char *host)
 {
     int ret = -1, n = 0, id = -1, count = 0;
     LPROXY *proxy = NULL;
+    char hostip[HTTP_URL_MAX], *p = NULL;
+    unsigned char *sip = NULL;
     void *dp = NULL;
 
     if(task && (hostid >= 0  || host) && (count = task->proxyio.total - task->proxyio.left) > 0)
@@ -476,14 +478,18 @@ int ltask_del_proxy(LTASK *task, int hostid, char *host)
             if(dp) id = (long)dp - 1;
         }
         else id = hostid;
-        fprintf(stdout, "id:%d\n", id);
+        //fprintf(stdout, "id:%d\n", id);
         if(id >= 0 && id < task->proxyio.total 
                 && (proxy = (LPROXY *)(task->proxyio.map)) && proxy != (LPROXY *)-1)
         {
+            sip = (unsigned char *)&(proxy[id].ip);
+            n = sprintf(hostip, "%d.%d.%d.%d:%d", sip[0], sip[1], sip[2], sip[3], proxy[id].port);
+            p = hostip;
+            TRIETAB_DEL(task->table, p, n, dp);
             memset(&(proxy[id]), 0, sizeof(LPROXY));
             task->proxyio.left++;
             ret = id;
-        fprintf(stdout, "ret:%d\n", ret);
+            //fprintf(stdout, "ret:%d\n", ret);
         }
         MUTEX_UNLOCK(task->mutex);
     }
@@ -512,7 +518,7 @@ int ltask_view_proxylist(LTASK *task, char *block)
                 if(proxy[i].status)
                 {
                     sip = (unsigned char *)&(proxy[i].ip);
-                    p += sprintf(p, "%d:{id:'%d', host:'%d.%d.%d.%d:%d', status:'%d'},", 
+                    p += sprintf(p, "'%d':{'id':'%d', 'host':'%d.%d.%d.%d:%d', 'status':'%d'},", 
                             i, i, sip[0], sip[1], sip[2], sip[3], 
                             proxy[i].port, proxy[i].status);
                 }
@@ -1261,13 +1267,13 @@ int ltask_view_dnslist(LTASK *task, char *block)
         if((dns = (LDNS *)(task->dnsio.map)) && dns != (LDNS *)-1)
         {
             p = buf;
-            p += sprintf(p, "%s", "({dnslist:{");
+            p += sprintf(p, "%s", "({'dnslist':{");
             pp = p;
             for(i = 0; i < task->dnsio.total; i++)
             {
                 if(dns[i].status != 0)
                 {
-                    p += sprintf(p, "%d:{id:'%d', host:'%s', status:'%d'},",
+                    p += sprintf(p, "'%d':{'id':'%d', 'host':'%s', 'status':'%d'},",
                             i, i, dns[i].name, dns[i].status);
                 }
             }
@@ -1496,10 +1502,10 @@ int ltask_get_stateinfo(LTASK *task, char *block)
             task->state->last_doc_size = task->state->doc_total_size;
         }
         p = (char *)running_ops[task->state->running];
-        n = sprintf(buf, "({status:'%s',url_total:'%d',url_tasks:'%d', url_ok:'%d',"
-                "url_error:'%d', doc_total_zsize:'%lld', doc_total_size:'%lld',"
-                "host_current:'%d', host_total:'%d', t_day:'%d', t_hour:'%d',"
-                "t_min:'%d', t_sec:'%d', t_usec:'%d', speed:'%f'})", 
+        n = sprintf(buf, "({'status':'%s','url_total':'%d','url_tasks':'%d', 'url_ok':'%d',"
+                "'url_error':'%d', 'doc_total_zsize':'%lld', 'doc_total_size':'%lld',"
+                "'host_current':'%d', 'host_total':'%d', 't_day':'%d', 't_hour':'%d',"
+                "'t_min':'%d', 't_sec':'%d', 't_usec':'%d', 'speed':'%f'})", 
                 p, task->state->url_total, task->state->url_tasks,
                 task->state->url_ok, task->state->url_error, task->state->doc_total_zsize, 
                 task->state->doc_total_size, task->state->host_current, task->state->host_total, 

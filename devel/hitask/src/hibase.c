@@ -11,13 +11,13 @@
 #include "logger.h"
 #include "base64.h"
 #include "hio.h"
-#define  HIBASE_TABLE_NAME   		"hibase.table"
-#define  HIBASE_TEMPLATE_NAME 		"hibase.template"
-#define  HIBASE_PNODE_NAME 		    "hibase.pnode"
-#define  HIBASE_URLNODE_NAME 		"hibase.urlnode"
-#define  HIBASE_QPNODE_NAME 		"hibase.qpnode"
-#define  HIBASE_QTEMPLATE_NAME 		"hibase.qtemplate"
-#define  HIBASE_QURLNODE_NAME 		"hibase.qurlnode"
+#define  HIBASE_TABLE_NAME          "hibase.table"
+#define  HIBASE_TEMPLATE_NAME       "hibase.template"
+#define  HIBASE_PNODE_NAME          "hibase.pnode"
+#define  HIBASE_URLNODE_NAME        "hibase.urlnode"
+#define  HIBASE_QPNODE_NAME         "hibase.qpnode"
+#define  HIBASE_QTEMPLATE_NAME      "hibase.qtemplate"
+#define  HIBASE_QURLNODE_NAME       "hibase.qurlnode"
 #define _EXIT_(format...)                                                               \
 do                                                                                      \
 {                                                                                       \
@@ -155,7 +155,7 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
         hibase_mkdir(hibase->basedir, 0755);
         //resume table
         p = path;
-        sprintf(path, "%s%s", hibase->basedir, HIBASE_TABLE_NAME);	
+        sprintf(path, "%s%s", hibase->basedir, HIBASE_TABLE_NAME);  
         HIO_INIT(hibase->tableio, p, st, ITABLE);
         HIO_MMAP(hibase->tableio, ITABLE, TABLE_INCRE_NUM); 
         if(hibase->tableio.fd > 0 && (table = HIO_MAP(hibase->tableio, ITABLE)))
@@ -188,7 +188,7 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
         sprintf(path, "%s%s", hibase->basedir, HIBASE_QTEMPLATE_NAME);
         p = path;
         FQUEUE_INIT(hibase->qtemplate, p, int);
-        sprintf(path, "%s%s", hibase->basedir, HIBASE_TEMPLATE_NAME);	
+        sprintf(path, "%s%s", hibase->basedir, HIBASE_TEMPLATE_NAME);   
         HIO_INIT(hibase->templateio, p, st, ITEMPLATE);
         HIO_MMAP(hibase->templateio, ITEMPLATE, TEMPLATE_INCRE_NUM); 
         if(hibase->templateio.fd > 0 && (template = HIO_MAP(hibase->templateio, ITEMPLATE)))
@@ -207,7 +207,7 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
         sprintf(path, "%s%s", hibase->basedir, HIBASE_QPNODE_NAME);
         p = path;
         FQUEUE_INIT(hibase->qpnode, p, int);
-        sprintf(path, "%s%s", hibase->basedir, HIBASE_PNODE_NAME);	
+        sprintf(path, "%s%s", hibase->basedir, HIBASE_PNODE_NAME);  
         HIO_INIT(hibase->pnodeio, p, st, PNODE);
         HIO_MMAP(hibase->pnodeio, PNODE, PNODE_INCRE_NUM); 
         if(hibase->pnodeio.fd  > 0 && (pnode = HIO_MAP(hibase->pnodeio, PNODE)))
@@ -575,16 +575,17 @@ int hibase_view_table(HIBASE *hibase, int tableid, char *block)
             && tab[tableid].status == TAB_STATUS_OK)
         {
             p = buf;
-            p += sprintf(p, "({id:'%d', name:'%s', nfields:'%d', fields:[", 
+            p += sprintf(p, "({'id':'%d', 'name':'%s', 'nfields':'%d', 'fields':[", 
                     tableid, tab[tableid].name, tab[tableid].nfields);
             pp = p;
             for(i = 0; i < FIELD_NUM_MAX; i++)
             {
                 if(tab[tableid].fields[i].status == FIELD_STATUS_OK)
                 {
-                    p += sprintf(p, "{id:'%d', name:'%s', type:'%d', flag:'%d', status:'%d'},",
-                            i, tab[tableid].fields[i].name, tab[tableid].fields[i].type,
-                            tab[tableid].fields[i].flag, tab[tableid].fields[i].status);
+                    p += sprintf(p, "{'id':'%d', 'name':'%s', 'type':'%d', "
+                            "'flag':'%d', 'status':'%d'},", i, tab[tableid].fields[i].name, 
+                            tab[tableid].fields[i].type, tab[tableid].fields[i].flag, 
+                            tab[tableid].fields[i].status);
                 }
             }
             if(p != pp) --p;
@@ -610,12 +611,12 @@ int hibase_list_table(HIBASE *hibase, char *block)
         if((tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1)
         {
             p = buf;
-            p += sprintf(p, "%s","({tables:[");
+            p += sprintf(p, "%s","({'tables':[");
             pp = p;
             for(i = 0; i < hibase->tableio.total; i++)
             {
                 if(tab[i].status == TAB_STATUS_OK)
-                    p += sprintf(p, "{id:'%d', name:'%s', nfields:'%d'},", 
+                    p += sprintf(p, "{'id':'%d', 'name':'%s', 'nfields':'%d'},", 
                             i, tab[i].name, tab[i].nfields);
             }
             if(p == pp) ret = 0;
@@ -645,20 +646,20 @@ int hibase_view_database(HIBASE *hibase, char *block)
         if((tab = (ITABLE *)(hibase->tableio.map)) && tab != (ITABLE *)-1)
         {
             p = buf;
-            p += sprintf(p, "%s","({tables:{");
+            p += sprintf(p, "%s","({'tables':{");
             pp = p;
             for(i = 0; i < hibase->tableio.total; i++)
             {
                 if(tab[i].status == TAB_STATUS_OK)
                 {
-                    p += sprintf(p, "%d:{id:'%d', name:'%s', nfields:'%d', fields:{", 
+                    p += sprintf(p, "'%d':{'id':'%d', 'name':'%s', 'nfields':'%d', 'fields':{", 
                         i, i, tab[i].name, tab[i].nfields);
                     ppp = p;
                     for(j = 0; j < FIELD_NUM_MAX; j++)
                     {
                         if(tab[i].fields[j].status == FIELD_STATUS_OK)
                         {
-                            p += sprintf(p, "%d:{id:'%d', name:'%s', type:'%d', "
+                            p += sprintf(p, "'%d':{'id':'%d', 'name':'%s', 'type':'%d', "
                                     "flag:'%d', status:'%d'},", j, j, tab[i].fields[j].name, 
                                     tab[i].fields[j].type, tab[i].fields[j].flag, 
                                     tab[i].fields[j].status);
@@ -821,15 +822,15 @@ int hibase_view_pnode_childs(HIBASE *hibase, int pnodeid, char *block)
         {
             parent = &(pnode[pnodeid]);
             p = buf;
-            p += sprintf(p, "({id:'%d',nchilds:'%d', childs:[", pnodeid, parent->nchilds);
+            p += sprintf(p, "({'id':'%d','nchilds':'%d', 'childs':[", pnodeid, parent->nchilds);
             x = parent->first;
             while(i < parent->nchilds && x >= 0 && x < hibase->pnodeio.total)
             {
                 if(i < (parent->nchilds - 1))
-                    p += sprintf(p, "{id:'%d',name:'%s',nchilds:'%d'},",
+                    p += sprintf(p, "{'id':'%d','name':'%s','nchilds':'%d'},",
                             pnode[x].id, pnode[x].name, pnode[x].nchilds);
                 else
-                    p += sprintf(p, "{'id':'%d','name':'%s',nchilds:'%d'}",
+                    p += sprintf(p, "{'id':'%d','name':'%s','nchilds':'%d'}",
                             pnode[x].id, pnode[x].name, pnode[x].nchilds);
                 x = pnode[x].next;
                 i++;
@@ -1101,7 +1102,7 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
             && ptemplate != (ITEMPLATE *)-1)
         {
             p = buf;
-            p += sprintf(p, "({id:'%d', name:'%s', ntemplates:'%d', templates:[", 
+            p += sprintf(p, "({'id':'%d', 'name':'%s', 'ntemplates':'%d', 'templates':[", 
                     pnodeid, pnode[pnodeid].name, pnode[pnodeid].ntemplates);
             if(pnode[pnodeid].ntemplates > 0)
             {
@@ -1116,24 +1117,25 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
                     }
                     else pattern = "";
                     //fprintf(stdout, "%d::%s\n%s\n", __LINE__, ptemplate[x].pattern, pattern);
-                    p += sprintf(p, "{id:'%d', flags:'%d', pattern:'%s', link:'%s',",
+                    p += sprintf(p, "{'id':'%d', 'flags':'%d', 'pattern':'%s', 'link':'%s',",
                             x, ptemplate[x].flags, pattern, ptemplate[x].link);
                     {
-                        p += sprintf(p, "linkmap:{tableid:'%d', fieldid:'%d', "
-                                "nodeid:'%d', flag:'%d'},", 
+                        p += sprintf(p, "'linkmap':{'tableid':'%d','fieldid':'%d', "
+                                "'nodeid':'%d', 'flag':'%d'},", 
                             ptemplate[x].linkmap.tableid, ptemplate[x].linkmap.fieldid,
                             ptemplate[x].linkmap.nodeid, ptemplate[x].linkmap.flag);
                     }
-                    p += sprintf(p, "url:'%s', nfields:'%d', map:[", 
+                    p += sprintf(p, "'url':'%s', 'nfields':'%d', 'map':[", 
                             ptemplate[x].url, ptemplate[x].nfields);
                     if(ptemplate[x].nfields > 0)
                     {
                         i = 0;
                         while(i < ptemplate[x].nfields && ptemplate[x].nfields < FIELD_NUM_MAX)
                         {
-                            p += sprintf(p, "{tableid:'%d', fieldid:'%d', nodeid:'%d', flag:'%d'},", 
-                                    ptemplate[x].map[i].tableid, ptemplate[x].map[i].fieldid,
-                                    ptemplate[x].map[i].nodeid, ptemplate[x].map[i].flag);
+                            p += sprintf(p, "{'tableid':'%d', 'fieldid':'%d', 'nodeid':'%d', "
+                                    "'flag':'%d'},", ptemplate[x].map[i].tableid, 
+                                    ptemplate[x].map[i].fieldid, ptemplate[x].map[i].nodeid, 
+                                    ptemplate[x].map[i].flag);
                             i++;
                         }
                         --p;

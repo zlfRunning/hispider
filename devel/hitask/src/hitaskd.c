@@ -777,16 +777,16 @@ do                                                                              
 {                                                                                               \
     if((p = pp = (char *)calloc(1, URLNODE_BLOCK_MAX)))                                         \
     {                                                                                           \
-        p += sprintf(p, "({nodeid:'%d', nurlnodes:'%d', urlnodes:{", node_id, count);           \
+        p += sprintf(p, "({'nodeid':'%d', 'nurlnodes':'%d', 'urlnodes':{", node_id, count);     \
         for(i = 0; i < count; i++)                                                              \
         {                                                                                       \
             buf[0] = '\0';                                                                      \
             ltask->get_url(ltask, urlnodes[i].urlid, buf);                                      \
-            p += sprintf(p, "%d:{id:'%d', nodeid:'%d', level:'%d', "                            \
-                    "nchilds:'%d', url:'%s'}, ", urlnodes[i].id, urlnodes[i].id,                \
+            p += sprintf(p, "'%d':{'id':'%d', 'nodeid':'%d', 'level':'%d', "                    \
+                    "'nchilds':'%d', 'url':'%s'},", urlnodes[i].id, urlnodes[i].id,             \
                     urlnodes[i].nodeid, urlnodes[i].level, urlnodes[i].nchilds, buf);           \
         }                                                                                       \
-        --p;                                                                                    \
+        if(count > 0)--p;                                                                       \
         p += sprintf(p, "%s", "}})");                                                           \
         count = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html;charset=%s\r\n"            \
                 "Content-Length:%ld\r\nConnection:close\r\n\r\n",                               \
