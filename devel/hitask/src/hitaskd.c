@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <sys/resource.h>
 #include <locale.h>
+#include <pcre.h>
 #include <sbase.h>
 #include <netdb.h>
 #include <arpa/inet.h>
