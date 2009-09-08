@@ -731,7 +731,7 @@ int ltask_set_host_level(LTASK *task, int hostid, char *host, short level)
 }
 
 /* add url */
-int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
+int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url, int flag)
 {
     char newurl[HTTP_BUF_SIZE], URL[HTTP_BUF_SIZE], *p = NULL, 
          *pp = NULL, *e = NULL, *host = NULL, *purl = NULL;
@@ -836,6 +836,7 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url)
                     && write(task->key_fd, key, MD5_LEN) > 0)
             {
                 meta.depth   = parent_depth + 1;
+                if(flag >= 0) meta.flag = flag;
                 meta.parent  = parentid;
                 meta.url_off = st.st_size;
                 meta.url_len = n - 1;
@@ -1518,7 +1519,7 @@ int ltask_get_stateinfo(LTASK *task, char *block)
 
 /* update url content  */
 int ltask_update_content(LTASK *task, int urlid, char *date, char *type, 
-        char *content, int ncontent)
+        char *content, int ncontent , int is_extract_link)
 {
     char buf[HTTP_BUF_SIZE], *url = NULL, *p = NULL, *data = NULL;
     int ret = -1, n = 0;
@@ -1581,7 +1582,7 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
 end:
         MUTEX_UNLOCK(task->mutex);
         /* uncompress text/html */
-        if(ret == 0 && url && type && strncasecmp(type, "text", 4) == 0) 
+        if(ret == 0 && is_extract_link && url && type && strncasecmp(type, "text", 4) == 0) 
         {
             DEBUG_LOGGER(task->logger, "Ready for extract_link(%d:%s)", urlid, url);
             ndata = ncontent * 20;
@@ -1774,7 +1775,7 @@ int ltask_extract_link(LTASK *task, int urlid, int depth, char *url, char *conte
             {
                 *pp = '\0';
                 DEBUG_LOGGER(task->logger, "add url:%s from %s\n", buf, url);
-                task->add_url(task, urlid, depth, buf);
+                task->add_url(task, urlid, depth, buf, 0);
             }
             /* to href last > */
 next:

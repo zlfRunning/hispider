@@ -29,6 +29,7 @@ static LTASK *ltask = NULL;
 static HIBASE *hibase = NULL;
 static void *hitaskd_logger = NULL, *histore_logger = NULL, *adns_logger = NULL;
 static int is_need_authorization = 0;
+static int is_need_extract_link = 0;
 static char *authorization_name = "Hitask Administration System";
 static void *argvmap = NULL;
 static int proxy_timeout = 20000000;
@@ -1174,7 +1175,8 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         }else goto err_end;
                         break;
                     case E_OP_URLNODE_ADD:
-                        if(nodeid >= 0 && url && (urlid = ltask->add_url(ltask, -1, 0, url)) >= 0
+                        if(nodeid >= 0 && url && flag >= 0
+                            && (urlid = ltask->add_url(ltask, -1, 0, url, flag)) >= 0
                             && (urlnodeid = hibase->add_urlnode(hibase, nodeid, 0, urlid,level))> 0
                             && (n = hibase->get_pnode_urlnodes(hibase, nodeid, &urlnodes)) > 0)
                         {
@@ -1411,7 +1413,8 @@ int histore_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                 /* doctype */
                 if((n = http_req->headers[HEAD_ENT_CONTENT_TYPE]) > 0)
                     p = http_req->hlines + n;
-                ltask->update_content(ltask, urlid, date, p, chunk->data, chunk->ndata);
+                ltask->update_content(ltask, urlid, date, p, 
+                        chunk->data, chunk->ndata, is_need_extract_link);
             }
             else if(http_req->reqid == HTTP_POST)
             {
@@ -1441,6 +1444,17 @@ int histore_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
         return 0;
     }
     return -1;
+}
+
+/* task handler */
+void *histore_task_handler(void *arg)
+{
+    int id;
+    if(arg && (id = ((long)arg - 1)) >= 0)
+    {
+             
+    }
+    return NULL;
 }
 
 /* oob handler */

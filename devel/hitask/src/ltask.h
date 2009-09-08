@@ -111,6 +111,7 @@ typedef struct _LMETA
     short type;
     short level;
     short depth;
+    int flag;
     int date;
     int parent;
     off_t url_off;
@@ -237,7 +238,7 @@ typedef struct _LTASK
     int (*add_cookie)(struct _LTASK *, int hostid, char *cookies);
     int (*update_cookie)(struct _LTASK *, int hostid, char *cookies);
     int (*del_cookie)(struct _LTASK *, int hostid, char *cookies);
-    int (*add_url)(struct _LTASK *, int parentid, int parent_depth, char *url);
+    int (*add_url)(struct _LTASK *, int parentid, int parent_depth, char *url, int flag);
     int (*pop_url)(struct _LTASK *, char *url, int *time, char *refer, char *cookie);
     int (*get_url)(struct _LTASK *, int urlid, char *url);
     int (*set_url_status)(struct _LTASK *, int urlid, char *url, short status, short err);
@@ -252,7 +253,9 @@ typedef struct _LTASK
     int (*list_users)(struct _LTASK *, char *block, int *nblock);
     int (*get_stateinfo)(struct _LTASK *, char *block);
     int (*update_content)(struct _LTASK *, int urlid, char *date, 
-            char *type, char *content, int ncontent);
+            char *type, char *content, int ncontent, int is_extract_link);
+    int (*get_content)(struct _LTASK *, int urlid, char *url, int *date, char *type, char *content);
+    void (*free_content)(struct _LTASK *, char *content);
     int (*extract_link)(struct _LTASK *, int urlid, int depth, 
             char *url, char *content, int ncontent);
     void (*clean)(struct _LTASK **);
