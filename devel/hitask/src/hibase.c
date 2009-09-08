@@ -809,6 +809,11 @@ int hibase_get_pnode_templates(HIBASE *hibase, int pnodeid, ITEMPLATE **template
     return n;
 }
 
+void hibase_free_templates(ITEMPLATE *templates)
+{
+    if(templates) free(templates);
+    return ;
+}
 /* get pnode childs */
 int hibase_get_pnode_childs(HIBASE *hibase, int pnodeid, PNODE *ppnode)
 {

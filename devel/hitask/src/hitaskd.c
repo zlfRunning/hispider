@@ -20,6 +20,7 @@
 #include "hibase.h"
 #include "trie.h"
 #include "tm.h"
+#include "zstream.h"
 #define PROXY_TIMEOUT 1000000
 static char *http_default_charset = "UTF-8";
 static char *httpd_home = NULL;
@@ -1450,22 +1451,71 @@ int histore_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
 /* task handler */
 void *histore_task_handler(void *arg)
 {
-    char *block = NULL, *url = NULL, *type = NULL, *content = NULL;
-    int id = -1, n = -1, count = -1, i = -1;
+    char *block = NULL, *url = NULL, *type = NULL, *content = NULL, 
+         *zdata = NULL, *p = NULL, *error = NULL;
+    int id = -1, len = 0, n = -1, count = -1, i = -1, flag = 0, 
+        erroffset = 0, res[FIELD_NUM_MAX * 2], nres = 0, j = 0;
+    size_t ndata = 0;
     LDOCHEADER *docheader = NULL;
+    ITEMPLATE *templates = NULL;
     URLNODE urlnode = {0};
     PNODE pnode = {0};
-    pcre *re = NULL;
+    pcre *reg = NULL;
+    PRES *pres = NULL;
 
     if(arg && (id = ((long)arg - 1)) >= 0 && hibase->get_urlnode(hibase, id, &urlnode) >= 0 
             && urlnode.nodeid > 0 && hibase->get_pnode(hibase, urlnode.nodeid, &pnode) > 0 
-            && (n = ltask->get_content(ltask, id, &block)) > 0 )
+            && (len = ltask->get_content(ltask, id, &block)) > 0 )
     {
-        if(n > sizeof(LDOCHEADER) && (docheader = (LDOCHEADER *)block))
+        if(len > sizeof(LDOCHEADER) && (docheader = (LDOCHEADER *)block)
+                && (count = hibase->get_pnode_templates(hibase, urlnode.nodeid, &templates)) > 0
+                && templates)
         {
             url = block + sizeof(LDOCHEADER);
             type = url + docheader->nurl + 1;
-            content = type + docheader->ntype + 1;
+            zdata = type + docheader->ntype + 1;
+            ndata = len * 20;
+            if(zdata < (block + len) && (content = (char *)calloc(1, ndata))
+                    && zdecompress((Bytef *)zdata, (uLong )docheader->ncontent, 
+                        (Bytef *)content, (uLong *)&ndata) == 0)
+            {
+                for(i = 0; i < count; i++)
+                {
+                    flag = PCRE_DOTALL|PCRE_MULTILINE|PCRE_EXTENDED;
+                    if(templates[i].flags & TMP_IS_IGNORECASE) flag |= PCRE_CASELESS;
+                    if((reg = pcre_compile(templates[i].pattern, flag, &error, &erroffset, NULL))) 
+                    {
+                        memset(res, 0, sizeof(int) * 2 * FIELD_NUM_MAX);
+                        nres = FIELD_NUM_MAX * 2;
+                        if((n = pcre_exec(reg, NULL, content, ndata, 0, 0, res, nres)) > 0)
+                        {
+                            pres = (PRES *)res;
+                            for(j = 0; j < n; j++)
+                            {
+                                fprintf(stdout, "%s::%d %d-%d %.*s\n", __FILE__, __LINE__, i, j,
+                                        pres[i].end  -  pres[i].start, content + pres[i].start);
+                            }
+                        }
+                        else
+                        {
+                            if(n == PCRE_ERROR_NOMATCH)
+                            {
+                                fprintf(stdout, "No match result with pattern[%s] at url[%s]\n", 
+                                        templates[i].pattern, url);
+                            }
+                        }
+                        pcre_free(reg);
+                    }
+                    else
+                    {
+                        //error
+                        fprintf(stdout, "%s::%d pcre compile error:%s at offset:%d\n", 
+                                __FILE__, __LINE__, error, erroffset);
+                    }
+                }
+            }
+            if(content) free(content);
+            if(templates)hibase->free_templates(templates);
             //uncompress
         }
         if(block)ltask->free_content(block); 

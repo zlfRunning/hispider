@@ -109,6 +109,12 @@ typedef struct _IREGX
     int   nodeid;
     int   flag;
 }IREGX;
+/* PCRE RES */
+typedef struct _PRES
+{
+    int start;
+    int end;
+}PRES;
 #define TMP_IS_PUBLIC       0x01
 #define TMP_IS_GLOBAL       0x02
 #define TMP_IS_IGNORECASE   0x04
@@ -190,6 +196,7 @@ typedef struct _HIBASE
     int     (*add_pnode)(struct _HIBASE *, int parent, char *name);
     int     (*get_pnode)(struct _HIBASE *, int id, PNODE *pnode);
     int     (*get_pnode_templates)(struct _HIBASE *, int id, ITEMPLATE **templates);
+    void    (*free_templates)(ITEMPLATE *templates);
     int     (*get_pnode_childs)(struct _HIBASE *, int id, PNODE *pnodes);
     int     (*view_pnode_childs)(struct _HIBASE *, int id, char *block);
     int     (*update_pnode)(struct _HIBASE *, int id, char *name);
