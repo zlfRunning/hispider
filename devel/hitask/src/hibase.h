@@ -104,10 +104,9 @@ typedef struct _URLNODE
 #define REG_IS_POST              0x10
 typedef struct _IREGX
 {
-    short tableid;
+    short flag;
     short fieldid;
     int   nodeid;
-    int   flag;
 }IREGX;
 /* PCRE RES */
 typedef struct _PRES
@@ -129,6 +128,7 @@ typedef struct _ITEMPLATE
     char  pattern[PATTERN_LEN_MAX];
     char  url[HI_URL_MAX];
     char  link[HI_URL_MAX];
+    int   tableid;
     IREGX linkmap;
     int   flags;
     int prev;

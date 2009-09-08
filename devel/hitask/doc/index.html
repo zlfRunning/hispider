@@ -815,6 +815,7 @@
                             {
                                 ViewDB(xmlHttp.responseText);
                                 form['tabname'].value = '';
+                                ViewDatabase();
                             }
                         }
                     }
@@ -841,6 +842,7 @@
                             {
                                 //alert(xmlHttp.responseText);
                                 ViewDB(xmlHttp.responseText);
+                                ViewDatabase();
                             }
                         }
                     }
@@ -1150,6 +1152,7 @@
                             if(xmlHttp.status == 200)
                             {
                                 ViewFields(xmlHttp.responseText);
+                                ViewDatabase();
                             }
                         }
                     }
@@ -1173,6 +1176,7 @@
                             if(xmlHttp.status == 200)
                             {
                                 ViewFields(xmlHttp.responseText);
+                                ViewDatabase();
                             }
                         }
                     }
@@ -1271,6 +1275,7 @@
                 var form = document.forms[formid];
                 xform['op'].value = 'template_update';
                 xform['nodeid'].value = form['nodeid'].value;
+                xform['tableid'].value = form['tableid'].value;
                 xform['templateid'].value = form['templateid'].value;
                 xform['pattern'].value = form['pattern'].value;
                 xform['flag'].value = form['flag'].value;
@@ -1399,6 +1404,7 @@
                 {
                     code = code.replace(/\r|\n/mig,'');
                     var nodeid = form['nodeid'].value;
+                    var tableid = form['link_table'].value;
                     var templateid = form['templateid'].value;
                     var url = form['url'].value;
                     var method = form['method'].value;
@@ -1428,18 +1434,19 @@
                         if(form['map'].value) map = eval(form['map'].value);
                         form['nfields'].value = arr.length;
                         var odiv = null;
-                        var tablesoptions = "";
+                        var fieldsoptions = "";
                         var childsoptions = "";
                         if((odiv = document.getElementById('database')))
                         {
                             var strdb = odiv.getAttribute('dbase');
                             var dbase = eval(strdb);
-                            if(dbase)
+                            if(dbase && dbase['tables'][tableid] && tableid >= 0)
                             {
-                                for(x in dbase['tables'])
+                                for(x in dbase['tables'][tableid]['fields'])
                                 {
-                                    tablesoptions += "<option value='"+x+"'>";
-                                    tablesoptions += dbase['tables'][x]['name']+"</option>\n";
+                                    fieldsoptions += "<option value='"+x+"'>";
+                                    fieldsoptions += dbase['tables'][tableid]['fields'][x]['name']
+                                        +"</option>";
                                 }
                             }
                         }
@@ -1467,6 +1474,7 @@
                             block += "<input type=hidden name='nodeid' value='"+nodeid+"'>";
                             block += "<input type=hidden name='op' value='"+op+"'>";
                             block += "<input type=hidden name='method' value='"+method+"'>";
+                            block += "<input type=hidden name='tableid' value='"+tableid+"'>";
                             block += "<input type=hidden name='templateid' value='"+templateid+"'>";
                             block += "<input type=hidden name='nfields' value='"+arr.length+"'>";
                             block += "&nbsp;";
@@ -1481,11 +1489,11 @@
                             block += ">公共数据";
                             block += "<input type=checkbox name='is_global' ";
                             if(is_global) block += "checked";
-                            block += ">是否重复匹配多条";
+                            block += ">重复匹配多条";
                             block += "&nbsp;&nbsp;&nbsp;&nbsp;";
                             block += "<input type=checkbox name='is_ignorecase' ";
                             if(is_ignorecase) block += "checked";
-                            block += ">是否忽略大小写";
+                            block += ">忽略大小写";
                             block += "<hr>";
                         for(i = 1; i < arr.length;i++)
                         {
@@ -1513,34 +1521,22 @@
                             block += ">去广告";
                             block += "<br>";
                             block += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-                            block += "<select name='tableid_"+i+"' onchange=\"";
-                            block += "changeTable(this.form,'fieldid_"+i+"',this)\">";
-                            block += "<option value='-1' selected>数据表</option>";
-                            if(map)
+                            block += "<select name='fieldid_"+i+"'>";
+                            block += "<option value='-1' selected>对应字段</option>";
+                            if(map && tableid >= 0)
                             {
-                                for(x in dbase['tables'])
+                                for(x in dbase['tables'][tableid]['fields'])
                                 {
                                     block += "<option value='"+x+"' ";
-                                    if(map && map[i-1]['tableid'] == x) block += " selected ";
-                                    block += ">"+ dbase['tables'][x]['name']+"</option>\n";
+                                    if(map && map[i-1]['fieldid'] == x) 
+                                        block += " selected ";
+                                    block += ">"+dbase['tables'][tableid]['fields'][x]['name']
+                                        +"</option>";
                                 }
                             }
                             else
                             {
-                                block += tablesoptions;
-                            }
-                            block += "</select>";
-                            block += "<select name='fieldid_"+i+"'>";
-                            block += "<option value='-1' selected>字段</option>";
-                            if(map && (tabid = map[i-1]['tableid']) >= 0)
-                            {
-                                for(x in dbase['tables'][tabid]['fields'])
-                                {
-                                    block += "<option value='"+x+"' ";
-                                    if(map && map[i-1]['fieldid'] == x) block += " selected ";
-                                    block += ">"+dbase['tables'][tabid]['fields'][x]['name']
-                                        +"</option>\n";
-                                }
+                                block += fieldsoptions;
                             }
                             block += "</select>";
                             block += "<select name='nodeid_"+i+"'>";
@@ -1708,6 +1704,7 @@
                     var pattern = "";
                     var map = null;
                     var strmap = "";
+                    var tableid = 0;
                     var nfields = 0;
                     var url = "";
                     var link = "";
@@ -1728,6 +1725,7 @@
                         pattern = base64strdecode(temp['pattern']);
                         flag = temp['flags'];
                         tempid = temp['id'];
+                        tableid = temp['tableid'];
                         map = temp['map'];
                         linkmap = temp['linkmap'];
                         strmap = "";
@@ -1736,8 +1734,7 @@
                             strmap = "{[";
                             for(x in map)
                             {
-                                strmap += "{tableid:"+map[x]['tableid']+","
-                                    +"fieldid:"+map[x]['fieldid']+ ","
+                                strmap += "{fieldid:"+map[x]['fieldid']+ ","
                                     +"nodeid:"+map[x]['nodeid']+ ","
                                     +"flag:"+map[x]['flag']+ "}";
                                 if(x < (map.length - 1)) strmap += ",";
@@ -1748,7 +1745,6 @@
                         if(linkmap)
                         {
                             strlinkmap = "({"
-                                +"tableid:'"+linkmap['tableid']+"',"
                                 +"fieldid:'"+linkmap['fieldid']+"',"
                                 +"nodeid:'"+linkmap['nodeid']+"',"
                                 +"flag:'"+linkmap['flag']+"'"
@@ -1766,6 +1762,7 @@
                         htmlstr += "<input type=hidden name='nodeid' value='"+nodeid+"'>";
                         htmlstr += "<input type=hidden name='templateid' value='"+tempid+"'>";
                         htmlstr += "<input type=hidden name='flag' value='"+flag+"'>";
+                        htmlstr += "<input type=hidden name='tableid' value='"+tableid+"'>";
                         htmlstr += "<input type=hidden name='nfields' value='"+nfields+"'>";
                         htmlstr += "<input type=hidden name='map' value='"+strmap+"'>";
                         htmlstr += "<input type=hidden name='link' value='"+link+"'>";
@@ -1822,6 +1819,7 @@
                 {
                     var op = form['op'].value;
                     var nodeid = form['nodeid'].value;
+                    var tableid = form['link_table'].value;
                     var templateid = form['templateid'].value;
                     var pattern = form['pattern'].value;
                     var link = form['link'].value;
@@ -1833,13 +1831,12 @@
                     if(form['method'].value == 1) flag |= 16;
                     var link_flag = 0;
                     if(form['link_method'][1].checked == true) link_flag |= 16;
-                    var linkmap = "[" + form['link_table'].value + ','
-                        + form['link_field'].value + ','
+                    var linkmap = "[" + form['link_field'].value + ','
                         + form['link_node'].value + ','
                         + link_flag + ']';
                     //alert(linkmap);
                     var xmlHttp = null;
-                    var argv = "nodeid="+nodeid+"&flag="+flag
+                    var argv = "nodeid="+nodeid+"&tableid="+tableid+"&flag="+flag
                         +"&linkmap="+encodeURIComponent(linkmap)
                         +"&link="+encodeURIComponent(link)
                         +"&pattern="+encodeURIComponent(pattern);
@@ -1866,7 +1863,7 @@
                                 if(xmlHttp.status == 200)
                                 {
                                     ShowTemplates(xmlHttp.responseText);
-                                    XTReset();
+                                    HiddenTemplate();
                                 }
                             }
                         }
@@ -1882,6 +1879,7 @@
                 var op = form['op'].value;
                 var nodeid = form['nodeid'].value;
                 var templateid = form['templateid'].value;
+                var tableid = form['tableid'].value;
                 var pattern = form['pattern'].value;
                 var url = form['url'].value;
                 var method = form['method'].value;
@@ -1891,7 +1889,6 @@
                 if(form['is_ignorecase'].checked == true) flag |= 4;
                 if(method == 1) flag |= 16;
                 var nfields = form['nfields'].value;
-                var tabid = null;
                 var fieldid = null;
                 var is_url = 0;
                 var is_img = 0;
@@ -1902,10 +1899,6 @@
                 var map = "{";
                 for(i = 1; i < nfields; i++)
                 {
-                    tabselect = form['tableid_'+i];
-                    fieldselect = form['nodeid_'+i];
-                    nodeselect = form['fieldid_'+i];
-                    tabid = form['tableid_'+i].value;
                     fieldid =  form['fieldid_'+i].value;
                     node_id = form['nodeid_'+i].value;
                     node_flag = 0;
@@ -1917,12 +1910,13 @@
                         node_flag |= 4;
                     if(form['is_need_antispam_'+i].checked == true) 
                         node_flag |= 8;
-                    map += "["+tabid+","+fieldid+","+node_id+","+node_flag+"]";
+                    map += "["+fieldid+","+node_id+","+node_flag+"]";
                     if(i < (nfields - 1)) map += ";";
                 }
                 map += "}";
                 var xmlHttp = null;
-                var argv = "nodeid="+nodeid+"&flag="+flag+"&map="+encodeURIComponent(map)
+                var argv = "nodeid="+nodeid+"&tableid="+tableid+"&flag="
+                    +flag+"&map="+encodeURIComponent(map)
                     +"&pattern="+encodeURIComponent(pattern);
                 if(url) argv += "&url="+encodeURIComponent(url);
                 if(op == 'template_add')
@@ -1948,7 +1942,7 @@
                             {
                                 ShowTemplates(xmlHttp.responseText);
                                 divremove(element);
-                                XTReset();
+                                HiddenTemplate();
                             }
                         }
                     }
@@ -2128,6 +2122,7 @@
             function LoadLinkOptions()
             {
                 var nodeid = -1;
+                var tableid = -1;
                 var flag = 0;
                 var odiv = null;
                 var linkmap = null;
@@ -2138,12 +2133,12 @@
                 {
                     if(form['linkmap'].value) linkmap = eval(form['linkmap'].value);
                     flag = form['flag'].value;
+                    tableid = form['tableid'].value;
                     if((odiv = document.getElementById('database'))
                         && (strdb = odiv.getAttribute('dbase')) 
                         && (dbase = eval(strdb)))
                     {
                         var table = null;
-                        var tabid = -1;
                         oselect = form['link_table'];
                         oselect.options.length = 1;
                         i = 1;
@@ -2151,22 +2146,22 @@
                         {
                             table = dbase['tables'][x];
                             oselect.options[i] = new Option(table['name'], x);
-                            if(linkmap && x == linkmap['tableid'])
+                            if(linkmap && x == tableid)
                             {
                                 oselect.options[i].selected = true;
                             }
                             ++i;
                         }
-                        if(linkmap && (tabid = linkmap['tableid']) >= 0)
+                        if(linkmap && tableid  >= 0)
                         {
-                            var fields = dbase['tables'][tabid]['fields'];
+                            var fields = dbase['tables'][tableid]['fields'];
                             oselect = form['link_field'];
                             oselect.options.length = 1;
                             i = 1;
                             for(x in fields)
                             {
-                                oselect.options[i] = new Option(fields[x]['name'], x); 
-                                if(linkmap && x == linkmap['fieldid'])
+                                oselect.options[i] = new Option(fields[x]['name'], x);
+                                if(linkmap && flag >= 0 && (flag & 8) && x == linkmap['fieldid'])
                                 {
                                     oselect.options[i].selected = true;
                                 }
@@ -2790,6 +2785,7 @@
             <input type=hidden name='op' value='template_add' >
             <input type=hidden name='nodeid' value='-1' >
             <input type=hidden name='templateid' value='-1' >
+            <input type=hidden name='tableid' value='-1' >
             <input type=hidden name='flag' value='0' >
             <input type=hidden name='nfields' value='-1' >
             <input type=hidden name='map' value='' >
@@ -2801,11 +2797,15 @@
             模版:<textarea name='pattern' rows=2  cols=120 > </textarea><br>
             <span align=center>
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-            <input type=checkbox name='is_public' >是否公共字段
+            <input type=checkbox name='is_public' >公共字段
             &nbsp;&nbsp;&nbsp;&nbsp;
-            <input type=checkbox name='is_global' >是否重复匹配多条
+            <input type=checkbox name='is_global' >重复匹配多条
             &nbsp;&nbsp;&nbsp;&nbsp;
-            <input type=checkbox name='is_ignorecase' >是否忽略大小写
+            <input type=checkbox name='is_ignorecase' >忽略大小写
+            &nbsp;&nbsp;&nbsp;&nbsp;
+            <select name='link_table' onchange="changeTable(this.form, 'link_field', this)">
+                <option value='-1' selected>数据表</option>
+            </select>
             &nbsp;&nbsp;&nbsp;&nbsp;
             <input type='button' value='Test Template' onclick="TestTemplate(this.form)">
             &nbsp;&nbsp;&nbsp;&nbsp;
@@ -2822,10 +2822,6 @@
             &nbsp;
             <input type=radio name='link_method' value='1'>POST
             &nbsp;
-            <select name='link_table' onchange="changeTable(this.form, 'link_field', this)">
-                <option value='-1' selected>数据表</option>
-            </select>
-            &nbsp;&nbsp;&nbsp;&nbsp;
             <select name='link_field' >
                 <option value='-1' selected>字段</option>
             </select>

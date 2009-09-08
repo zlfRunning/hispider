@@ -916,11 +916,6 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                     {
                         if(*p == '[') ++p;
                         else goto err_end;
-                        template.map[i].tableid = atoi(p);
-                        while(*p != '\0' && ((*p >= '0' && *p <= '9') || *p == '-'))++p;
-                        while(*p != '\0' && *p != ',')++p;
-                        if(*p != ',') goto err_end;
-                        ++p;
                         template.map[i].fieldid = atoi(p);
                         while(*p != '\0' && ((*p >= '0' && *p <= '9') || *p == '-'))++p;
                         while(*p != '\0' && *p != ',')++p;
@@ -949,11 +944,6 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                     p = linkmap;
                     while(*p != '\0' && *p != '[')++p;
                     if(*p != '[') goto err_end;
-                    ++p;
-                    template.linkmap.tableid = atoi(p);
-                    while(*p != '\0' && ((*p >= '0' && *p <= '9') || *p == '-'))++p;
-                    while(*p != '\0' && *p != ',')++p;
-                    if(*p != ',') goto err_end;
                     ++p;
                     template.linkmap.fieldid = atoi(p);
                     while(*p != '\0' && ((*p >= '0' && *p <= '9') || *p == '-'))++p;
@@ -1133,6 +1123,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         }else goto err_end;
                         break;
                     case E_OP_TEMPLATE_ADD:
+                        template.tableid = tableid;
                         if(nodeid >= 0 && pattern && (map||linkmap) && url
                             && (template.flags = flag) >= 0
                             && (n = strlen(pattern)) > 0 && n < PATTERN_LEN_MAX
@@ -1147,6 +1138,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         }else goto err_end;
                         break;
                     case E_OP_TEMPLATE_UPDATE:
+                        template.tableid = tableid;
                         if(nodeid >= 0 && templateid >= 0 && pattern && (map||linkmap) && url
                             && (template.flags = flag) >= 0
                             && (n = strlen(pattern)) > 0 && n < PATTERN_LEN_MAX

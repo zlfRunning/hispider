@@ -1136,7 +1136,7 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
             && ptemplate != (ITEMPLATE *)-1)
         {
             p = buf;
-            p += sprintf(p, "({'id':'%d', 'name':'%s', 'ntemplates':'%d', 'templates':[", 
+            p += sprintf(p, "({'id':'%d', 'name':'%s', 'ntemplates':'%d','templates':[", 
                     pnodeid, pnode[pnodeid].name, pnode[pnodeid].ntemplates);
             if(pnode[pnodeid].ntemplates > 0)
             {
@@ -1151,13 +1151,13 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
                     }
                     else pattern = "";
                     //fprintf(stdout, "%d::%s\n%s\n", __LINE__, ptemplate[x].pattern, pattern);
-                    p += sprintf(p, "{'id':'%d', 'flags':'%d', 'pattern':'%s', 'link':'%s',",
-                            x, ptemplate[x].flags, pattern, ptemplate[x].link);
+                    p += sprintf(p, "{'id':'%d', 'tableid':'%d', 'flags':'%d', "
+                            "'pattern':'%s', 'link':'%s',", x, ptemplate[x].tableid,
+                             ptemplate[x].flags, pattern, ptemplate[x].link);
                     {
-                        p += sprintf(p, "'linkmap':{'tableid':'%d','fieldid':'%d', "
-                                "'nodeid':'%d', 'flag':'%d'},", 
-                            ptemplate[x].linkmap.tableid, ptemplate[x].linkmap.fieldid,
-                            ptemplate[x].linkmap.nodeid, ptemplate[x].linkmap.flag);
+                        p += sprintf(p, "'linkmap':{'fieldid':'%d','nodeid':'%d', 'flag':'%d'},", 
+                            ptemplate[x].linkmap.fieldid, ptemplate[x].linkmap.nodeid, 
+                            ptemplate[x].linkmap.flag);
                     }
                     p += sprintf(p, "'url':'%s', 'nfields':'%d', 'map':[", 
                             ptemplate[x].url, ptemplate[x].nfields);
@@ -1166,8 +1166,7 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
                         i = 0;
                         while(i < ptemplate[x].nfields && ptemplate[x].nfields < FIELD_NUM_MAX)
                         {
-                            p += sprintf(p, "{'tableid':'%d', 'fieldid':'%d', 'nodeid':'%d', "
-                                    "'flag':'%d'},", ptemplate[x].map[i].tableid, 
+                            p += sprintf(p, "{'fieldid':'%d', 'nodeid':'%d', 'flag':'%d'},", 
                                     ptemplate[x].map[i].fieldid, ptemplate[x].map[i].nodeid, 
                                     ptemplate[x].map[i].flag);
                             i++;
