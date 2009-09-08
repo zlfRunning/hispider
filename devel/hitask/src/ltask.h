@@ -254,8 +254,8 @@ typedef struct _LTASK
     int (*get_stateinfo)(struct _LTASK *, char *block);
     int (*update_content)(struct _LTASK *, int urlid, char *date, 
             char *type, char *content, int ncontent, int is_extract_link);
-    int (*get_content)(struct _LTASK *, int urlid, char *url, int *date, char *type, char *content);
-    void (*free_content)(struct _LTASK *, char *content);
+    int (*get_content)(struct _LTASK *, int urlid, char **block);
+    void (*free_content)(char *block);
     int (*extract_link)(struct _LTASK *, int urlid, int depth, 
             char *url, char *content, int ncontent);
     void (*clean)(struct _LTASK **);

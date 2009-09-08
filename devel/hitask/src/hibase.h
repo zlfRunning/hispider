@@ -189,6 +189,7 @@ typedef struct _HIBASE
     int     (*pnode_exists)(struct _HIBASE *, int parent, char *name, int name_len);
     int     (*add_pnode)(struct _HIBASE *, int parent, char *name);
     int     (*get_pnode)(struct _HIBASE *, int id, PNODE *pnode);
+    int     (*get_pnode_templates)(struct _HIBASE *, int id, ITEMPLATE **templates);
     int     (*get_pnode_childs)(struct _HIBASE *, int id, PNODE *pnodes);
     int     (*view_pnode_childs)(struct _HIBASE *, int id, char *block);
     int     (*update_pnode)(struct _HIBASE *, int id, char *name);

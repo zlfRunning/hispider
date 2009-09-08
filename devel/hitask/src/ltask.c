@@ -1606,6 +1606,43 @@ end:
     }
     return ret;
 }
+
+/* get content */
+int ltask_get_content(LTASK *task, int urlid, char **block)
+{
+    LMETA meta = {0};
+    int n = -1;
+
+    if(task && urlid >= 0 && block && task->state && urlid < task->state->url_total)
+    {
+        MUTEX_LOCK(task->mutex);
+        if(pread(task->meta_fd, &meta, sizeof(LMETA), (off_t)urlid * (off_t)sizeof(LMETA)) > 0
+                && meta.content_len > 0 && (*block = (char *)calloc(1, meta.content_len)))
+        {
+            if(pread(task->doc_fd, *block, meta.content_len, meta.content_off) > 0)
+            {
+                n = meta.content_len;
+            }
+            else 
+            {
+                free(*block);
+                *block = NULL;
+            }
+        }
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return n ;
+}
+
+void ltask_free_content(char *block)
+{
+    if(block)
+    {
+        free(block);
+    }
+    return ;
+}
+
 #define URLTOEND(start, up, eup, flag, dpp)                             \
 do                                                                      \
 {                                                                       \
@@ -1873,6 +1910,8 @@ LTASK *ltask_init()
         task->list_users            = ltask_list_users;
         task->get_stateinfo         = ltask_get_stateinfo;
         task->update_content        = ltask_update_content;
+        task->get_content           = ltask_get_content;
+        task->free_content          = ltask_free_content;
         task->extract_link          = ltask_extract_link;
         task->clean                 = ltask_clean;
     }

@@ -773,11 +773,40 @@ int hibase_get_pnode(HIBASE *hibase, int pnodeid, PNODE *ppnode)
                 && pnode != (PNODE *)-1 && pnode[pnodeid].status > 0)
         {
             memcpy(ppnode, &(pnode[pnodeid]), sizeof(PNODE));
-            ret = 0;
+            ret = pnodeid;
         }
         MUTEX_UNLOCK(hibase->mutex);
     }
     return ret;
+}
+
+/* get pnode templates */
+int hibase_get_pnode_templates(HIBASE *hibase, int pnodeid, ITEMPLATE **templates)
+{
+    ITEMPLATE *template = NULL;
+    PNODE *pnode = NULL;
+    int n = -1, x = -1, i = 0;
+
+    if(hibase && templates && pnodeid >= 0)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if(pnodeid >= 0 && pnodeid < hibase->pnodeio.total 
+            && (pnode = HIO_MAP(hibase->pnodeio, PNODE)) 
+            &&  pnode[pnodeid].status > 0 && (n = pnode[pnodeid].ntemplates) > 0
+            &&  (template = HIO_MAP(hibase->templateio, ITEMPLATE))
+            && (*templates = (ITEMPLATE *)calloc(n, sizeof(ITEMPLATE))))
+        {
+            i = 0;
+            x = pnode[pnodeid].template_first;
+            while(x > 0 && i < n)
+            {
+                memcpy(&((*templates)[i++]), &(template[x]), sizeof(ITEMPLATE));
+                x = template[x].next;
+            }
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return n;
 }
 
 /* get pnode childs */
@@ -1485,6 +1514,7 @@ HIBASE * hibase_init()
         hibase->delete_field        = hibase_delete_field;
         hibase->add_pnode           = hibase_add_pnode;
         hibase->get_pnode           = hibase_get_pnode;
+        hibase->get_pnode_templates = hibase_get_pnode_templates;
         hibase->get_pnode_childs    = hibase_get_pnode_childs;
         hibase->view_pnode_childs   = hibase_view_pnode_childs;
         hibase->update_pnode        = hibase_update_pnode;

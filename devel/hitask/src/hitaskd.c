@@ -1450,10 +1450,25 @@ int histore_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
 /* task handler */
 void *histore_task_handler(void *arg)
 {
-    int id;
-    if(arg && (id = ((long)arg - 1)) >= 0)
+    char *block = NULL, *url = NULL, *type = NULL, *content = NULL;
+    int id = -1, n = -1, count = -1, i = -1;
+    LDOCHEADER *docheader = NULL;
+    URLNODE urlnode = {0};
+    PNODE pnode = {0};
+    pcre *re = NULL;
+
+    if(arg && (id = ((long)arg - 1)) >= 0 && hibase->get_urlnode(hibase, id, &urlnode) >= 0 
+            && urlnode.nodeid > 0 && hibase->get_pnode(hibase, urlnode.nodeid, &pnode) > 0 
+            && (n = ltask->get_content(ltask, id, &block)) > 0 )
     {
-             
+        if(n > sizeof(LDOCHEADER) && (docheader = (LDOCHEADER *)block))
+        {
+            url = block + sizeof(LDOCHEADER);
+            type = url + docheader->nurl + 1;
+            content = type + docheader->ntype + 1;
+            //uncompress
+        }
+        if(block)ltask->free_content(block); 
     }
     return NULL;
 }
