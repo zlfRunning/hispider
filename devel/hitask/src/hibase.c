@@ -887,7 +887,7 @@ int hibase_update_pnode(HIBASE *hibase, int pnodeid, char *name)
 
     if(hibase && hibase->mpnode && name && (n = strlen(name)) > 0 && n < PNODE_NAME_MAX
         && pnodeid > 0 && pnodeid < hibase->pnodeio.total
-        && hibase_get_pnode(hibase, pnodeid, &node) == 0 
+        && hibase_get_pnode(hibase, pnodeid, &node) >= 0 
         && (uid = hibase_pnode_exists(hibase, node.parent, name, n)) > 0)
     {
         MUTEX_LOCK(hibase->mutex);

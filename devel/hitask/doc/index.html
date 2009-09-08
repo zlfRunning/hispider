@@ -371,6 +371,7 @@
                 {
                     oParent = document.getElementById('treebody');
                 }
+                //alert(pid+':'+id+':'+name);
                 if(oParent == null) return;
                 var oNode = document.createElement('div');
                 var level = oParent.getAttribute('level') * 1;
@@ -579,12 +580,11 @@
                                     var tnode = eval(xmlHttp.responseText);
                                     if(tnode['id'] == pid)
                                     {
-                                        var i = 0;
                                         for(i = 0; i < tnode['nchilds']; i++)
                                         {
                                             AddNode(pid, tnode['childs'][i]['id'] * 1, 
-                                                tnode['childs'][i]['name'], 
-                                            tnode['childs'][i]['nchilds']);
+                                                    tnode['childs'][i]['name'], 
+                                                    tnode['childs'][i]['nchilds']);
                                         }
                                     }
                                 }
@@ -625,14 +625,19 @@
                             {
                                 var id = trim(xmlHttp.responseText);
                                 var pid = oNode.getAttribute('parent');
+                                var oParent = document.getElementById('node'+pid);
                                 if(id == nodeid)
                                 {
-                                    var oParent = document.getElementById('node'+pid);
                                     var nchilds = oParent.getAttribute('nchilds') - 1;
                                     oParent.setAttribute('nchilds', nchilds);
                                     var ochild =  document.getElementById('ch_'+pid);
                                     ochild.innerHTML = nchilds;
-                                    oNode.innerHTML = ""; 
+                                    oParent.removeChild(oNode); 
+                                    var urlid = document.forms['templateform']['nodeid'].value
+                                    if(id == urlid)
+                                    {
+                                        HiddenTemplate();
+                                    }
                                 }
                             }
                             
@@ -685,36 +690,36 @@
                                 if(taskinfo)
                                 {
                                     var htmlstr = "";
-                                    htmlstr += "<span class='ktask'>Running:&nbsp;</span>";
+                                    htmlstr += "<span class='ktask'>状态:&nbsp;</span>";
                                     htmlstr += "<a href=\"javascript:ViewTask('task_";
                                     htmlstr += taskinfo['status']+"');\" class='vtask'";
                                     htmlstr += ">"+taskinfo['status']+"</a><br>";
-                                    htmlstr += "<span class='ktask'>Tasks:&nbsp;</span>";
+                                    htmlstr += "<span class='ktask'>任务总数:&nbsp;</span>";
                                     htmlstr += "<span class='vtask'>"+taskinfo['url_tasks'];
                                     htmlstr += "</span><br>";
-                                    htmlstr += "<span class='ktask'>URL Total:&nbsp;</span>";
+                                    htmlstr += "<span class='ktask'>URL总数:&nbsp;</span>";
                                     htmlstr += "<span class='vtask'>"+taskinfo['url_total'];
                                     htmlstr += "</span><br>";
-                                    htmlstr += "<span class='ktask'>URL OK:&nbsp;</span>";
+                                    htmlstr += "<span class='ktask'>URL完成:&nbsp;</span>";
                                     htmlstr += "<span class='vtask'>"+taskinfo['url_ok'];
                                     htmlstr += "</span><br>";
-                                    htmlstr += "<span class='ktask'>URL Error:&nbsp;</span>";
+                                    htmlstr += "<span class='ktask'>URL错误:&nbsp;</span>";
                                     htmlstr += "<span class='vtask'>"+taskinfo['url_error'];
                                     htmlstr += "</span><br>";
-                                    htmlstr += "<span class='ktask'>Doc:&nbsp;</span>";
+                                    htmlstr += "<span class='ktask'>文档大小:&nbsp;</span>";
                                     htmlstr += "<span class='vtask'>"+taskinfo['doc_total_zsize'];
                                     htmlstr += "/" + taskinfo['doc_total_size']+"</span><br>";
-                                    htmlstr += "<span class='ktask'>Host:&nbsp;</span>";
+                                    htmlstr += "<span class='ktask'>DNS解析:&nbsp;</span>";
                                     htmlstr += "<span class='vtask'>"+taskinfo['host_current'];
                                     htmlstr += "/" + taskinfo['host_total']+"</span><br>";
-                                    htmlstr += "<span class='ktask'>Time Used:&nbsp;</span>";
+                                    htmlstr += "<span class='ktask'>已用时间:&nbsp;</span>";
                                     htmlstr += "<span class='vtask'>["+taskinfo['t_day'];
                                     htmlstr += "&nbsp;Day(s)&nbsp;&nbsp;"+taskinfo['t_hour'];
                                     htmlstr += ":"+taskinfo['t_min'];
                                     htmlstr += ":"+taskinfo['t_sec'];
                                     htmlstr += "&nbsp;+"+taskinfo['t_usec']+"]";
                                     htmlstr += "</span><br>";
-                                    htmlstr += "<span class='ktask'>Speed:&nbsp;</span>";
+                                    htmlstr += "<span class='ktask'>当前速度:&nbsp;</span>";
                                     htmlstr += "<span class='vtask'>"+taskinfo['speed'];
                                     htmlstr += " (KB/S) </span>\n";
                                     var otaskinfo = document.getElementById('taskinfo');
@@ -755,6 +760,13 @@
             {
                 element.className = 'lfield';
             }
+            function ResetDB()
+            {
+                var odb = document.getElementById('dbselect');
+                    odb.innerHTML = "";
+                var odbf = document.getElementById('dbfields');
+                    odbf.innerHTML = "";
+            }
             function ViewDB(txt)
             {
                 var db = eval(txt);
@@ -783,8 +795,6 @@
                     var odb = document.getElementById('dbselect');
                     odb.innerHTML = htmlstr;
                 }
-                var odbf = document.getElementById('dbfields');
-                odbf.innerHTML = "";
             }
 
             function AddTable(form)
@@ -809,6 +819,7 @@
                         }
                     }
                     xmlHttp.send(argv);
+                    ResetDB();
                 }
                 return true;
             }
@@ -834,6 +845,7 @@
                         }
                     }
                     xmlHttp.send(argv);
+                    ResetDB();
                 }
                 return true;
             }
@@ -1240,10 +1252,8 @@
                 form = document.forms['urlform'];
                 form['method'][0].checked = true;
             }
-            function XTAdd(e, nodeid)
+            function XTAdd(nodeid)
             {
-                e = e || window.event;
-                var element = e.target || e.srcElement;
                 var Xdiv =  document.getElementById("xtemplateform");
                 Xdiv.style.display = 'inline';
                 XTReset();
@@ -1708,9 +1718,8 @@
                     var htmlstr =  "<ul class='ultab' >";
                         htmlstr += "<li class='template-header'>";
                         htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
-                        htmlstr += "点击&nbsp;<span class='eadd' title='Click Add New Template' ";
-                        htmlstr += "onclick=\"XTAdd(event, '"+nodeid+"')\">✚</span>&nbsp;添加模版";
-                        htmlstr += "到&nbsp;&nbsp;"
+                        htmlstr += "输入URL测试模版";
+                        htmlstr += "然后添加到&nbsp;&nbsp;"
                         htmlstr += name + "[" + arr['ntemplates'] + "]";
                         htmlstr += "</li>";
                     for(i = 0; i < arr['ntemplates']; i++)
@@ -1772,6 +1781,7 @@
                     }
                     htmlstr += "</ul>";
                     ediv.innerHTML = htmlstr;
+                    XTAdd(nodeid);
                 }
             }
             function ViewTemplates(nodeid)
@@ -2762,7 +2772,7 @@
       <div id='xtemplateform'>
         <div id=urlform >
         <form action='javascript:void(0);' name='urlform' onsubmit='return LoadURL(this);'>
-            URL:<input type=text size='32' name='url'>
+            URL:<input type=text size='64' name='url'>
             &nbsp;
             <input type=radio name='method' value='0' checked>GET
             &nbsp;
@@ -2835,6 +2845,9 @@
     <select name='nodeid' onchange='ListNodeURLs(this.form)'>
     <option value='-1' selected>选择节点</option>
     </select>
+    &nbsp;&nbsp;
+    <input type=radio name='method' value=0 selected>GET
+    <input type=radio name='method' value=1 >POST
     &nbsp;&nbsp;
     <select name='level' >
     <option value='-1' selected>优先级</option>

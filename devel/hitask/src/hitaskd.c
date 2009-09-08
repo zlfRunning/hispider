@@ -34,7 +34,7 @@ static int is_need_authorization = 0;
 static int is_need_extract_link = 0;
 static char *authorization_name = "Hitask Administration System";
 static void *argvmap = NULL;
-static int proxy_timeout = 20000000;
+static int proxy_timeout = 2000000;
 static char *e_argvs[] = 
 {
     "op", 
@@ -1449,11 +1449,11 @@ int histore_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
 }
 
 /* task handler */
-void *histore_task_handler(void *arg)
+void histore_task_handler(void *arg)
 {
     char *block = NULL, *url = NULL, *type = NULL, *content = NULL, 
          *zdata = NULL, *p = NULL, *error = NULL;
-    int id = -1, len = 0, n = -1, count = -1, i = -1, flag = 0, 
+    int id = -1, len = 0, n = -1, count = -1, i = -1, flag = 0, start_offset = 0,
         erroffset = 0, res[FIELD_NUM_MAX * 2], nres = 0, j = 0;
     size_t ndata = 0;
     LDOCHEADER *docheader = NULL;
@@ -1485,23 +1485,31 @@ void *histore_task_handler(void *arg)
                     if(templates[i].flags & TMP_IS_IGNORECASE) flag |= PCRE_CASELESS;
                     if((reg = pcre_compile(templates[i].pattern, flag, &error, &erroffset, NULL))) 
                     {
-                        memset(res, 0, sizeof(int) * 2 * FIELD_NUM_MAX);
                         nres = FIELD_NUM_MAX * 2;
-                        if((n = pcre_exec(reg, NULL, content, ndata, 0, 0, res, nres)) > 0)
+                        pres = (PRES *)res;
+                        while(start_offset >= 0)
                         {
-                            pres = (PRES *)res;
-                            for(j = 0; j < n; j++)
+                            if((n = pcre_exec(reg, NULL, content, ndata, 
+                                            start_offset, 0, res, nres)) > 0)
                             {
-                                fprintf(stdout, "%s::%d %d-%d %.*s\n", __FILE__, __LINE__, i, j,
-                                        pres[i].end  -  pres[i].start, content + pres[i].start);
+                                for(j = 0; j < n; j++)
+                                {
+                                    //handling data
+                                    fprintf(stdout, "%s::%d %d-%d %.*s\n", __FILE__, __LINE__, i, j,
+                                            pres[i].end  -  pres[i].start, content + pres[i].start);
+                                    start_offset = pres[i].end;
+                                }
+                                if((templates[i].flags & TMP_IS_GLOBAL) == 0)
+                                    start_offset = -1;
                             }
-                        }
-                        else
-                        {
-                            if(n == PCRE_ERROR_NOMATCH)
+                            else
                             {
-                                fprintf(stdout, "No match result with pattern[%s] at url[%s]\n", 
-                                        templates[i].pattern, url);
+                                start_offset = -1;
+                                if(n == PCRE_ERROR_NOMATCH)
+                                {
+                                    fprintf(stdout, "No match result with pattern[%s] at url[%s]\n", 
+                                            templates[i].pattern, url);
+                                }
                             }
                         }
                         pcre_free(reg);
@@ -1520,7 +1528,7 @@ void *histore_task_handler(void *arg)
         }
         if(block)ltask->free_content(block); 
     }
-    return NULL;
+    return ;
 }
 
 /* oob handler */
