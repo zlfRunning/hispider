@@ -32,10 +32,8 @@
             #database{position:absolute;background-color:#F4FBFF;display:none;
                 border:0px solid #81BEF7;padding:0px;left:0px;top:36px;width:100%;height:100%;}
             .dblist{position:relative;padding:0px; background-color:#D0E9F7;height:100%;}
-            .dbtitle{position:relative;padding:0px;background-color:#D0E9F7;
-                color:#2F5FA1; height:30px;}
-            .dbselect,#dbselect{position:relative;padding:0px;
-                background-color:#D0E9F7;color:#2F5FA1;}
+            .dbtitle{position:relative;background-color:#D0E9F7;color:#2F5FA1; height:30px;}
+            .dbselect,#dbselect{position:relative;background-color:#D0E9F7;color:#2F5FA1;}
             #dbfields,.dbfields{position:relative;background-color:#F4FBFF;color:#2F5FA1;}
             .field-title{background-color:#D0E9F7; height:30px;}
             .ultab{list-style:none;padding:0;margin:0;}
@@ -52,15 +50,17 @@
                 border:1px solid #81BEF7;padding:0px;left:0px;
                 top:36px;height:100%;width:100%;}
             .treetab{background-color:#F2F2F2;height:100%;};
-            #treebody{position:relative;background-color:#F2F2F2;display:inline;color:#2F5FA1;}
-            .treeline{border:0px;font-size:12pt;font-weight:bold;color:#BDBDBD;}
-            .title{border:0px;font-size:12pt;background-color:#F2F2F2;color:#000000;}
-            .btitle{border:0px;font-size:12pt;background-color:#D0E9F7;}
+            #treebody{position:relative;background-color:#F2F2F2;color:#2F5FA1;width:100%;}
+            .treeline{position:relative;border:0px;font-size:12pt;font-weight:bold;color:#BDBDBD;}
+            .title{position:relative;background-color:#F2F2F2;color:#000000;width:100%;}
+            .btitle{position:relative;background-color:#D0E9F7;width:100%;}
             #node-template{position:relative;background-color:#D0E9F7;
                 border:1px solid #ffffff;padding:0px;color:#2F5FA1;}
             .template-header{background-color:#D0E9F7;cursor: pointer;};
             .ltemplate{background-color:#D0E9F7;cursor: pointer;}
-            .formdiv{position:absolute;width:300px;background-color:#ffffff;
+            #txtform{position:absolute;width:320px;background-color:#ffffff;
+                border:1px solid #81BEF7;padding:10px;overflow:auto;display:none;}
+            #dbform{position:absolute;width:350px;background-color:#ffffff;
                 border:1px solid #81BEF7;padding:10px;overflow:auto;display:none;}
             #xtemplateform{position:relative;background-color:#ffffff;display:none;width:100%;
                 border:0px solid #81BEF7;padding:0px;font-size:12pt;color:#2F5FA1;}
@@ -84,7 +84,8 @@
                 font-size:12pt;color:#2F5FA1;}
             .ctxt_block{position:relative;background-color:silver;border:1px solid #000000;}
             .closebutton{font-size:14pt;font-weight:bold;color:red;
-                cursor:pointer;display:inline;right:20px;text-align:right;}
+                cursor:pointer;display:inline;text-align:right;}
+            .closetxt{cursor:pointer;font-size:10pt;color:#cccccc;text-align:right;}
             #urlblock{position:absolute;background-color:#F4FBFF;display:none;
                 border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:100%;height:100%;}
             .url-ul{list-style:none;padding:0;margin:0;width:100%;}
@@ -378,7 +379,8 @@
                 oNode.setAttribute('UID', id);
                 oNode.setAttribute('UName', name);
                 htmlstr = "<div id='title_"+ id +"' class='title' ";
-                htmlstr += " onmousemove='highlight(this);' onmouseout='backcss(this);'>";
+                htmlstr += " onmousemove=\"onDiv(this, 'btitle');\" ";
+                htmlstr += " onmouseout=\"outDiv(this, 'title');\">";
                 htmlstr += "<span class='treeline'>";
                 var i = 0;
                 for(i = 0; i < (level-1); i++)
@@ -710,22 +712,6 @@
             {
                 div.className = cssName;
             }
-            function selectTab(element)
-            {
-                element.className = 'ltab-selected';
-            }
-            function outTab(element)
-            {
-                element.className = 'ltab';
-            }
-            function selectField(element)
-            {
-                element.className = 'lfield-selected';
-            }
-            function outField(element)
-            {
-                element.className = 'lfield';
-            }
             function ResetDB()
             {
                 var odb = document.getElementById('dbselect');
@@ -745,8 +731,8 @@
                     {
                         tabid = db['tables'][i]['id'];
                         tabname = db['tables'][i]['name'];
-                        htmlstr += "<li class='ltab' onmousemove='selectTab(this)' ";
-                        htmlstr += " onmouseout='outTab(this)' >";
+                        htmlstr += "<li class='ltab' onmousemove=\"onDiv(this, 'ltab-selected')\" ";
+                        htmlstr += " onmouseout=\"outDiv(this, 'ltab')\" >";
                         htmlstr += "<span class='ltabname' onclick='ViewTable("+tabid+")' ";
                         htmlstr += " title='点击进入数据表管理' >";
                         htmlstr += tabname+"</span>";
@@ -831,7 +817,7 @@
                     var ftype = null;
                     var flag = 0;
                     htmlstr =  "<ul class='ultab' >";
-                    htmlstr += "<li class='field-title'>"
+                    htmlstr += "<li class='field-title'>";
                     htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
                     htmlstr += "点击&nbsp;<span class='eadd' title='Click Add New Field' ";
                     htmlstr += "onclick=\"DBFXAdd(event, '"+tabid+"')\">✚</span>&nbsp;添加字段";
@@ -846,8 +832,9 @@
                         fname = tab['fields'][i]['name'];
                         ftype = tab['fields'][i]['type'];
                         flag = tab['fields'][i]['flag'];
-                        htmlstr += "<li class='lfield' onmousemove='selectField(this)' "
-                        htmlstr += " onmouseout='outField(this);' >";
+                        htmlstr += "<li class='lfield' ";
+                        htmlstr += " onmousemove=\"onDiv(this, 'lfield-selected')\" ";
+                        htmlstr += " onmouseout=\"outDiv(this, 'lfield');\" >";
                         htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
                         htmlstr += "<span class='lfname' ";
                         htmlstr += "onclick=\"DBFXEdit(event, "+tabid+","+fid+",";
@@ -1441,7 +1428,9 @@
                         var str = "<div class='template-bar' onmousedown='";
                             str += "divmove(event, this)'>";
                             str += "<span class='closebutton' onclick='divremove(";
-                            str += "this.parentNode.parentNode)' >X</span>";
+                            str += "this.parentNode.parentNode)' >X</span>&nbsp;&nbsp;";
+                            str += "<span class='closetxt' onclick='divremove(";
+                            str += "this.parentNode.parentNode)' >关闭</span>";
                             str += "</div>";
                        var  block = "<form action='javascript:void(0)' ";
                             block += "onsubmit='EditTemplate(this, this.parentNode)' >";
@@ -1454,7 +1443,7 @@
                             block += "&nbsp;";
                             block += "URL:<input type=text name='url' size=80 value='"+url+"'>";
                             block += "<br>";
-                            block += "模版:<textarea name='pattern' cols=76 rows=4>"
+                            block += "模版:<textarea name='pattern' cols=76 rows=4>" 
                                 +pattern+"</textarea>";
                             block += "<br>";
                             block += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
@@ -1478,11 +1467,11 @@
                             block += arr[i];
                             block += "</textarea><br>";
                             block += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-                            block += "<span title='自动拼接为完成链接'>"
+                            block += "<span title='自动拼接为完成链接'>";
                             block += "<input type=checkbox name='is_url_"+i+"'";
                             if(map && map[i-1]['flag'] & 1) block += " checked ";
                             block += " onclick='selectURL(this.form,this,"+i+")'>链接</span>";
-                            block += "<span title='链接标识一条完整信息的结束'>"
+                            block += "<span title='链接标识一条完整信息的结束'>";
                             block += "<input type=checkbox name='is_uniqe_"+i+"'";
                             if(map && map[i-1]['flag'] & 1) 
                             {
@@ -1493,7 +1482,7 @@
                                 block += " disabled=true ";
                             block += ">标识性链接</span>";
                             block += "&nbsp;&nbsp;";
-                            block += "<span title='下载存储为文件比如:图片,mp3等'>"
+                            block += "<span title='下载存储为文件比如:图片,mp3等'>";
                             block += "<input type=checkbox name='is_file_"+i+"'";
                             if(map && map[i-1]['flag'] & 1) 
                             {
@@ -1504,12 +1493,12 @@
                                 block += " disabled=true ";
                             block += ">文件</span>";
                             block += "&nbsp;&nbsp;";
-                            block += "<span title='去掉html标签后的文本内容'>"
+                            block += "<span title='去掉html标签后的文本内容'>";
                             block += "<input type=checkbox name='is_need_clearhtml_"+i+"'";
                             if(map && map[i-1]['flag'] & 4) block += " checked ";
                             block += ">去HTML</span>";
                             block += "&nbsp;&nbsp;";
-                            block += "<span title='去掉疑似广告的部分内容，该功能谨慎使用'>"
+                            block += "<span title='去掉疑似广告的部分内容，该功能谨慎使用'>";
                             block += "<input type=checkbox name='is_need_antispam_"+i+"'";
                             if(map && map[i-1]['flag'] & 8) block += " checked ";
                             block += ">去广告</span>";
@@ -1631,7 +1620,9 @@
                         var str = "<div id='templateeditorheader' onmousedown='";
                         str += "divmove(event, this)'>";
                         str += "<span class='closebutton' onclick='divremove(";
-                        str += "this.parentNode.parentNode)' >X</span>";
+                        str += "this.parentNode.parentNode)' >X</span>&nbsp;&nbsp;";
+                        str += "<span class='closetxt' onclick='divremove(";
+                        str += "this.parentNode.parentNode)' >关闭</span>";
                         str += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Result Count:"+count+"</div>";
                         var element = null;
                         if((element = document.getElementById('template-editor')))
@@ -1653,6 +1644,7 @@
                         var frame = document.createElement('iframe');
                         frame.id = 'template-viewer';
                         element.appendChild(frame);
+                        element.focus();
                         var block = "";
                         var url = "";
                         link = form['link'].value;
@@ -1663,7 +1655,7 @@
                             for(j = 1; j < matches[i].length; j++) 
                             {
                                 if(j < 10) block += "0"; 
-                                block += j+":<textarea cols=76 rows=1>"
+                                block += j+":<textarea cols=76 rows=1>" 
                                     +matches[i][j]+"</textarea><br>";    
                                 if(link)
                                 {
@@ -1710,7 +1702,7 @@
                         htmlstr += "<li class='template-header'>";
                         htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
                         htmlstr += "输入URL测试模版";
-                        htmlstr += "然后添加到&nbsp;&nbsp;"
+                        htmlstr += "然后添加到&nbsp;&nbsp;";
                         htmlstr += name + "[" + arr['ntemplates'] + "]";
                         htmlstr += "</li>";
                     for(i = 0; i < arr['ntemplates']; i++)
@@ -1728,8 +1720,8 @@
                             strmap = "{[";
                             for(x in map)
                             {
-                                strmap += "{fieldid:"+map[x]['fieldid']+ ","
-                                    +"nodeid:"+map[x]['nodeid']+ ","
+                                strmap += "{fieldid:"+map[x]['fieldid']+ "," 
+                                    +"nodeid:"+map[x]['nodeid']+ "," 
                                     +"flag:"+map[x]['flag']+ "}";
                                 if(x < (map.length - 1)) strmap += ",";
                             }
@@ -1738,10 +1730,10 @@
                         strlinkmap = "";
                         if(linkmap)
                         {
-                            strlinkmap = "({"
-                                +"fieldid:'"+linkmap['fieldid']+"',"
-                                +"nodeid:'"+linkmap['nodeid']+"',"
-                                +"flag:'"+linkmap['flag']+"'"
+                            strlinkmap = "({" 
+                                +"fieldid:'"+linkmap['fieldid']+"'," 
+                                +"nodeid:'"+linkmap['nodeid']+"'," 
+                                +"flag:'"+linkmap['flag']+"'" 
                                 +"})";
                         }
                         url = temp['url'];
@@ -1750,7 +1742,7 @@
                         htmlstr += "<form action='javascript:void(0)' class='listform' ";
                         htmlstr += " name='xform"+tempid+"' onsubmit='XTEdit(this)'>";
                         htmlstr += "<li class='ltemplate' >";
-                        htmlstr += "<textarea name='pattern' cols=80 rows=1 readonly/disabled >"
+                        htmlstr += "<textarea name='pattern' cols=80 rows=1 readonly/disabled >" 
                             +pattern+"</textarea>&nbsp;&nbsp;&nbsp;&nbsp;";
                         htmlstr += "<input type=hidden name='nodeid' value='"+nodeid+"'>";
                         htmlstr += "<input type=hidden name='templateid' value='"+tempid+"'>";
@@ -1912,7 +1904,7 @@
                 }
                 map += "}";
                 var xmlHttp = null;
-                var argv = "nodeid="+nodeid+"&tableid="+tableid+"&flag="
+                var argv = "nodeid="+nodeid+"&tableid="+tableid+"&flag=" 
                     +flag+"&map="+encodeURIComponent(map)
                     +"&pattern="+encodeURIComponent(pattern);
                 if(url) argv += "&url="+encodeURIComponent(url);
@@ -2427,7 +2419,7 @@
                     && confirm("您确认修改优先级为["+text+"]?")
                     &&(xmlHttp = CreateXMLHTTP()) != null)
                 {
-                    var argv = "op=urlnode_update&nodeid="+nodeid+"&urlnodeid="
+                    var argv = "op=urlnode_update&nodeid="+nodeid+"&urlnodeid=" 
                         +urlnodeid+"&level="+level;
                     xmlHttp.open('POST', '/', true);
                     xmlHttp.setRequestHeader("Content-Length", argv.length);
@@ -2759,7 +2751,7 @@
     <div id='database'>
         <table width=100% height=100% cellspacing=0 border=0 valign=top align=left >
         <tr>
-        <td class='dblist' valign=top height=100% >
+        <td class='dblist' valign=top width=20% height=100% >
             <table cellspacing=0 border=0 valign=top align=left>
             <tr>
                 <td valign=top class='dbtitle'>
@@ -2785,7 +2777,7 @@
         <td valign=top align=left width=auto height=100% class='treetab' >
             <div id='treebody' level='0'></div>
         </td>
-        <td valign=top align=left height=100% >
+        <td valign=top align=left width=auto height=100% >
               <div id='node-template'></div>
               <div id='xtemplateform'>
                 <div id=urlform >
@@ -2906,23 +2898,27 @@
     <div id='user'>
     </div>
 </div>
-    <div id='txtform' class='formdiv'>
+    <div id='txtform'>
         <form name="editorform" action="javascript:void(0)" onsubmit="return EditNode(this);"> 
             <input type=hidden name='op' value='node_add' >
             <input type=hidden name='nodeid' value='0' >
             <input type=hidden name='pid' value='0' >
             <input type='text' name='nodename' class='txtinput' size=24>
             <input type=submit value='ok' class='submit' >
-            &nbsp;&nbsp;<span class='closebutton' onclick="CloseThis(this)">x</span>
+            &nbsp;&nbsp;&nbsp;&nbsp;
+            <span class='closebutton' onclick="CloseThis(this)">x</span>
+            &nbsp;&nbsp;<span class='closetxt' onclick="CloseThis(this)" >关闭</span>
         </form>
     </div>
-    <div id='dbform' class='formdiv'>
+    <div id='dbform'>
         <form name="xdbform" action="javascript:void(0)" onsubmit="return EditDB(this);"> 
             <input type=hidden name='op' value='table_add' >
             <input type=hidden name='tableid' value='0' >
             <input type='text' name='name' class='txtinput' size=24>
             <input type=submit value='ok' class='submit' >
-            &nbsp;&nbsp;<span class='closebutton' onclick="CloseThis(this)">x</span>
+            &nbsp;&nbsp;&nbsp;&nbsp;
+            <span class='closebutton' onclick="CloseThis(this)">x</span>
+            &nbsp;&nbsp;<span class='closetxt' onclick="CloseThis(this)" >关闭</span>
         </form>
     </div>
     <div id='dbfieldform'>
@@ -2945,7 +2941,9 @@
             <input type=checkbox name='is_index' value=1 >是否索引
             <input type=checkbox name='is_null' value=4 >是否为空
             <input type=submit value='ok' class='submit' >
-            &nbsp;&nbsp;<span class='closebutton' onclick="CloseThis(this)">x</span>
+            &nbsp;&nbsp;&nbsp;&nbsp;
+            <span class='closebutton' onclick="CloseThis(this)">x</span>
+            &nbsp;&nbsp;<span class='closetxt' onclick="CloseThis(this)" >关闭</span>
         </form>
     </div>
     </body>
