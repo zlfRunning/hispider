@@ -1444,9 +1444,11 @@ int histore_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
 void histore_task_handler(void *arg)
 {
     char *block = NULL, *url = NULL, *type = NULL, *content = NULL, 
-         *zdata = NULL, *p = NULL, *error = NULL;
-    int id = -1, len = 0, n = -1, count = -1, i = -1, flag = 0, start_offset = 0,
-        erroffset = 0, res[FIELD_NUM_MAX * 2], nres = 0, j = 0;
+         *zdata = NULL, *p = NULL, *error = NULL, *pp = NULL, 
+         newurl[HTTP_URL_MAX], oldurl[HTTP_URL_MAX];
+    int id = -1, len = 0, n = -1, count = -1, i = -1, flag = 0, 
+        start_offset = 0, erroffset = 0, res[FIELD_NUM_MAX * 2], 
+        nres = 0, j = 0, x = 0, nx = 0, urlid = 0, nodeid = 0;
     size_t ndata = 0;
     LDOCHEADER *docheader = NULL;
     ITEMPLATE *templates = NULL;
@@ -1473,7 +1475,7 @@ void histore_task_handler(void *arg)
             {
                 for(i = 0; i < count; i++)
                 {
-                    flag = PCRE_DOTALL|PCRE_MULTILINE|PCRE_EXTENDED;
+                    flag = PCRE_DOTALL|PCRE_MULTILINE|PCRE_EXTENDED|PCRE_UTF8;
                     if(templates[i].flags & TMP_IS_IGNORECASE) flag |= PCRE_CASELESS;
                     if((reg = pcre_compile(templates[i].pattern, flag, &error, &erroffset, NULL))) 
                     {
@@ -1482,15 +1484,65 @@ void histore_task_handler(void *arg)
                         while(start_offset >= 0)
                         {
                             if((n = pcre_exec(reg, NULL, content, ndata, 
-                                            start_offset, 0, res, nres)) > 0)
+                                            start_offset, 0, res, nres)) > 0 )
                             {
-                                for(j = 0; j < n; j++)
+                                if(templates[i].flags & TMP_IS_LINK)
                                 {
-                                    //handling data
-                                    fprintf(stdout, "%s::%d %d-%d %.*s\n", __FILE__, __LINE__, i, j,
-                                            pres[i].end  -  pres[i].start, content + pres[i].start);
-                                    start_offset = pres[i].end;
+                                    //link
+                                    p = templates[i].link;
+                                    pp = newurl;
+                                    while(*p != '\0' && pp < end)
+                                    {
+                                        if(*p == '<')
+                                        {
+                                            ++p;
+                                            if(*p == '\0') goto err_next;
+                                            x = atoi(p) - 1;
+                                            if(x >= n && x < 0) goto err_next;
+                                            if((nx = pres[x].end  -  pres[x].start) > (end - pp))
+                                                goto err_next;
+                                            if(nx > 0)
+                                            {
+                                                memcpy(pp, pres[i].start, nx);
+                                                pp += nx;
+                                            }
+                                            while(*p != '\0' && *p != '>')++p;
+                                        }
+                                        else *pp++ = *p++;
+                                    }
+                                    *pp++ = '\0';
+                                    if((nodeid = templates[i].linkmap.nodeid > 0)  
+                                        && (urlid = ltask->add_url(ltask, urlnode.urlid, 0, newurl, 
+                                                (templates[i].linkmap.flag & REG_IS_POST))) >= 0)
+                                    {
+                                       hibase->add_urlnode(hibase, nodeid, urlnode.id, urlid, level);
+                                       goto ok_next;
+                                    }
+                                err_next:
+                                    ERROR_LOGGER(hitaskd_logger, 
+                                            "link error link:%s pattern:%s url:%s",
+                                            templates[i].link, templates[i].pattern, url);
                                 }
+                                else
+                                {
+                                    for(j = 0; j < n; j++)
+                                    {
+                                        //handling data
+                                        if(j < templates[i].nfields 
+                                            && (templates[i].map[i].flag & REG_IS_URL))
+                                        {
+                                            
+                                        }
+                                        else
+                                        {
+                                            fprintf(stdout, "%s::%d %d-%d %.*s\n", __FILE__, 
+                                                 __LINE__, i, j, pres[i].end  -  pres[i].start, 
+                                                content + pres[i].start);
+                                        }
+                                        start_offset = pres[i].end;
+                                    }
+                                }
+                                ok_next:
                                 if((templates[i].flags & TMP_IS_GLOBAL) == 0)
                                     start_offset = -1;
                             }
