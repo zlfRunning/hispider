@@ -1,13 +1,12 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
     <head>
-        <title>Hitask Monitor</title>
-        <style>
+    <title>Hitask Monitor</title>
+    <style>
             body{
-                background:#F4FBFF;
+                background-color:#F4FBFF;
                 color:#333;
                 font-family:verdana,tahoma;
                 font-size:12pt;
-                margin:auto;
                 width:100%;
                 height:100%;
             }
@@ -22,24 +21,25 @@
                 top:0px;left:0px;cursor: pointer;}
             #itab ul{margin:0;padding:0;list-style:none;color:#2F5FA1;cursor: pointer;}
             #itab li{float:left;background-color:#F4FBFF;border-right:1px solid #FFF;
-                padding:3px 8px 3px 8px;cursor: pointer;width:120px;height:30px;cursor: pointer;}
+                padding:3px 8px 3px 8px; cursor: pointer;width:120px;height:30px;cursor: pointer;}
             #itab .tab-selected{background-color:#D0E9F7;padding:0;margin:0;
-                padding:3px 8px 3px 8px;height:30px;cursor: pointer;}
+                padding:3px 8px 3px 8px; height:30px;cursor: pointer;}
             #taskinfo{position:absolute;background-color:#D0E9F7; color:#2F5FA1;display:none;
                 border:1px solid #81BEF7; padding:0px;top:36px;height:100%;width:100%;}
             .ktask{font-size:12pt;font-weight:bold;}
             .vtask{font-size:12pt;font-weight:bold;}
             #database{position:absolute;background-color:#F4FBFF;display:none;
-                border:0px solid #81BEF7;padding:0px;left:0px;top:36px;width:100%;height:100%;}
+                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:100%;height:100%;}
             .dblist{position:relative;padding:0px; background-color:#D0E9F7;height:100%;}
-            .dbtitle{position:relative;background-color:#D0E9F7;color:#2F5FA1; height:30px;}
-            .dbselect,#dbselect{position:relative;background-color:#D0E9F7;color:#2F5FA1;}
-            #dbfields,.dbfields{position:relative;background-color:#F4FBFF;color:#2F5FA1;}
-            .field-title{background-color:#D0E9F7; height:30px;}
-            .ultab{list-style:none;padding:0;margin:0;}
-            .ltabname{cursor:pointer;font-size:12pt; }
-            .ltab{background-color:#D0E9F7;cursor: pointer;}
-            .ltab-selected{background-color:#F4FBFF;cursor: pointer;}
+            .dbtitle{position:relative;background-color:#2F5FA1;color:#c0c0c0; height:30px;}
+            #dbselect{position:relative;background-color:#D0E9F7;color:#2F5FA1;width:100%;}
+            #dbfields .dbfields{position:relative;background-color:#F4FBFF;color:#2F5FA1;}
+            .field-title{background-color:#2F5FA1;color:#c0c0c0;font-size:13pt;
+                font-weight:bold;height:30px;width:100%;}
+            .ultab{list-style:none;padding:0;margin:0;width:100%;}
+            .ltabname{cursor:pointer;font-size:12pt;}
+            .ltab{background-color:#D0E9F7;cursor: pointer;width:100%;}
+            .ltab-selected{background-color:#F4FBFF;cursor: pointer;width:100%;}
             .lfname{cursor: pointer;}
             .lfield{background-color:#F4FBFF;cursor: pointer;}
             .lfield-selected{background-color:#D0E9F7;cursor: pointer;}
@@ -49,18 +49,23 @@
             #template{position:absolute;background-color:#F4FBFF;display:none;
                 border:1px solid #81BEF7;padding:0px;left:0px;
                 top:36px;height:100%;width:100%;}
-            .treetab{background-color:#F2F2F2;height:100%;};
-            #treebody{position:relative;background-color:#F2F2F2;color:#2F5FA1;width:100%;}
-            .treeline{position:relative;border:0px;font-size:12pt;font-weight:bold;color:#BDBDBD;}
-            .title{position:relative;background-color:#F2F2F2;color:#000000;width:100%;}
-            .btitle{position:relative;background-color:#D0E9F7;width:100%;}
+            .template-tab{height:100%;width:100%;table-layout:fixed;}
+            .treetab{background-color:#D0E9F7;height:100%;margin:auto;}
+            #tree-title{background-color:#2F5FA1;color:#c0c0c0;font-size:13pt;
+                font-weight:bold;height:30px;width:100%;}
+            #treebody{position:relative;color:#000000;width:100%;}
+            .treeline{position:relative;border:0px;font-size:12pt;font-weight:bold;}
+            .title{position:relative;background-color:#D0E9F7;width:100%;}
+            .btitle{position:relative;background-color:#c0c0c0;width:100%;}
+            #template-title{background-color:#2F5FA1;color:#c0c0c0;font-size:13pt;
+                font-weight:bold;height:30px;width:100%;}
             #node-template{position:relative;background-color:#D0E9F7;
                 border:1px solid #ffffff;padding:0px;color:#2F5FA1;}
-            .template-header{background-color:#D0E9F7;cursor: pointer;};
+            .template-header{background-color:#D0E9F7;cursor: pointer;}
             .ltemplate{background-color:#D0E9F7;cursor: pointer;}
-            #txtform{position:absolute;width:320px;background-color:#ffffff;
+            #txtform{position:absolute;width:350px;background-color:#ffffff;
                 border:1px solid #81BEF7;padding:10px;overflow:auto;display:none;}
-            #dbform{position:absolute;width:350px;background-color:#ffffff;
+            #dbform{position:absolute;width:380px;background-color:#ffffff;
                 border:1px solid #81BEF7;padding:10px;overflow:auto;display:none;}
             #xtemplateform{position:relative;background-color:#ffffff;display:none;width:100%;
                 border:0px solid #81BEF7;padding:0px;font-size:12pt;color:#2F5FA1;}
@@ -91,22 +96,22 @@
             .url-ul{list-style:none;padding:0;margin:0;width:100%;}
             .url-li{background-color:#D0E9F7;cursor: pointer;}
             .url-li-selected{background-color:#F4FBFF;cursor: pointer;}
-            #url-header{position:relative;background-color:#D0E9F7;color:#2F5FA1;
-                height:40px;width:100%;border:1px solid #FFFFFF;}
+            #url-header{position:relative;background-color:#2F5FA1;color:#cccccc;
+                height:30px;width:100%;border:1px solid #FFFFFF;}
             #data{position:absolute;background-color:#F4FBFF;display:none;
                 border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:100%;height:100%;}
             #dns{position:absolute;background-color:#F4FBFF;display:none;
                 border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:100%;height:100%;}
-            #dns-header{position:relative;background-color:#D0E9F7;color:#2F5FA1;
-                height:40px;width:100%;border:1px solid #FFFFFF;}
+            #dns-header{position:relative;background-color:#2F5FA1;color:#cccccc;
+                height:30px;width:100%;border:1px solid #FFFFFF;}
             #dns-list{position:relative;}
             .dns-ul{list-style:none;padding:0;margin:0;}
             .dns-li{background-color:#D0E9F7;cursor: pointer;}
             .dns-li-selected{background-color:#F4FBFF;cursor: pointer;}
             #proxy{position:absolute;background-color:#F4FBFF;display:none;
                 border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:100%;height:100%;}
-            #proxy-header{position:relative;background-color:#D0E9F7;color:#2F5FA1;
-                height:40px;width:100%;border:1px solid #FFFFFF;}
+            #proxy-header{position:relative;background-color:#2F5FA1;color:#cccccc;
+                height:30px;width:100%;border:1px solid #FFFFFF;}
             #proxy-list{position:relative;}
             .proxy-ul{list-style:none;padding:0;margin:0;}
             .proxy-li{background-color:#D0E9F7;cursor: pointer;}
@@ -2752,14 +2757,14 @@
         <table width=100% height=100% cellspacing=0 border=0 valign=top align=left >
         <tr>
         <td class='dblist' valign=top width=20% height=100% >
-            <table cellspacing=0 border=0 valign=top align=left>
+            <table cellspacing=0 border=0 valign=top align=left width=100% >
             <tr>
-                <td valign=top class='dbtitle'>
+                <td valign=top class='dbtitle' width=100% >
                 点击<span class='eadd' title='Add' onclick='DBXAdd(event)'>✚</span>添加数据表</div>
                 </td>
             </tr>
             <tr>
-                <td valign=top class='dbselect'>
+                <td valign=top width=100% >
                     <div id='dbselect'></div>
                 </td>
             </tr>
@@ -2772,12 +2777,14 @@
         </table>
     </div>
     <div id='template'>
-      <table width=100% cellspacing=0 border=0 valign=top align=left height=100% >
+    <table cellspacing=0 border=0 valign=top align=left height=100% class='template-tab' >
         <tr>
-        <td valign=top align=left width=auto height=100% class='treetab' >
+        <td valign=top align=left height=100%  class='treetab'>
+            <div id='tree-title'>抓取树用于指导爬虫的爬去路径</div>
             <div id='treebody' level='0'></div>
         </td>
-        <td valign=top align=left width=auto height=100% >
+        <td valign=top align=left height=100% width=80%>
+              <div id='template-title'>模版用于抽取自己需要的数据</div>
               <div id='node-template'></div>
               <div id='xtemplateform'>
                 <div id=urlform >
@@ -2855,7 +2862,8 @@
     </div>
     <div id='urlblock'>
     <div id='url-header'>
-    <form name='urlblockform' action='javascript:void(0)' onsubmit='return AddNodeURL(this)' >
+    <form name='urlblockform' class='listform' action='javascript:void(0)' 
+            onsubmit='return AddNodeURL(this)' >
     <input type=hidden name='op'value='url_add' >
     <select name='nodeid' onchange='ListNodeURLs(this.form)'>
     <option value='-1' selected>选择节点</option>
@@ -2879,7 +2887,8 @@
     <div id='data'></div>
     <div id='dns'>
     <div id='dns-header'>
-    <form name='dns-add-form' action='javascript:void(0)' onsubmit='return AddDNS(this)'>
+    <form name='dns-add-form' class='listform' action='javascript:void(0)' 
+            onsubmit='return AddDNS(this)'>
     添加DNS:<input type=text name='host' size=64 value='' >
     <input type=submit value='ok'>
     </form>
@@ -2899,7 +2908,9 @@
     </div>
 </div>
     <div id='txtform'>
-        <form name="editorform" action="javascript:void(0)" onsubmit="return EditNode(this);"> 
+        <form name="editorform" class='listform' action="javascript:void(0)" 
+            onsubmit="return EditNode(this);"> 
+            <span class='closetxt' onclick="CloseThis(this)" >关闭</span>
             <input type=hidden name='op' value='node_add' >
             <input type=hidden name='nodeid' value='0' >
             <input type=hidden name='pid' value='0' >
@@ -2907,22 +2918,24 @@
             <input type=submit value='ok' class='submit' >
             &nbsp;&nbsp;&nbsp;&nbsp;
             <span class='closebutton' onclick="CloseThis(this)">x</span>
-            &nbsp;&nbsp;<span class='closetxt' onclick="CloseThis(this)" >关闭</span>
         </form>
     </div>
     <div id='dbform'>
-        <form name="xdbform" action="javascript:void(0)" onsubmit="return EditDB(this);"> 
+        <form name="xdbform" class='listform' action="javascript:void(0)" 
+            onsubmit="return EditDB(this);"> 
+            <span class='closetxt' onclick="CloseThis(this)" >关闭</span>
             <input type=hidden name='op' value='table_add' >
             <input type=hidden name='tableid' value='0' >
             <input type='text' name='name' class='txtinput' size=24>
             <input type=submit value='ok' class='submit' >
             &nbsp;&nbsp;&nbsp;&nbsp;
             <span class='closebutton' onclick="CloseThis(this)">x</span>
-            &nbsp;&nbsp;<span class='closetxt' onclick="CloseThis(this)" >关闭</span>
         </form>
     </div>
     <div id='dbfieldform'>
-        <form name="dbfieldform" action="javascript:void(0)" onsubmit="return EditField(this);"> 
+        <form name="dbfieldform" class='listform' action="javascript:void(0)" 
+            onsubmit="return EditField(this);"> 
+            <span class='closebutton' onclick="CloseThis(this)">x</span>
             <input type=hidden name='op' value='table_add' >
             <input type=hidden name='tableid' value='' >
             <input type=hidden name='fieldid' value='' >
@@ -2942,8 +2955,7 @@
             <input type=checkbox name='is_null' value=4 >是否为空
             <input type=submit value='ok' class='submit' >
             &nbsp;&nbsp;&nbsp;&nbsp;
-            <span class='closebutton' onclick="CloseThis(this)">x</span>
-            &nbsp;&nbsp;<span class='closetxt' onclick="CloseThis(this)" >关闭</span>
+            <span class='closetxt' onclick="CloseThis(this)" >关闭</span>
         </form>
     </div>
     </body>
