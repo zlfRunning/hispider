@@ -3,20 +3,19 @@
         <title>Hitask Monitor</title>
         <style>
             body{
-                background:#000000;
+                background:#F4FBFF;
                 color:#333;
                 font-family:verdana,tahoma;
                 font-size:12pt;
                 margin:auto;
-                width:1000px;
+                width:100%;
                 height:100%;
             }
             #mainframe
             {
                 position:relative;
-                background-color:#ffffff;
-                margin:auto;
-                width:1000px;
+                background-color:#F4FBFF;
+                width:100%;
                 height:100%;
             }
             #itab {position:relative;background:#F4FBFF;height:50px; width:100%;
@@ -27,48 +26,22 @@
             #itab .tab-selected{background-color:#D0E9F7;padding:0;margin:0;
                 padding:3px 8px 3px 8px;height:30px;cursor: pointer;}
             #taskinfo{position:absolute;background-color:#F4FBFF; color:#2F5FA1;display:none;
-                border:1px solid #81BEF7; padding:0px;top:36px;height:100%;width:998px;}
+                border:1px solid #81BEF7; padding:0px;top:36px;height:100%;width:100%;}
             .ktask{font-size:12pt;font-weight:bold;}
             .vtask{font-size:12pt;font-weight:bold;}
             #database{position:absolute;background-color:#F4FBFF;display:none;
-                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:100%;}
-            #urlblock{position:absolute;background-color:#F4FBFF;display:none;
-                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:100%;}
-            .url-ul{list-style:none;padding:0;margin:0;}
-            .url-li{background-color:#D0E9F7;cursor: pointer;}
-            .url-li-selected{background-color:#F4FBFF;cursor: pointer;}
-            #url-header{position:relative;background-color:#D0E9F7;color:#2F5FA1;
-                height:40px;width:996px;border:1px solid #FFFFFF;}
-            #data{position:absolute;background-color:#F4FBFF;display:none;
-                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:100%;}
-            #dns{position:absolute;background-color:#F4FBFF;display:none;
-                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:100%;}
-            #dns-header{position:relative;background-color:#D0E9F7;color:#2F5FA1;
-                height:40px;width:996px;border:1px solid #FFFFFF;}
-            #dns-list{position:relative;}
-            .dns-ul{list-style:none;padding:0;margin:0;}
-            .dns-li{background-color:#D0E9F7;cursor: pointer;}
-            .dns-li-selected{background-color:#F4FBFF;cursor: pointer;}
-            #proxy{position:absolute;background-color:#F4FBFF;display:none;
-                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;height:100%;}
-            #proxy-header{position:relative;background-color:#D0E9F7;color:#2F5FA1;
-                height:40px;width:996px;border:1px solid #FFFFFF;}
-            #proxy-list{position:relative;}
-            .proxy-ul{list-style:none;padding:0;margin:0;}
-            .proxy-li{background-color:#D0E9F7;cursor: pointer;}
-            .proxy-li-selected{background-color:#F4FBFF;cursor: pointer;}
-            #dblist{position:relative;top:0px;left:0px;padding:0px;
-                background-color:#D0E9F7;width:300px;height:100%;}
-            #dbtitle{position:relative;top:0px;left:0px;padding:0px;
+                border:0px solid #81BEF7;padding:0px;left:0px;top:36px;width:100%;height:100%;}
+            .dblist{position:relative;padding:0px; background-color:#D0E9F7;height:100%;}
+            .dbtitle{position:relative;padding:0px;background-color:#D0E9F7;
+                color:#2F5FA1; height:30px;}
+            .dbselect,#dbselect{position:relative;padding:0px;
                 background-color:#D0E9F7;color:#2F5FA1;}
-            #dbselect{position:relative;top:0px;left:0px;padding:0px;
-                background-color:#D0E9F7;border:0px solid #ffffff;color:#2F5FA1;}
+            #dbfields,.dbfields{position:relative;background-color:#F4FBFF;color:#2F5FA1;}
+            .field-title{background-color:#D0E9F7; height:30px;}
             .ultab{list-style:none;padding:0;margin:0;}
-            .ltabname{cursor: pointer;font-size:12pt; }
+            .ltabname{cursor:pointer;font-size:12pt; }
             .ltab{background-color:#D0E9F7;cursor: pointer;}
             .ltab-selected{background-color:#F4FBFF;cursor: pointer;}
-            #dbfields{position:absolute;background-color:#D0E9F7;color:#2F5FA1;
-                left:300px;top:0px;width:698px;}
             .lfname{cursor: pointer;}
             .lfield{background-color:#F4FBFF;cursor: pointer;}
             .lfield-selected{background-color:#D0E9F7;cursor: pointer;}
@@ -76,29 +49,30 @@
                 border:1px solid #81BEF7;padding:0px;font-size:12pt;color:#2F5FA1;
                 overflow:auto;display:none;}
             #template{position:absolute;background-color:#F4FBFF;display:none;
-                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:998px;}
-            #treebody{position:relative;background-color:#ffffff;display:inline;width:996px;
-                border:0px solid #81BEF7; padding:0px;left:0px;top:0px;color:#2F5FA1;}
-            #node-template{position:relative;background-color:#D0E9F7; width:996px;
+                border:1px solid #81BEF7;padding:0px;left:0px;
+                top:36px;height:100%;width:100%;}
+            .treetab{background-color:#D0E9F7;height:100%;};
+            #treebody{position:relative;background-color:#F4FBFF;display:inline;color:#2F5FA1;}
+            .treeline{border:0px;font-size:12pt;font-weight:bold;color:#BDBDBD;}
+            .title{border:0px;font-size:12pt;background-color:#D0E9F7;color:#000000;}
+            .btitle{border:0px;font-size:12pt;background-color:#F2F2F2;}
+            #node-template{position:relative;background-color:#D0E9F7;
                 border:0px solid #81BEF7;padding:0px;top:0px;left:0px;color:#2F5FA1;}
             .template-header{background-color:#D0E9F7;cursor: pointer;};
             .ltemplate{background-color:#D0E9F7;cursor: pointer;}
             .ltemplate-selected{background-color:#F4FBFF;cursor: pointer;}
-            .treeline{border:0px;font-size:12pt;font-weight:bold;color:#BDBDBD;}
-            .title{border:0px;font-size:12pt;background-color:#ffffff;color:#000000;}
-            .btitle{border:0px;font-size:12pt;background-color:#F2F2F2;}
             .formdiv{position:absolute;width:300px;background-color:#ffffff;
                 border:1px solid #81BEF7;padding:10px;overflow:auto;display:none;}
-            #xtemplateform{position:relative;background-color:#ffffff;display:none;width:996px;
+            #xtemplateform{position:relative;background-color:#ffffff;display:none;width:100%;
                 border:0px solid #81BEF7;padding:0px;font-size:12pt;color:#2F5FA1;}
             #urlform{position:relative;background-color:#D0E9F7;}
             #source_code_op{display:none;}
             #templatediv{display:none;position:relative;}
             .template-bar{position:relative;background-color:#2F5FA1;height:20px;
                 font-size:13pt;font-weight:bold;color:silver;}
-            #editor-frame{height:200px;width:994px;border:1px solid #000000;}
-            #template-config{position:absolute;background-color:#D0E9F7;
-                border:1px solid #000000;padding:0px;font-size:12pt;color:#2F5FA1;}
+            #editor-frame{height:200px;width:100%;border:1px solid #000000;}
+            #template-config{position:absolute;background-color:#D0E9F7;overflow:auto;
+                border:2px solid #000000;padding:0px;font-size:12pt;color:#2F5FA1;height:500px;}
             #template-config-frame{position:relative;background-color:#D0E9F7;
                 border:0px solid #000000;width:100%;height:500px;
                 font-size:12pt;color:#2F5FA1;}
@@ -112,15 +86,38 @@
             .ctxt_block{position:relative;background-color:silver;border:1px solid #000000;}
             .closebutton{font-size:14pt;font-weight:bold;color:red;
                 cursor:pointer;display:inline;right:20px;text-align:right;}
+            #urlblock{position:absolute;background-color:#F4FBFF;display:none;
+                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:100%;height:100%;}
+            .url-ul{list-style:none;padding:0;margin:0;width:100%;}
+            .url-li{background-color:#D0E9F7;cursor: pointer;}
+            .url-li-selected{background-color:#F4FBFF;cursor: pointer;}
+            #url-header{position:relative;background-color:#D0E9F7;color:#2F5FA1;
+                height:40px;width:100%;border:1px solid #FFFFFF;}
+            #data{position:absolute;background-color:#F4FBFF;display:none;
+                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:100%;height:100%;}
+            #dns{position:absolute;background-color:#F4FBFF;display:none;
+                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:100%;height:100%;}
+            #dns-header{position:relative;background-color:#D0E9F7;color:#2F5FA1;
+                height:40px;width:100%;border:1px solid #FFFFFF;}
+            #dns-list{position:relative;}
+            .dns-ul{list-style:none;padding:0;margin:0;}
+            .dns-li{background-color:#D0E9F7;cursor: pointer;}
+            .dns-li-selected{background-color:#F4FBFF;cursor: pointer;}
+            #proxy{position:absolute;background-color:#F4FBFF;display:none;
+                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:100%;height:100%;}
+            #proxy-header{position:relative;background-color:#D0E9F7;color:#2F5FA1;
+                height:40px;width:100%;border:1px solid #FFFFFF;}
+            #proxy-list{position:relative;}
+            .proxy-ul{list-style:none;padding:0;margin:0;}
+            .proxy-li{background-color:#D0E9F7;cursor: pointer;}
+            .proxy-li-selected{background-color:#F4FBFF;cursor: pointer;}
             .node
             {
-                overflow:hidden;
                 color:black;
                 font-size:12pt;
             }
             .nodename
             {
-                overflow:hidden;
                 color:black;
                 font-size:12pt;
                 cursor:pointer;
@@ -864,13 +861,15 @@
                     var ftype = null;
                     var flag = 0;
                     htmlstr =  "<ul class='ultab' >";
-                    htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
+                    htmlstr += "<li class='field-title'>"
+                    htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
                     htmlstr += "点击&nbsp;<span class='eadd' title='Click Add New Field' ";
                     htmlstr += "onclick=\"DBFXAdd(event, '"+tabid+"')\">✚</span>&nbsp;添加字段";
                     htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
                     htmlstr += "<span class='ltabname'>"+tabname+"[";
                     htmlstr += "<span class='nchilds'>"+tab['nfields']+"</span>";
                     htmlstr += "]</span>";
+                    htmlstr += "</li>";
                     for(i = 0; i < tab['nfields']; i++)
                     {
                         fid = tab['fields'][i]['id'];
@@ -2080,6 +2079,7 @@
                 }
                 else if(div == 'user')
                 {
+
                 }
             }
             function loadTaskInfo()
@@ -2794,86 +2794,108 @@
     </div>
     <div id='taskinfo'></div>
     <div id='database'>
-        <div id='dblist'>
-        <div id='dbtitle'>点击
-            <span class='eadd' title='Add' onclick='DBXAdd(event)'>✚</span>添加数据表
-        </div>
-        <div id='dbselect'></div>
-        </div>
-        <div id='dbfields'></div>
+        <table width=100% height=100% cellspacing=0 border=0 valign=top align=left >
+        <tr>
+        <td class='dblist' valign=top height=100% width=10%>
+            <table cellspacing=0 border=0 valign=top align=left>
+            <tr>
+                <td valign=top class='dbtitle'>
+                点击<span class='eadd' title='Add' onclick='DBXAdd(event)'>✚</span>添加数据表</div>
+                </td>
+            </tr>
+            <tr>
+                <td valign=top class='dbselect'>
+                    <div id='dbselect'></div>
+                </td>
+            </tr>
+            </table>
+        </td>
+        <td valign=top align=left class='dbfields' cellspacing=0 border=0 >
+            <div id='dbfields'></div>
+        </td>
+        </tr>
+        </table>
     </div>
     <div id='template'>
-      <div id='treebody' level='0'></div>
-      <div id='node-template'></div>
-      <div id='xtemplateform'>
-        <div id=urlform >
-        <form action='javascript:void(0);' name='urlform' onsubmit='return LoadURL(this);'>
-            URL:<input type=text size='64' name='url'>
-            &nbsp;
-            <input type=radio name='method' value='0' checked>GET
-            &nbsp;
-            <input type=radio name='method' value='1'>POST
-            &nbsp;
-            <input type=submit value='Load'>
-        </form>
-        </div>
-        <div id='source_code_op'>
-            <div id='source_view'></div>
-            <div id='source_op'></div>
-        </div>
-        <div id='templatediv'>
-            <form name="templateform" action="javascript:void(0)" >
-            <input type=hidden name='op' value='template_add' >
-            <input type=hidden name='nodeid' value='-1' >
-            <input type=hidden name='templateid' value='-1' >
-            <input type=hidden name='tableid' value='-1' >
-            <input type=hidden name='flag' value='0' >
-            <input type=hidden name='nfields' value='-1' >
-            <input type=hidden name='map' value='' >
-            <input type=hidden name='linkmap' value='' >
-            <input type=hidden name='url' value='' >
-            <input type=hidden name='method' value='' >
-            代码:<textarea name='code' rows=6  cols=120> </textarea> 
-            <br>
-            模版:<textarea name='pattern' rows=2  cols=120 > </textarea><br>
-            <span align=center>
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-            <input type=checkbox name='is_public' >公共字段
-            &nbsp;&nbsp;&nbsp;&nbsp;
-            <input type=checkbox name='is_global' >重复匹配多条
-            &nbsp;&nbsp;&nbsp;&nbsp;
-            <input type=checkbox name='is_ignorecase' >忽略大小写
-            &nbsp;&nbsp;&nbsp;&nbsp;
-            <select name='link_table' onchange="changeTable(this.form, 'link_field', this)">
-                <option value='-1' selected>数据表</option>
-            </select>
-            &nbsp;&nbsp;&nbsp;&nbsp;
-            <input type='button' value='Test Template' onclick="TestTemplate(this.form)">
-            &nbsp;&nbsp;&nbsp;&nbsp;
-            <input type='button' value='Config Template' onclick="ConfigTemplate(this.form)">
-            <hr>
-            <div class='template-bar'>用于拼接隐藏的链接和Ajax内容块地址</div>
-            URL规则:<input type=text name='link' value='' size=64>
-            &nbsp;&nbsp;&nbsp;&nbsp;
-            <input type='button' value='Test Template & Link' onclick="TestTemplate(this.form)">
-            &nbsp;&nbsp;&nbsp;&nbsp;
-            <input type='button' value='Submit Link' onclick="EditLink(this.form);">
-            <br>
-            <input type=radio name='link_method' value='0' checked>GET
-            &nbsp;
-            <input type=radio name='link_method' value='1'>POST
-            &nbsp;
-            <select name='link_field' >
-                <option value='-1' selected>字段</option>
-            </select>
-            &nbsp;&nbsp;&nbsp;&nbsp;
-            <select name='link_node' >
-                <option value='-1' selected>子节点</option>
-            </select>
-            </span>
-        </form>
-        </div>
-      </div>
+      <table width=100% cellspacing=0 border=0 valign=top align=left height=100% >
+        <tr>
+        <td valign=top align=left width=20% height=100% class='treetab' >
+            <div id='treebody' level='0'></div>
+        </td>
+        <td valign=top align=left width=80% height=100% >
+              <div id='node-template'></div>
+              <div id='xtemplateform'>
+                <div id=urlform >
+                <form action='javascript:void(0);' name='urlform' onsubmit='return LoadURL(this);'>
+                URL:<input type=text size='64' name='url'>
+                &nbsp;
+                <input type=radio name='method' value='0' checked>GET
+                &nbsp;
+                <input type=radio name='method' value='1'>POST
+                &nbsp;
+                <input type=submit value='Load'>
+                </form>
+                </div>
+                <div id='source_code_op'>
+                  <div id='source_view'></div>
+                  <div id='source_op'></div>
+                </div>
+                <div id='templatediv'>
+                <form name="templateform" action="javascript:void(0)" >
+                <input type=hidden name='op' value='template_add' >
+                <input type=hidden name='nodeid' value='-1' >
+                <input type=hidden name='templateid' value='-1' >
+                <input type=hidden name='tableid' value='-1' >
+                <input type=hidden name='flag' value='0' >
+                <input type=hidden name='nfields' value='-1' >
+                <input type=hidden name='map' value='' >
+                <input type=hidden name='linkmap' value='' >
+                <input type=hidden name='url' value='' >
+                <input type=hidden name='method' value='' >
+                代码:<textarea name='code' rows=8  cols=120> </textarea> 
+                <br>
+                模版:<textarea name='pattern' rows=4  cols=120 > </textarea><br>
+                <span align=center>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                <input type=checkbox name='is_public' >公共字段
+                &nbsp;&nbsp;&nbsp;&nbsp;
+                <input type=checkbox name='is_global' >重复匹配多条
+                &nbsp;&nbsp;&nbsp;&nbsp;
+                <input type=checkbox name='is_ignorecase' >忽略大小写
+                &nbsp;&nbsp;&nbsp;&nbsp;
+                <select name='link_table' onchange="changeTable(this.form, 'link_field', this)">
+                    <option value='-1' selected>数据表</option>
+                </select>
+                &nbsp;&nbsp;&nbsp;&nbsp;
+                <input type='button' value='Test Template' onclick="TestTemplate(this.form)">
+                &nbsp;&nbsp;&nbsp;&nbsp;
+                <input type='button' value='Config Template' onclick="ConfigTemplate(this.form)">
+                <hr>
+                <div class='template-bar'>用于拼接隐藏的链接和Ajax内容块地址</div>
+                URL规则:<input type=text name='link' value='' size=64>
+                &nbsp;&nbsp;&nbsp;&nbsp;
+                <input type='button' value='Test Template & Link' onclick="TestTemplate(this.form)">
+                &nbsp;&nbsp;&nbsp;&nbsp;
+                <input type='button' value='Submit Link' onclick="EditLink(this.form);">
+                <br>
+                <input type=radio name='link_method' value='0' checked>GET
+                &nbsp;
+                <input type=radio name='link_method' value='1'>POST
+                &nbsp;
+                <select name='link_field' >
+                    <option value='-1' selected>字段</option>
+                </select>
+                &nbsp;&nbsp;&nbsp;&nbsp;
+                <select name='link_node' >
+                    <option value='-1' selected>子节点</option>
+                </select>
+                </span>
+                </form>
+                </div>
+            </div>
+        </td>
+        </tr>
+       </table>
     </div>
     <div id='urlblock'>
     <div id='url-header'>
