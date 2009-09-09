@@ -1443,9 +1443,9 @@ int histore_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
 /* task handler */
 void histore_task_handler(void *arg)
 {
-    char *block = NULL, *url = NULL, *type = NULL, *content = NULL, 
-         *zdata = NULL, *p = NULL, *error = NULL, *pp = NULL, 
-         newurl[HTTP_URL_MAX], oldurl[HTTP_URL_MAX];
+    char *block = NULL, *url = NULL, *type = NULL, *content = NULL, *p = NULL, 
+         *zdata = NULL, *end = NULL, *pp = NULL, newurl[HTTP_URL_MAX];
+    const char *error = NULL;
     int id = -1, len = 0, n = -1, count = -1, i = -1, flag = 0, 
         start_offset = 0, erroffset = 0, res[FIELD_NUM_MAX * 2], 
         nres = 0, j = 0, x = 0, nx = 0, urlid = 0, nodeid = 0;
@@ -1503,7 +1503,7 @@ void histore_task_handler(void *arg)
                                                 goto err_next;
                                             if(nx > 0)
                                             {
-                                                memcpy(pp, pres[i].start, nx);
+                                                memcpy(pp, content + pres[i].start, nx);
                                                 pp += nx;
                                             }
                                             while(*p != '\0' && *p != '>')++p;
@@ -1515,7 +1515,8 @@ void histore_task_handler(void *arg)
                                         && (urlid = ltask->add_url(ltask, urlnode.urlid, 0, newurl, 
                                                 (templates[i].linkmap.flag & REG_IS_POST))) >= 0)
                                     {
-                                       hibase->add_urlnode(hibase, nodeid, urlnode.id, urlid, level);
+                                       hibase->add_urlnode(hibase, nodeid, urlnode.id, 
+                                               urlid, urlnode.level);
                                        goto ok_next;
                                     }
                                 err_next:

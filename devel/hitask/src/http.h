@@ -222,7 +222,6 @@ static HTTP_ELEMENT response_status[] =
    | Cookies 
    | Set-Cookie 
  */
-#define HTTP_HEADER_NUM	49
 static HTTP_ELEMENT http_headers[] = 
 {
 #define HEAD_REQ_ACCEPT 0
@@ -322,8 +321,13 @@ static HTTP_ELEMENT http_headers[] =
 #define HEAD_REQ_COOKIE 47
     {47, "Cookie:", 7, NULL},
 #define HEAD_RESP_SET_COOKIE 48
-    {48, "Set-Cookie:", 11, NULL}
+    {48, "Set-Cookie:", 11, NULL},
+#define HEAD_GEN_USERID     49
+    {49, "UserID:", 7, NULL},
+#define HEAD_GEN_UUID     50
+    {50, "UUID:", 5, NULL}
 };
+#define HTTP_HEADER_NUM	51
 
 /* HTTP/1.1 METHODS
    Method         = 

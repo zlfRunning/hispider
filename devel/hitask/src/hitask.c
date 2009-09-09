@@ -33,6 +33,8 @@ typedef struct _TASK
     CONN *s_conn;
     CONN *c_conn;
     int  taskid;
+    int  userid;
+    int  uuid;
     int  state;
     char request[HTTP_BUF_SIZE];
     int  nrequest;
@@ -78,6 +80,10 @@ int http_download_error(int c_id, int err)
             p += sprintf(p, "Host: %s\r\n Server:%s\r\n\r\n", 
                     tasklist[c_id].host, tasklist[c_id].ip);
         }
+        if(tasklist[c_id].userid >= 0)
+            p += sprintf(p, "UserID:%d\r\n", tasklist[c_id].userid);
+        if(tasklist[c_id].uuid >= 0)
+            p += sprintf(p, "UUID:%d\r\n", tasklist[c_id].uuid);
         if(err > 0) p += sprintf(p, "Warning: %d\r\n", err);
         p += sprintf(p, "%s", "\r\n");
         n = p - buf;
@@ -103,7 +109,7 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
     char *p = NULL, *end = NULL, *ip = NULL, *sip = NULL, *pip = NULL, 
          *host = NULL, *path = NULL;// *cookie = NULL, *refer = NULL;
     HTTP_RESPONSE http_resp = {0};
-    int taskid = 0, n = 0, c_id = 0, port = 0, pport = 0, 
+    int taskid = 0, n = 0, c_id = 0, port = 0, pport = 0, userid = -1, uuid = -1, 
         sport = 0, is_use_proxy = 0, doctype = -1, *px = NULL;
     struct hostent *hp = NULL;
 
@@ -177,6 +183,10 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
                     ? (http_resp.hlines + n): NULL;
                 taskid = tasklist[c_id].taskid = ((n = http_resp.headers[HEAD_REQ_FROM]) > 0)
                     ? atoi(http_resp.hlines + n) : 0;
+                userid = tasklist[c_id].userid = ((n = http_resp.headers[HEAD_GEN_USERID]) > 0)
+                    ? atoi(http_resp.hlines + n) : -1;
+                uuid = tasklist[c_id].uuid = ((n = http_resp.headers[HEAD_GEN_UUID]) > 0)
+                    ? atoi(http_resp.hlines + n) : -1;
                 //fprintf(stdout, "%s::%d OK host:%s ip:%s port:%d path:%s taskid:%d \n", 
                 //        __FILE__, __LINE__, host, ip, port, path, taskid);
                 if(pip && pport > 0) 
@@ -227,6 +237,8 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
                     //end
                     p += sprintf(p, "%s", "\r\n");
                     tasklist[c_id].nrequest = p - tasklist[c_id].request;
+                    tasklist[c_id].userid = userid;
+                    tasklist[c_id].uuid = uuid;
                     tasklist[c_id].c_conn->c_id = c_id;
                     tasklist[c_id].c_conn->start_cstate(tasklist[c_id].c_conn);
                     return service->newtransaction(service, tasklist[c_id].c_conn, c_id);
@@ -541,6 +553,10 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                             tasklist[c_id].host, tasklist[c_id].ip);
                     tasklist[c_id].is_new_host = 0;
                 }
+                if(tasklist[c_id].userid >= 0)
+                    p += sprintf(p, "UserID:%d\r\n", tasklist[c_id].userid);
+                if(tasklist[c_id].uuid >= 0)
+                    p += sprintf(p, "UUID:%d\r\n", tasklist[c_id].uuid);
                 if(http_resp->ncookies > 0)
                 {
                     ps = p;
@@ -576,6 +592,10 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 {
                     p += sprintf(p, "Content-Type: %s\r\n", http_resp->hlines +n);
                 }
+                if(tasklist[c_id].userid >= 0)
+                    p += sprintf(p, "UserID:%d\r\n", tasklist[c_id].userid);
+                if(tasklist[c_id].uuid >= 0)
+                    p += sprintf(p, "UUID:%d\r\n", tasklist[c_id].uuid);
                 p += sprintf(p, "Content-Length: %ld\r\n", LI(nzdata));
                 p += sprintf(p, "%s", "\r\n");
                 if((d_conn = tasklist[c_id].d_conn) && d_conn->push_chunk && (n = (p - buf)) > 0)
