@@ -18,6 +18,9 @@
 #define  HIBASE_QPNODE_NAME         "hibase.qpnode"
 #define  HIBASE_QTEMPLATE_NAME      "hibase.qtemplate"
 #define  HIBASE_QURLNODE_NAME       "hibase.qurlnode"
+#define  HIBASE_QTASK_NAME          "hibase.qtask"
+#define  HIBASE_QWAIT_NAME          "hibase.qwait"
+#define  HIBASE_ISTATE_NAME         "hibase.istate"
 #define _EXIT_(format...)                                                               \
 do                                                                                      \
 {                                                                                       \
@@ -145,14 +148,42 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
     ITABLE *table = NULL;
     PNODE *pnode = NULL;
     URLNODE *urlnode = NULL;
+    int i = 0, j = 0, n = 0, fd = -1;
     struct stat st = {0};
-    int i = 0, j = 0, n = 0;
     void *dp = NULL;
 
     if(hibase && dir)
     {
         n = sprintf(hibase->basedir, "%s/", dir);
         hibase_mkdir(hibase->basedir, 0755);
+        //resum state 
+        sprintf(path, "%s/%s", dir, HIBASE_ISTATE_NAME);
+        if((fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
+        {
+            if(fstat(fd, &st) == 0)
+            {
+                if(st.st_size == 0) ftruncate(fd, sizeof(ISTATE));
+                if((hibase->istate = (ISTATE *)mmap(NULL, sizeof(ISTATE),
+                    PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0)) == (void *)-1)
+                {
+                    _EXIT_("mmap %s failed, %s\n", path, strerror(errno));
+                }
+            }
+            else
+            {
+                _EXIT_("state %s failed, %s\n", path, strerror(errno));
+            }
+            close(fd);
+        }
+        else
+        {
+            _EXIT_("open %s failed, %s\n", path, strerror(errno));
+        }
+        p = path;
+        sprintf(path, "%s%s", hibase->basedir, HIBASE_QTASK_NAME);  
+        FQUEUE_INIT(hibase->qtask, p, int);
+        sprintf(path, "%s%s", hibase->basedir, HIBASE_QWAIT_NAME);  
+        FQUEUE_INIT(hibase->qwait, p, int);
         //resume table
         p = path;
         sprintf(path, "%s%s", hibase->basedir, HIBASE_TABLE_NAME);  
@@ -1262,6 +1293,11 @@ int hibase_add_urlnode(HIBASE *hibase, int nodeid, int parentid, int urlid, int 
         {
             urlnode[urlnodeid].status = URLNODE_STATUS_OK;
             if(level >= 0) urlnode[urlnodeid].level = level;
+            if(level > 0) 
+            {
+                px = &urlnodeid;
+                FQUEUE_PUSH(hibase->qtask, int, px);
+            }
             urlnode[urlnodeid].id = urlnodeid;
             urlnode[urlnodeid].parentid = parentid;
             urlnode[urlnodeid].urlid = urlid;
@@ -1306,7 +1342,7 @@ int hibase_add_urlnode(HIBASE *hibase, int nodeid, int parentid, int urlid, int 
 int hibase_update_urlnode(HIBASE *hibase, int urlnodeid, int level)
 {
     URLNODE *urlnode = NULL;
-    int ret = -1;
+    int ret = -1, *px = NULL;
 
     if(hibase && urlnodeid > 0 && urlnodeid < hibase->urlnodeio.total && level >= 0)
     {
@@ -1314,6 +1350,11 @@ int hibase_update_urlnode(HIBASE *hibase, int urlnodeid, int level)
         if((urlnode = HIO_MAP(hibase->urlnodeio, URLNODE)))
         {
             if(level >= 0) urlnode[urlnodeid].level = level;
+            if(level > 0)
+            {
+                px = &urlnodeid;
+                FQUEUE_PUSH(hibase->qtask, int, px);
+            }
             ret = urlnodeid;
         }
         MUTEX_UNLOCK(hibase->mutex);
@@ -1486,6 +1527,13 @@ void hibase_clean(HIBASE **phibase)
         FQUEUE_CLEAN((*phibase)->qpnode);
         FQUEUE_CLEAN((*phibase)->qtemplate);
         FQUEUE_CLEAN((*phibase)->qurlnode);
+        FQUEUE_CLEAN((*phibase)->qtask);
+        FQUEUE_CLEAN((*phibase)->qwait);
+        if((*phibase)->istate) 
+        {
+            msync((*phibase)->istate, sizeof(ISTATE), MS_SYNC);
+            munmap((*phibase)->istate, sizeof(ISTATE));
+        }
         MUTEX_DESTROY((*phibase)->mutex);
         //fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
         free(*phibase);

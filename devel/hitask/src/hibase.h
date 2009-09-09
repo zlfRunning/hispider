@@ -135,6 +135,12 @@ typedef struct _ITEMPLATE
     int prev;
     int next;
 }ITEMPLATE;
+/* state info */
+typedef struct _ISTATE
+{
+    int task_current;
+    int urlnode_total;
+}ISTATE;
 /* hibase io/map */
 typedef struct _HIO
 {
@@ -163,6 +169,9 @@ typedef struct _HIBASE
     HIO     urlnodeio;
     void    *qurlnode;
     int     urlnode_id_max;
+    void    *qtask;
+    void    *qwait;
+    ISTATE  *istate;
     void    *logger;
     void    *mutex;
     char    basedir[HIBASE_PATH_MAX];
