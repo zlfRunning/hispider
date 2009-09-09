@@ -1391,9 +1391,22 @@
                     }
                 }
             }
-            function TestLink(form)
+            function selectURL(form, box, id)
             {
-
+                if(form && box && id >= 0)
+                {
+                    if(box.checked == true)
+                    {
+                        form['is_uniqe_'+id].disabled = false;
+                        form['is_file_'+id].disabled = false;
+                    }
+                    else
+                    {
+                        form['is_uniqe_'+id].disabled = true;
+                        form['is_file_'+id].disabled = true;
+                    }
+                }
+                return true;
             }
             function ConfigTemplate(form)
             {
@@ -1504,21 +1517,41 @@
                             block += arr[i];
                             block += "</textarea><br>";
                             block += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
+                            block += "<span title='自动拼接为完成链接'>"
                             block += "<input type=checkbox name='is_url_"+i+"'";
                             if(map && map[i-1]['flag'] & 1) block += " checked ";
-                            block += ">URL";
+                            block += " onclick='selectURL(this.form,this,"+i+")'>链接</span>";
+                            block += "<span title='链接标识一条完整信息的结束'>"
+                            block += "<input type=checkbox name='is_uniqe_"+i+"'";
+                            if(map && map[i-1]['flag'] & 1) 
+                            {
+                                if(map[i-1]['flag'] & 32)
+                                    block += " checked ";
+                            }
+                            else 
+                                block += " disabled=true ";
+                            block += ">标识性链接</span>";
                             block += "&nbsp;&nbsp;";
-                            block += "<input type=checkbox name='is_img_"+i+"'";
-                            if(map && map[i-1]['flag'] & 2) block += " checked ";
-                            block += ">图片";
+                            block += "<span title='下载存储为文件比如:图片,mp3等'>"
+                            block += "<input type=checkbox name='is_file_"+i+"'";
+                            if(map && map[i-1]['flag'] & 1) 
+                            {
+                                if(map[i-1]['flag'] & 2)
+                                    block += " checked ";
+                            }
+                            else 
+                                block += " disabled=true ";
+                            block += ">文件</span>";
                             block += "&nbsp;&nbsp;";
+                            block += "<span title='去掉html标签后的文本内容'>"
                             block += "<input type=checkbox name='is_need_clearhtml_"+i+"'";
                             if(map && map[i-1]['flag'] & 4) block += " checked ";
-                            block += ">去HTML";
+                            block += ">去HTML</span>";
                             block += "&nbsp;&nbsp;";
+                            block += "<span title='去掉疑似广告的部分内容，该功能谨慎使用'>"
                             block += "<input type=checkbox name='is_need_antispam_"+i+"'";
                             if(map && map[i-1]['flag'] & 8) block += " checked ";
-                            block += ">去广告";
+                            block += ">去广告</span>";
                             block += "<br>";
                             block += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
                             block += "<select name='fieldid_"+i+"'>";
@@ -1891,7 +1924,7 @@
                 var nfields = form['nfields'].value;
                 var fieldid = null;
                 var is_url = 0;
-                var is_img = 0;
+                var is_file = 0;
                 var is_need_clearhtml = 0;
                 var is_need_antispam = 0;
                 var child_nodeid = 0;
@@ -1903,9 +1936,13 @@
                     node_id = form['nodeid_'+i].value;
                     node_flag = 0;
                     if(form['is_url_'+i].checked == true) 
+                    {
                         node_flag |= 1;
-                    if(form['is_img_'+i].checked == true) 
-                        node_flag |= 2;
+                        if(form['is_uniqe_'+i].checked == true)
+                            node_flag |= 32;
+                        if(form['is_file_'+i].checked == true) 
+                            node_flag |= 2;
+                    }
                     if(form['is_need_clearhtml_'+i].checked == true) 
                         node_flag |= 4;
                     if(form['is_need_antispam_'+i].checked == true) 
@@ -1954,7 +1991,7 @@
             function selectView(div, e)
             {
                 var elist = new Array('taskinfo','database', 'template', 
-                    'urlblock', 'data', 'dns', 'proxy');
+                    'urlblock', 'data', 'dns', 'proxy', 'user');
                 e = e || window.event;
                 var element = e.target || e.srcElement;
                 var oli = null, ob = null, odiv = null;
@@ -2040,6 +2077,9 @@
                 {
                     ResetProxyList();
                     ListProxy();
+                }
+                else if(div == 'user')
+                {
                 }
             }
             function loadTaskInfo()
@@ -2749,6 +2789,7 @@
         <li id='tab4' onclick="selectView('data', event)" >数据管理</li>
         <li id='tab5' onclick="selectView('dns', event)" >DNS管理</li>
         <li id='tab6' onclick="selectView('proxy', event)" >代理设置</li>
+        <li id='tab7' onclick="selectView('user', event)" >用户管理</li>
         </ul>
     </div>
     <div id='taskinfo'></div>
@@ -2876,7 +2917,8 @@
     </div>
     <div id='proxy-list'></div>
     </div>
-
+    <div id='user'>
+    </div>
 </div>
     <div id='txtform' class='formdiv'>
         <form name="editorform" action="javascript:void(0)" onsubmit="return EditNode(this);"> 

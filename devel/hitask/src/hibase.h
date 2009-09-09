@@ -98,10 +98,11 @@ typedef struct _URLNODE
     int next;
 }URLNODE;
 #define REG_IS_URL               0x01
-#define REG_IS_IMG               0x02
+#define REG_IS_FILE              0x02
 #define REG_IS_NEED_CLEARHTML    0x04
 #define REG_IS_NEED_ANTISPAM     0x08
 #define REG_IS_POST              0x10
+#define REG_IS_UNIQE             0x20
 typedef struct _IREGX
 {
     short flag;
