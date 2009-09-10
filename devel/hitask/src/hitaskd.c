@@ -758,15 +758,17 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
                 ltask->set_url_status(ltask, urlid, NULL, URL_STATUS_ERR, err);
             }
             /* get new task */
-            if((urlnodeid = hibase->pop_urlnode(hibase, &urlnode)) >= 0 && urlnode.urlid > 0)
+            if((urlnodeid = hibase->pop_urlnode(hibase, &urlnode)) >= 0 && urlnode.urlid >= 0)
             {
-                if(urlnode.parentid>0 && hibase->get_urlnode(hibase,urlnode.parentid,&parent) > 0)
+                fprintf(stdout, "%d::usernodeid:%d userid:%d\n", __LINE__, urlnodeid, urlid);
+                if(urlnode.parentid> 0 && hibase->get_urlnode(hibase,urlnode.parentid,&parent) > 0)
                 {
                     referid = parent.urlid;
                 }
                 if((ltask->get_task(ltask, urlnode.urlid, referid, 
                         urlnodeid, -1, buf, &n)) >= 0 && n > 0)
                 {
+                fprintf(stdout, "%d::usernodeid:%d userid:%d %s\n", __LINE__, urlnodeid, urlid, buf);
                     return conn->push_chunk(conn, buf, n);
                 }
                 else goto err_end;
@@ -1186,8 +1188,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         }else goto err_end;
                         break;
                     case E_OP_URLNODE_ADD:
-                        if(nodeid >= 0 && url && flag >= 0
-                            && (urlid = ltask->add_url(ltask, -1, 0, url, flag)) >= 0
+                        if(nodeid >= 0 && url && (urlid=ltask->add_url(ltask,-1,0,url, flag))>= 0
                             && (urlnodeid = hibase->add_urlnode(hibase, nodeid, 0, urlid,level))> 0
                             && (n = hibase->get_pnode_urlnodes(hibase, nodeid, &urlnodes)) > 0)
                         {
@@ -1197,7 +1198,8 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         }
                         else 
                         {
-                            fprintf(stdout, "%d::%d:%s %d\n", __LINE__, urlid, url, urlnodeid);
+                            fprintf(stdout, "%d::%d:%s %d:%d\n", __LINE__, 
+                                    urlid, url, urlnodeid, flag);
                             goto err_end;
                         }
                         break;

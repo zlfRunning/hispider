@@ -34,8 +34,7 @@
             .dbtitle{position:relative;background-color:#2F5FA1;color:#c0c0c0; height:30px;}
             #dbselect{position:relative;background-color:#D0E9F7;color:#2F5FA1;width:100%;}
             #dbfields .dbfields{position:relative;background-color:#F4FBFF;color:#2F5FA1;}
-            .field-title{background-color:#2F5FA1;color:#c0c0c0;font-size:13pt;
-                font-weight:bold;height:30px;width:100%;}
+            .field-title{background-color:#2F5FA1;color:#c0c0c0;height:30px;width:100%;}
             .ultab{list-style:none;padding:0;margin:0;width:100%;}
             .ltabname{cursor:pointer;font-size:12pt;}
             .ltab{background-color:#D0E9F7;cursor: pointer;width:100%;}
@@ -43,17 +42,17 @@
             .lfname{cursor: pointer;}
             .lfield{background-color:#F4FBFF;cursor: pointer;}
             .lfield-selected{background-color:#D0E9F7;cursor: pointer;}
-            #dbfieldform{position:absolute;width:650px;background-color:#ffffff;
-                border:1px solid #81BEF7;padding:0px;font-size:12pt;color:#2F5FA1;
-                overflow:auto;display:none;}
+            #dbfieldform{position:absolute;width:720px;height:50px;background-color:#ffffff;
+                border:1px solid #81BEF7;padding-top:10px;padding-left:6px;font-size:12pt;
+                color:#2F5FA1;overflow:auto;display:none;}
             #template{position:absolute;background-color:#F4FBFF;display:none;
                 border:1px solid #81BEF7;padding:0px;left:0px;
                 top:36px;height:100%;width:100%;}
             .template-tab{height:100%;width:100%;}
-            .treetab{background-color:#D0E9F7;height:100%;margin:auto;}
+            .treetab{background-color:#D0E9F7;height:100%;margin:auto;overflow:auto}
             #tree-title{background-color:#2F5FA1;color:#c0c0c0;font-size:13pt;
                 font-weight:bold;height:30px;width:100%;}
-            #treebody{position:relative;color:#000000;width:100%;}
+            #treebody{position:relative;color:#000000;width:100%;overflow:auto}
             .treeline{position:relative;border:0px;font-size:12pt;font-weight:bold;}
             .title{position:relative;background-color:#D0E9F7;width:100%;}
             .btitle{position:relative;background-color:#c0c0c0;width:100%;}
@@ -72,17 +71,16 @@
             #urlform{position:relative;background-color:#D0E9F7;}
             #source_code_op{display:none;}
             #templatediv{display:none;position:relative;}
-            .template-bar{position:relative;background-color:#2F5FA1;height:20px;
+            .template-bar{position:relative;background-color:#2F5FA1;height:30px;
                 font-size:13pt;font-weight:bold;color:silver;}
             #editor-frame{height:200px;width:100%;border:1px solid #000000;}
-            #template-config{position:absolute;background-color:#D0E9F7;overflow:auto;
-                border:2px solid #000000;padding:0px;font-size:12pt;color:#2F5FA1;height:500px;}
-            #template-config-frame{position:relative;background-color:#D0E9F7;
-                border:0px solid #000000;width:100%;height:500px;
-                font-size:12pt;color:#2F5FA1;}
-            #template-editor{position:absolute;background-color:#D0E9F7;display:inline;
-                border:1px solid #000000;padding:0px;height:520px;font-size:12pt;color:#2F5FA1;}
-            #templateeditorheader{position:relative;background-color:#2F5FA1;height:30px;
+            #template-config{position:absolute;background-color:#D0E9F7;
+                border:2px solid #000000;padding:0px;font-size:12pt;color:#2F5FA1;height:550px;}
+            #template-config-block{position:relative;width:100%;height:520px;overflow:auto;}
+            #template-test{position:absolute;background-color:#D0E9F7; border:2px solid #000000;
+                padding:0px;height:550px;font-size:12pt;color:#2F5FA1;}
+            #template-matches{position:relative;height:520px;overflow:auto;}
+            #template-test-header{position:relative;background-color:#2F5FA1;height:30px;
                 font-size:14pt;color:red;font-weight:bold;}
             #template-viewer{position:relative;background-color:#D0E9F7;
                 border:0px solid #000000;width:100%;height:500px;
@@ -124,7 +122,7 @@
             .eadd{color:#5FB404;font-size:13pt;font-weight:bolder;cursor:pointer;}
             .eupdate{color:#FF8000;font-size:13pt;font-weight:bolder;cursor:pointer;}
             .edelete{color:#B4045F;font-size:13pt;font-weight:bolder;cursor:pointer;}
-            .icon{display:inline;color:#FF8000;font-size:12pt;text-align:center;cursor:pointer;}
+            .icon{display:inline;color:#FF8000;font-size:13pt;text-align:center;cursor:pointer;}
             .nchilds{display:inline;color:red;font-size:12pt;}
         </style>
     <script language='javascript'>
@@ -824,8 +822,8 @@
                     htmlstr =  "<ul class='ultab' >";
                     htmlstr += "<li class='field-title'>";
                     htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-                    htmlstr += "点击&nbsp;<span class='eadd' title='Click Add New Field' ";
-                    htmlstr += "onclick=\"DBFXAdd(event, '"+tabid+"')\">✚</span>&nbsp;添加字段";
+                    htmlstr += "点击<span class='eadd' title='Click Add New Field' ";
+                    htmlstr += "onclick=\"DBFXAdd(event, '"+tabid+"')\">✚</span>添加字段";
                     htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
                     htmlstr += "<span class='ltabname'>"+tabname+"[";
                     htmlstr += "<span class='nchilds'>"+tab['nfields']+"</span>";
@@ -1182,6 +1180,25 @@
                     };
                 };
             }
+            function ResetTemplateform()
+            {
+                var form = document.forms["templateform"];
+                form['op'].value = 'template_add';
+                form['templateid'].value = -1;
+                form['pattern'].value = ''
+                form['is_public'].checked = false;
+                form['is_global'].checked = false;
+                form['is_ignorecase'].checked = false;
+                form['flag'].value = '';
+                form['nfields'].value = 0;
+                form['link'].value = '';
+                form['linkmap'].value = '';
+                form['map'].value = '';
+                form['link_method'][0].checked = true;
+                form['link_table'].options[0].selected = true;
+                form['link_field'].options[0].selected = true;
+                form['link_node'].options[0].selected = true;
+            }
             function XTReset()
             {
                 var odiv = document.getElementById('source_view');
@@ -1291,7 +1308,7 @@
                         {
                             if(xmlHttp.status == 200)
                             {
-                                HiddenTemplate();
+                                //HiddenTemplate();
                                 ShowTemplates(xmlHttp.responseText);
                             }
                         }
@@ -1352,11 +1369,13 @@
                     {
                         form['is_uniqe_'+id].disabled = false;
                         form['is_file_'+id].disabled = false;
+                        form['nodeid_'+id].disabled = false;
                     }
                     else
                     {
                         form['is_uniqe_'+id].disabled = true;
                         form['is_file_'+id].disabled = true;
+                        form['nodeid_'+id].disabled = true;
                     }
                 }
                 return true;
@@ -1437,8 +1456,9 @@
                             str += "<span class='closetxt' onclick='divremove(";
                             str += "this.parentNode.parentNode)' >关闭</span>";
                             str += "</div>";
-                       var  block = "<form action='javascript:void(0)' ";
-                            block += "onsubmit='EditTemplate(this, this.parentNode)' >";
+                       var  block = "<div id='template-config-block'>";
+                            block += "<form action='javascript:void(0)' class='listform' ";
+                            block += "onsubmit='EditTemplate(this, this.parentNode.parentNode)' >";
                             block += "<input type=hidden name='nodeid' value='"+nodeid+"'>";
                             block += "<input type=hidden name='op' value='"+op+"'>";
                             block += "<input type=hidden name='method' value='"+method+"'>";
@@ -1527,7 +1547,10 @@
                                 block += fieldsoptions;
                             }
                             block += "</select>";
-                            block += "<select name='nodeid_"+i+"'>";
+                            block += "<select name='nodeid_"+i+"' ";
+                            if(map && (map[i-1]['flag'] & 1)) block += " disabled=false ";
+                            else block += " disabled=true ";
+                            block += ">";
                             block += "<option value='-1' selected>关联节点</option>";
                             if(map)
                             {
@@ -1547,7 +1570,7 @@
                         }
                         block += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
                         block += "<input type=submit value='OK' >";
-                        block += "</form>";
+                        block += "</form></div>";
                         var element = null;
                         if((element = document.getElementById('template-config')))
                         {
@@ -1622,21 +1645,46 @@
                     }
                     if(count > 0)
                     {
-                        var str = "<div id='templateeditorheader' onmousedown='";
+                        var str = "<div id='template-test-header' onmousedown='";
                         str += "divmove(event, this)'>";
                         str += "<span class='closebutton' onclick='divremove(";
                         str += "this.parentNode.parentNode)' >X</span>&nbsp;&nbsp;";
                         str += "<span class='closetxt' onclick='divremove(";
                         str += "this.parentNode.parentNode)' >关闭</span>";
-                        str += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Result Count:"+count+"</div>";
+                        str += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Match Result Count:"+count+"</div>";
+                        str += "<div id='template-matches' >";
+                        var url = "";
+                        link = form['link'].value;
+                        for(i = 0; i < count; i++)
+                        {
+                            if(link) url = link;
+                            str += "<span>result:"+i+"<hr>";
+                            for(j = 1; j < matches[i].length; j++) 
+                            {
+                                if(j < 10) str += "0"; 
+                                str += j+":<textarea cols=76 rows=1>"
+                                    +matches[i][j]+"</textarea><br>";    
+                                if(link)
+                                {
+                                    reg = new RegExp("<"+j+">", "ig");
+                                    url = url.replace(reg, matches[i][j]);
+                                }
+                            }
+                            if(url)
+                            {
+                                str += "URL:<input type=text size=64 value='"+url+"'><br>";
+                            }
+                            str += "</span><hr>";
+                        }
+                        str += "</div>";
                         var element = null;
-                        if((element = document.getElementById('template-editor')))
+                        if((element = document.getElementById('template-test')))
                         {
                             document.body.removeChild(element);
                         }
                         element = document.createElement('div');
                         element.innerHTML = str;
-                        element.id = 'template-editor';
+                        element.id = 'template-test';
                         var divwidth = 700;
                         var obody = document.getElementById('mainframe');
                         var xleft = parseInt(obody.offsetWidth) - divwidth;
@@ -1646,14 +1694,13 @@
                         element.style.top = y+'px';
                         element.style.width = divwidth + 'px';
                         document.body.appendChild(element);
+                        /*
                         var frame = document.createElement('iframe');
                         frame.id = 'template-viewer';
                         element.appendChild(frame);
                         element.focus();
                         var block = "";
-                        var url = "";
-                        link = form['link'].value;
-                        for(i = 0; i < count; i++)
+                                                for(i = 0; i < count; i++)
                         {
                             if(link) url = link;
                             block += "<span class='ctxt_block'>Result:"+i+"";
@@ -1677,6 +1724,7 @@
                         frame.contentWindow.document.open();
                         frame.contentWindow.document.write(block);
                         frame.contentWindow.document.close();
+                        */
                     }
                 }
                 return true;
@@ -1688,7 +1736,7 @@
                 if(ediv) ediv.innerHTML = "";
                 if(txt && ediv && (arr = eval(txt)))
                 {
-                    var template = null;
+                    var temp = null;
                     var nodeid = arr['id'];
                     var tempid = 0;
                     var flag = 0;
@@ -1768,7 +1816,6 @@
                     }
                     htmlstr += "</ul>";
                     ediv.innerHTML = htmlstr;
-                    XTAdd(nodeid);
                 }
             }
             function ViewTemplates(nodeid)
@@ -1793,6 +1840,7 @@
                             if(xmlHttp.status == 200)
                             {
                                 ShowTemplates(xmlHttp.responseText);
+                                XTAdd(nodeid);
                                 //alert(xmlHttp.responseText);
                             }
                         }
@@ -1852,8 +1900,9 @@
                             {
                                 if(xmlHttp.status == 200)
                                 {
+                                    if(op == 'template_add') ResetTemplateform();
+                                    else HiddenTemplate();
                                     ShowTemplates(xmlHttp.responseText);
-                                    HiddenTemplate();
                                 }
                             }
                         }
@@ -1890,8 +1939,8 @@
                 for(i = 1; i < nfields; i++)
                 {
                     fieldid =  form['fieldid_'+i].value;
-                    node_id = form['nodeid_'+i].value;
                     node_flag = 0;
+                    node_id = -1;
                     if(form['is_url_'+i].checked == true) 
                     {
                         node_flag |= 1;
@@ -1899,6 +1948,7 @@
                             node_flag |= 32;
                         if(form['is_file_'+i].checked == true) 
                             node_flag |= 2;
+                        node_id = form['nodeid_'+i].value;
                     }
                     if(form['is_need_clearhtml_'+i].checked == true) 
                         node_flag |= 4;
@@ -1934,8 +1984,12 @@
                         {
                             if(xmlHttp.status == 200)
                             {
+                                //alert(xmlHttp.responseText);
                                 divremove(element);
-                                HiddenTemplate();
+                                if(op == 'template_add') 
+                                    ResetTemplateform();
+                                else 
+                                    HiddenTemplate();
                                 ShowTemplates(xmlHttp.responseText);
                             }
                         }
@@ -2779,11 +2833,11 @@
     <div id='template'>
     <table cellspacing=0 border=0 valign=top align=left height=100% class='template-tab' >
         <tr>
-        <td valign=top align=left height=100% class='treetab'>
+        <td valign=top align=left height=100% width=300px class='treetab'>
             <div id='tree-title'>抓取树用于指导爬虫的爬去路径</div>
             <div id='treebody' level='0'></div>
         </td>
-        <td valign=top align=left height=100% width=70%>
+        <td valign=top align=left height=100% >
               <div id='template-title'>模版用于抽取自己需要的数据</div>
               <div id='node-template'></div>
               <div id='xtemplateform'>
@@ -2935,7 +2989,7 @@
     <div id='dbfieldform'>
         <form name="dbfieldform" class='listform' action="javascript:void(0)" 
             onsubmit="return EditField(this);"> 
-            <span class='closebutton' onclick="CloseThis(this)">x</span>
+            <span class='closetxt' onclick="CloseThis(this)" >关闭</span>
             <input type=hidden name='op' value='table_add' >
             <input type=hidden name='tableid' value='' >
             <input type=hidden name='fieldid' value='' >
@@ -2955,7 +3009,7 @@
             <input type=checkbox name='is_null' value=4 >是否为空
             <input type=submit value='ok' class='submit' >
             &nbsp;&nbsp;&nbsp;&nbsp;
-            <span class='closetxt' onclick="CloseThis(this)" >关闭</span>
+            <span class='closebutton' onclick="CloseThis(this)">x</span>
         </form>
     </div>
     </body>
