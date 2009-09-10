@@ -19,7 +19,7 @@ extern "C" {
 #define HIBASE_PATH_MAX		    256
 #define PATTERN_LEN_MAX		    4096
 #define TABLE_INCRE_NUM         256
-#define TEMPLATE_INCRE_NUM      10000
+#define TEMPLATE_INCRE_NUM      100
 #define PNODE_INCRE_NUM         10000
 #define URLNODE_INCRE_NUM       10000
 #define PNODE_CHILDS_MAX        10000
@@ -138,8 +138,13 @@ typedef struct _ITEMPLATE
 /* state info */
 typedef struct _ISTATE
 {
-    int urlnodeid_current;
-    int urlnode_total;
+    int templateio_current;
+    int templateio_left;
+    int templateio_total;
+    int urlnodeio_current;
+    int urlnodeio_left;
+    int urlnodeio_total;
+    int urlnode_task_current;
 }ISTATE;
 /* hibase io/map */
 typedef struct _HIO
@@ -165,10 +170,8 @@ typedef struct _HIBASE
     int     uid_max;
     HIO     templateio;
     void    *qtemplate;
-    int     template_id_max;
     HIO     urlnodeio;
     void    *qurlnode;
-    int     urlnode_id_max;
     void    *qtask;
     void    *qwait;
     ISTATE  *istate;

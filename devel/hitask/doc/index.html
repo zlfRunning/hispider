@@ -1548,8 +1548,8 @@
                             }
                             block += "</select>";
                             block += "<select name='nodeid_"+i+"' ";
-                            if(map && (map[i-1]['flag'] & 1)) block += " disabled=false ";
-                            else block += " disabled=true ";
+                            if(map && (map[i-1]['flag'] & 1)) block += " ";
+                            else block += " disabled ";
                             block += ">";
                             block += "<option value='-1' selected>关联节点</option>";
                             if(map)
@@ -1736,6 +1736,7 @@
                 if(ediv) ediv.innerHTML = "";
                 if(txt && ediv && (arr = eval(txt)))
                 {
+                    //alert(txt);
                     var temp = null;
                     var nodeid = arr['id'];
                     var tempid = 0;

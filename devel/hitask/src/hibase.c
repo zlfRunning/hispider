@@ -21,6 +21,27 @@
 #define  HIBASE_QTASK_NAME          "hibase.qtask"
 #define  HIBASE_QWAIT_NAME          "hibase.qwait"
 #define  HIBASE_ISTATE_NAME         "hibase.istate"
+#define INCRE_STATE(hibase, io, name) (hibase->istate->io##_##name = ++(hibase->io.name))
+#define DECRE_STATE(hibase, io, name) (hibase->istate->io##_##name = --(hibase->io.name))
+#define UPDATE_STATE(hibase, io)                                        \
+do                                                                      \
+{                                                                       \
+    if(hibase && hibase->istate)                                        \
+    {                                                                   \
+        hibase->istate->io##_left = hibase->io.left;                    \
+        hibase->istate->io##_current = hibase->io.current;              \
+    }                                                                   \
+}while(0)
+#define RESUME_STATE(hibase, io)                                           \
+do                                                                      \
+{                                                                       \
+    if(hibase && hibase->istate)                                        \
+    {                                                                   \
+        hibase->io.left = hibase->istate->io##_left;                    \
+        hibase->io.current = hibase->istate->io##_current;              \
+    }                                                                   \
+}while(0)
+
 //tables
 static char *table_data_types[] = {"null", "int", "float", "null", "text",
     "null","null","null","blob"};
@@ -139,6 +160,8 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
         FQUEUE_INIT(hibase->qtemplate, p, int);
         sprintf(path, "%s%s", hibase->basedir, HIBASE_TEMPLATE_NAME);   
         HIO_INIT(hibase->templateio, p, st, ITEMPLATE);
+        RESUME_STATE(hibase, templateio);
+        /*
         HIO_MMAP(hibase->templateio, ITEMPLATE, TEMPLATE_INCRE_NUM); 
         if(hibase->templateio.fd > 0 && (template = HIO_MAP(hibase->templateio, ITEMPLATE)))
         {
@@ -152,6 +175,7 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
                 else hibase->templateio.left++;
             }
         }
+        */
         //resume pnode
         sprintf(path, "%s%s", hibase->basedir, HIBASE_QPNODE_NAME);
         p = path;
@@ -182,6 +206,8 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
         FQUEUE_INIT(hibase->qurlnode, p, int);
         sprintf(path, "%s%s", hibase->basedir, HIBASE_URLNODE_NAME);
         HIO_INIT(hibase->urlnodeio, p, st, URLNODE);
+        RESUME_STATE(hibase, urlnodeio);
+        /*
         HIO_MMAP(hibase->urlnodeio, URLNODE, URLNODE_INCRE_NUM);
         if(hibase->urlnodeio.fd  > 0 && (urlnode = HIO_MAP(hibase->urlnodeio, URLNODE)))
         {
@@ -198,7 +224,7 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
                 }
             }
             //HIO_MUNMAP(hibase->urlnodeio);
-        }
+        }*/
     }
     return -1;
 }
@@ -742,15 +768,21 @@ int hibase_get_pnode_templates(HIBASE *hibase, int pnodeid, ITEMPLATE **template
         if(pnodeid >= 0 && pnodeid < hibase->pnodeio.total 
             && (pnode = HIO_MAP(hibase->pnodeio, PNODE)) 
             &&  pnode[pnodeid].status > 0 && (n = pnode[pnodeid].ntemplates) > 0
-            &&  (template = HIO_MAP(hibase->templateio, ITEMPLATE))
-            && (*templates = (ITEMPLATE *)calloc(n, sizeof(ITEMPLATE))))
+            && hibase->templateio.fd > 0 
+            && (template = *templates = (ITEMPLATE *)calloc(n, sizeof(ITEMPLATE))))
         {
             i = 0;
             x = pnode[pnodeid].template_first;
             while(x > 0 && i < n)
             {
-                memcpy(&((*templates)[i++]), &(template[x]), sizeof(ITEMPLATE));
-                x = template[x].next;
+                if(pread(hibase->templateio.fd, template, sizeof(ITEMPLATE), 
+                            (off_t)sizeof(ITEMPLATE) * (off_t)x) > 0)
+                {
+                    x = template->next;
+                    ++i;
+                    ++template;
+                }
+                else break; 
             }
         }
         MUTEX_UNLOCK(hibase->mutex);
@@ -950,30 +982,31 @@ int hibase_list_pnode(HIBASE *hibase, int pnodeid, FILE *fp)
     }
     return -1;
 }
-
 /* add template */
 int hibase_add_template(HIBASE *hibase, int pnodeid, ITEMPLATE *template)
 {
     int templateid = -1, x = 0, *px = NULL;
-    ITEMPLATE *ptemplate = NULL;
     PNODE *pnode = NULL;
 
     if(hibase && pnodeid >= 0 && pnodeid < hibase->pnodeio.total)
     {
         MUTEX_LOCK(hibase->mutex);
         if(hibase->templateio.left == 0)
-        {HIO_MMAP(hibase->templateio, ITEMPLATE, TEMPLATE_INCRE_NUM);}
+        {
+            HIO_INCRE(hibase->templateio, ITEMPLATE, TEMPLATE_INCRE_NUM);
+            UPDATE_STATE(hibase, templateio);
+        }
         px = &x;
         if(FQUEUE_POP(hibase->qtemplate, int, px) == 0)
             templateid = x;
         else
-            templateid = ++(hibase->templateio.current);
-        if((pnode = (PNODE *)(hibase->pnodeio.map)) && pnode != (PNODE *)-1
-            && templateid >= 0 && templateid < hibase->templateio.total
-            && (ptemplate = HIO_MAP(hibase->templateio, ITEMPLATE)))
+            templateid = INCRE_STATE(hibase, templateio, current);
+        if((pnode = HIO_MAP(hibase->pnodeio, PNODE))
+            && templateid >= 0 && templateid < hibase->templateio.total)
         {
-            memcpy(&(ptemplate[templateid]), template, sizeof(ITEMPLATE));
-            ptemplate[templateid].status = TEMPLATE_STATUS_OK;
+            template->status = TEMPLATE_STATUS_OK;
+            //memcpy(&(ptemplate[templateid]), template, sizeof(ITEMPLATE));
+            //ptemplate[templateid].status = TEMPLATE_STATUS_OK;
             if(pnode[pnodeid].ntemplates == 0)
             {
                 pnode[pnodeid].template_first = pnode[pnodeid].template_last = templateid;
@@ -981,10 +1014,19 @@ int hibase_add_template(HIBASE *hibase, int pnodeid, ITEMPLATE *template)
             else
             {
                x =  pnode[pnodeid].template_last;
-               ptemplate[x].next = templateid;
-               ptemplate[templateid].prev = x;
+               if(pwrite(hibase->templateio.fd, &templateid, sizeof(int), 
+                       (off_t)x * (off_t)sizeof(ITEMPLATE) 
+                       + (off_t)((void *)&(template->next) - (void *)template)) >0)
+                template->prev = x;
+               //ptemplate[x].next = templateid;
+               //ptemplate[templateid].prev = x;
             }
-            pnode[pnodeid].ntemplates++;
+            if(pwrite(hibase->templateio.fd, template, sizeof(ITEMPLATE), 
+                        (off_t)sizeof(ITEMPLATE) * (off_t) templateid) > 0)
+            {
+                pnode[pnodeid].template_last = templateid;
+                pnode[pnodeid].ntemplates++;
+            }
         }
         MUTEX_UNLOCK(hibase->mutex);
     }
@@ -994,15 +1036,15 @@ int hibase_add_template(HIBASE *hibase, int pnodeid, ITEMPLATE *template)
 /* get template */
 int hibase_get_template(HIBASE *hibase, int templateid, ITEMPLATE *template)
 {
-    ITEMPLATE *ptemplate = NULL;
     int ret = -1;
 
     if(hibase && templateid >= 0 && templateid < hibase->templateio.total)
     {
         MUTEX_LOCK(hibase->mutex);
-        if((ptemplate = (ITEMPLATE *)(hibase->templateio.map)) && ptemplate != (ITEMPLATE *)-1)
+        if(hibase->templateio.fd > 0 && pread(hibase->templateio.fd, template, 
+                    sizeof(ITEMPLATE), (off_t)sizeof(ITEMPLATE) * (off_t)templateid) > 0)
         {
-            memcpy(template, &(ptemplate[templateid]), sizeof(ITEMPLATE));
+            //memcpy(template, &(ptemplate[templateid]), sizeof(ITEMPLATE));
             ret = templateid;
         }
         MUTEX_UNLOCK(hibase->mutex);
@@ -1019,10 +1061,11 @@ int hibase_update_template(HIBASE *hibase, int templateid, ITEMPLATE *template)
     if(hibase && templateid >= 0 && templateid < hibase->templateio.total)
     {
         MUTEX_LOCK(hibase->mutex);
-        if((ptemplate = (ITEMPLATE *)(hibase->templateio.map)) && ptemplate != (ITEMPLATE *)-1)
+        template->status = TEMPLATE_STATUS_OK;
+        if(hibase->templateio.fd > 0 && pwrite(hibase->templateio.fd, template, 
+                    ((void *)&(template->prev) - (void *)template), //ignore next/prev 
+                    (off_t)sizeof(ITEMPLATE) * (off_t)templateid) > 0)
         {
-            memcpy(&(ptemplate[templateid]), template, sizeof(ITEMPLATE) - (sizeof(int) * 2));
-            ptemplate[templateid].status = TEMPLATE_STATUS_OK;
             ret = templateid;
         }
         MUTEX_UNLOCK(hibase->mutex);
@@ -1034,31 +1077,37 @@ int hibase_update_template(HIBASE *hibase, int templateid, ITEMPLATE *template)
 int hibase_delete_template(HIBASE *hibase, int pnodeid, int templateid)
 {
     int ret = -1, x = 0, *px = NULL;
-    ITEMPLATE *ptemplate = NULL;
+    ITEMPLATE template = {0};
     PNODE *pnode = NULL;
 
     if(hibase && pnodeid >= 0 && pnodeid < hibase->pnodeio.total)
     {
         MUTEX_LOCK(hibase->mutex);
-        if((pnode = (PNODE *)(hibase->pnodeio.map)) && pnode != (PNODE *)-1
-            && templateid >= 0 && templateid < hibase->templateio.total
-            && (ptemplate = (ITEMPLATE *)(hibase->templateio.map)) && ptemplate != (ITEMPLATE *)-1)
+        if((pnode = HIO_MAP(hibase->pnodeio, PNODE)) && templateid >= 0 
+            && templateid < hibase->templateio.total && hibase->templateio.fd > 0
+            && pread(hibase->templateio.fd, &template, sizeof(ITEMPLATE),
+                (off_t)sizeof(ITEMPLATE) * (off_t) templateid) > 0)
         {
-            if(ptemplate[templateid].prev > 0)
+            if((x = template.prev) > 0)
             {
-                x = ptemplate[templateid].prev;
-                ptemplate[x].next = ptemplate[templateid].next;
+                pwrite(hibase->templateio.fd, &(template.next), sizeof(int), 
+                    (off_t)x * (off_t)sizeof(ITEMPLATE) 
+                    + (off_t)((void *)&(template.next) - (void *)&template));
+                //ptemplate[x].next = ptemplate[templateid].next;
             }
-            if(ptemplate[templateid].next > 0)
+            if((x = template.next) > 0)
             {
-                x = ptemplate[templateid].next;
-                ptemplate[x].prev = ptemplate[templateid].prev;
+                pwrite(hibase->templateio.fd, &(template.prev), sizeof(int), 
+                    (off_t)x * (off_t)sizeof(ITEMPLATE) 
+                    + (off_t)((void *)&(template.prev) - (void *)&template));
+                //x = ptemplate[templateid].next;
+                //ptemplate[x].prev = ptemplate[templateid].prev;
             }
             if(pnode[pnodeid].template_first == templateid)
-                pnode[pnodeid].template_first = ptemplate[templateid].next;
+                pnode[pnodeid].template_first = template.next;
             if(pnode[pnodeid].template_last == templateid)
-                pnode[pnodeid].template_last = ptemplate[templateid].prev;
-            memset(&(ptemplate[templateid]), 0, sizeof(ITEMPLATE));
+                pnode[pnodeid].template_last = template.prev;
+            //memset(&(ptemplate[templateid]), 0, sizeof(ITEMPLATE));
             px = &templateid;
             FQUEUE_PUSH(hibase->qtemplate, int, px);
             pnode[pnodeid].ntemplates--;
@@ -1072,7 +1121,7 @@ int hibase_delete_template(HIBASE *hibase, int pnodeid, int templateid)
 /* view templates */
 int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
 {
-    ITEMPLATE *ptemplate = NULL;
+    ITEMPLATE template = {0};
     PNODE *pnode = NULL;
     int n = -1, x = 0, i = 0;
     char buf[HI_BUF_SIZE], xbuf[HI_BUF_SIZE], *pattern = NULL, *p = NULL;
@@ -1080,9 +1129,7 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
     if(hibase && pnodeid >= 0 && pnodeid < hibase->pnodeio.total && block)
     {
         MUTEX_LOCK(hibase->mutex);
-        if((pnode = (PNODE *)(hibase->pnodeio.map)) && pnode != (PNODE *)-1
-            && (ptemplate = (ITEMPLATE *)(hibase->templateio.map)) 
-            && ptemplate != (ITEMPLATE *)-1)
+        if((pnode = HIO_MAP(hibase->pnodeio, PNODE)) && hibase->templateio.fd > 0)
         {
             p = buf;
             p += sprintf(p, "({'id':'%d', 'name':'%s', 'ntemplates':'%d','templates':[", 
@@ -1090,40 +1137,40 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
             if(pnode[pnodeid].ntemplates > 0)
             {
                 x = pnode[pnodeid].template_first;
-                while(x > 0)
+                while(x > 0 && pread(hibase->templateio.fd, &template, sizeof(ITEMPLATE),
+                        (off_t)x * (off_t)sizeof(ITEMPLATE)) > 0)
                 {
-                    if((n = strlen(ptemplate[x].pattern)) > 0
-                        && (HI_BUF_SIZE > BASE64_LEN(n)))
+                    if((n = strlen(template.pattern)) > 0 && (HI_BUF_SIZE > BASE64_LEN(n)))
                     {
-                        base64_encode(xbuf, (unsigned char *)ptemplate[x].pattern, n);
+                        base64_encode(xbuf, (unsigned char *)template.pattern, n);
                         pattern = xbuf;
                     }
                     else pattern = "";
                     //fprintf(stdout, "%d::%s\n%s\n", __LINE__, ptemplate[x].pattern, pattern);
                     p += sprintf(p, "{'id':'%d', 'tableid':'%d', 'flags':'%d', "
-                            "'pattern':'%s', 'link':'%s',", x, ptemplate[x].tableid,
-                             ptemplate[x].flags, pattern, ptemplate[x].link);
+                            "'pattern':'%s', 'link':'%s',", x, template.tableid,
+                             template.flags, pattern, template.link);
                     {
                         p += sprintf(p, "'linkmap':{'fieldid':'%d','nodeid':'%d', 'flag':'%d'},", 
-                            ptemplate[x].linkmap.fieldid, ptemplate[x].linkmap.nodeid, 
-                            ptemplate[x].linkmap.flag);
+                            template.linkmap.fieldid, template.linkmap.nodeid, 
+                            template.linkmap.flag);
                     }
                     p += sprintf(p, "'url':'%s', 'nfields':'%d', 'map':[", 
-                            ptemplate[x].url, ptemplate[x].nfields);
-                    if(ptemplate[x].nfields > 0)
+                            template.url, template.nfields);
+                    if(template.nfields > 0)
                     {
                         i = 0;
-                        while(i < ptemplate[x].nfields && ptemplate[x].nfields < FIELD_NUM_MAX)
+                        while(i < template.nfields && template.nfields < FIELD_NUM_MAX)
                         {
                             p += sprintf(p, "{'fieldid':'%d', 'nodeid':'%d', 'flag':'%d'},", 
-                                    ptemplate[x].map[i].fieldid, ptemplate[x].map[i].nodeid, 
-                                    ptemplate[x].map[i].flag);
+                                    template.map[i].fieldid, template.map[i].nodeid, 
+                                    template.map[i].flag);
                             i++;
                         }
                         --p;
                     }
                     p += sprintf(p, "%s","]},");
-                    x = ptemplate[x].next;
+                    x = template.next;
                 }
                 *--p = '\0';
             }
@@ -1439,17 +1486,20 @@ int hibase_pop_urlnode(HIBASE *hibase, URLNODE *urlnode)
     if(hibase && hibase->qtask && hibase->istate && urlnode)
     {
         MUTEX_LOCK(hibase->mutex);
-        while(FQTOTAL(hibase->qtask) > 0 || hibase->istate->urlnodeid_current
-            < hibase->urlnodeio.current)
+        fprintf(stdout, "%d::qtotal:%d urlnodeid:%d current:%d\n", __LINE__, 
+                FQTOTAL(hibase->qtask), hibase->istate->urlnode_task_current, 
+                hibase->urlnodeio.current);
+        while(FQTOTAL(hibase->qtask) > 0 || hibase->istate->urlnode_task_current
+                < hibase->urlnodeio.current)
         {
             px = &x;
             if(FQUEUE_POP(hibase->qtask, int, px) == 0)
             {
                 urlnodeid = x;
             }
-            else if(hibase->istate->urlnodeid_current < hibase->urlnodeio.current)
+            else if(hibase->istate->urlnodeio_current < hibase->urlnodeio.current)
             {
-                urlnodeid = hibase->istate->urlnodeid_current++;
+                urlnodeid = hibase->istate->urlnode_task_current++;
             }
             if(urlnodeid >= 0 && hibase->urlnodeio.fd > 0 && pread(hibase->urlnodeio.fd, 
                 urlnode, sizeof(URLNODE), (off_t)urlnodeid * (off_t)sizeof(URLNODE)) > 0
