@@ -2340,13 +2340,17 @@
 		        }
                 return ViewDatabase();
 		    }
+            function ResetDiv(id)
+            {
+                var div = document.getElementById(id);
+                if(div) div.innerHTML = '';
+            }
             function ResetURLList()
             {
                 var form = document.forms['urlblockform'];
                 if(form)
                 {
-                    var div = document.getElementById('url-list');
-                    if(div) div.innerHTML = '';
+                    ResetDiv('url-list');
                     form['level'].options[0].selected = true;
                     form['url'].focus();
                     form['url'].value = 'http://';
@@ -2520,6 +2524,7 @@
                         }
                     }
                     xmlHttp.send(argv);
+                    ResetDiv('url-list');
                 }
                 return true;
             }

@@ -758,7 +758,8 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
                 ltask->set_url_status(ltask, urlid, NULL, URL_STATUS_ERR, err);
             }
             /* get new task */
-            if((urlnodeid = hibase->pop_urlnode(hibase, &urlnode)) >= 0 && urlnode.urlid >= 0)
+            if((urlnodeid = hibase->pop_urlnode(hibase, &urlnode)) > 0 
+                    && (urlid = urlnode.urlid) >= 0)
             {
                 fprintf(stdout, "%d::usernodeid:%d userid:%d\n", __LINE__, urlnodeid, urlid);
                 if(urlnode.parentid> 0 && hibase->get_urlnode(hibase,urlnode.parentid,&parent) > 0)
@@ -768,13 +769,15 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
                 if((ltask->get_task(ltask, urlnode.urlid, referid, 
                         urlnodeid, -1, buf, &n)) >= 0 && n > 0)
                 {
-                fprintf(stdout, "%d::usernodeid:%d userid:%d %s\n", __LINE__, urlnodeid, urlid, buf);
+                    fprintf(stdout, "%d::usernodeid:%d userid:%d %s\n", 
+                        __LINE__, urlnodeid, urlid, buf);
                     return conn->push_chunk(conn, buf, n);
                 }
                 else goto err_end;
             }
             else if(ltask->get_task(ltask, -1, -1, -1, -1, buf, &n) >= 0 && n > 0) 
             {
+                fprintf(stdout, "request:%s\n", buf);
                 return conn->push_chunk(conn, buf, n);
             }
             else

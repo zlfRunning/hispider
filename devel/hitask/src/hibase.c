@@ -83,7 +83,6 @@ int hibase_mkdir(char *path, int mode)
 int hibase_set_basedir(HIBASE *hibase, char *dir)
 {
     char path[HIBASE_PATH_MAX], *p = NULL;
-    ITEMPLATE *template = NULL;
     ITABLE *table = NULL;
     PNODE *pnode = NULL;
     URLNODE *urlnode = NULL;
@@ -206,8 +205,7 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
         FQUEUE_INIT(hibase->qurlnode, p, int);
         sprintf(path, "%s%s", hibase->basedir, HIBASE_URLNODE_NAME);
         HIO_INIT(hibase->urlnodeio, p, st, URLNODE);
-        RESUME_STATE(hibase, urlnodeio);
-        /*
+        //RESUME_STATE(hibase, urlnodeio);
         HIO_MMAP(hibase->urlnodeio, URLNODE, URLNODE_INCRE_NUM);
         if(hibase->urlnodeio.fd  > 0 && (urlnode = HIO_MAP(hibase->urlnodeio, URLNODE)))
         {
@@ -224,7 +222,7 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
                 }
             }
             //HIO_MUNMAP(hibase->urlnodeio);
-        }*/
+        }
     }
     return -1;
 }
@@ -1055,7 +1053,6 @@ int hibase_get_template(HIBASE *hibase, int templateid, ITEMPLATE *template)
 /* update template */
 int hibase_update_template(HIBASE *hibase, int templateid, ITEMPLATE *template)
 {
-    ITEMPLATE *ptemplate = NULL;
     int ret = -1;
 
     if(hibase && templateid >= 0 && templateid < hibase->templateio.total)
@@ -1482,32 +1479,39 @@ int hibase_get_pnode_urlnodes(HIBASE *hibase, int nodeid, URLNODE **purlnodes)
 int hibase_pop_urlnode(HIBASE *hibase, URLNODE *urlnode)
 {
     int urlnodeid = -1, x = 0, *px = NULL;
+    URLNODE *purlnode = NULL;
 
     if(hibase && hibase->qtask && hibase->istate && urlnode)
     {
         MUTEX_LOCK(hibase->mutex);
-        fprintf(stdout, "%d::qtotal:%d urlnodeid:%d current:%d\n", __LINE__, 
-                FQTOTAL(hibase->qtask), hibase->istate->urlnode_task_current, 
-                hibase->urlnodeio.current);
-        while(FQTOTAL(hibase->qtask) > 0 || hibase->istate->urlnode_task_current
-                < hibase->urlnodeio.current)
+        if(hibase->urlnodeio.total > 0 && hibase->urlnodeio.current > 0 
+            && (purlnode = HIO_MAP(hibase->urlnodeio, URLNODE)))
         {
-            px = &x;
-            if(FQUEUE_POP(hibase->qtask, int, px) == 0)
+            //fprintf(stdout, "%d::qtotal:%d urlnodeid:%d current:%d\n", __LINE__, 
+            //        FQTOTAL(hibase->qtask), hibase->istate->urlnode_task_current, 
+            //        hibase->urlnodeio.current);
+            while(FQTOTAL(hibase->qtask) > 0 || hibase->istate->urlnode_task_current
+                    <= hibase->urlnodeio.current)
             {
-                urlnodeid = x;
-            }
-            else if(hibase->istate->urlnodeio_current < hibase->urlnodeio.current)
-            {
-                urlnodeid = hibase->istate->urlnode_task_current++;
-            }
-            if(urlnodeid >= 0 && hibase->urlnodeio.fd > 0 && pread(hibase->urlnodeio.fd, 
-                urlnode, sizeof(URLNODE), (off_t)urlnodeid * (off_t)sizeof(URLNODE)) > 0
-                && urlnode->status > 0)
-            {
+                px = &x;
+                if(FQUEUE_POP(hibase->qtask, int, px) == 0)
+                {
+                    urlnodeid = x;
+                }
+                else if(hibase->istate->urlnodeio_current <= hibase->urlnodeio.current)
+                {
+                    urlnodeid = hibase->istate->urlnode_task_current++;
+                }
+                if(urlnodeid > 0 &&  purlnode[urlnodeid].status > 0)
+                {
+                    if(x != urlnodeid && purlnode[urlnodeid].level > 0) 
+                        continue;
+                    memcpy(urlnode, &(purlnode[urlnodeid]), sizeof(URLNODE));
                     break;
+                }
+                else urlnodeid = -1;
             }
-            else urlnodeid = -1;
+            //fprintf(stdout, "%d::urlnodeid:%d\n", __LINE__, urlnodeid);
         }
         MUTEX_UNLOCK(hibase->mutex);
     }
@@ -1518,6 +1522,7 @@ int hibase_pop_urlnode(HIBASE *hibase, URLNODE *urlnode)
 int hibase_pop_task_urlnodeid(HIBASE *hibase)
 {
     int urlnodeid = -1, x = 0, *px = NULL;
+
     if(hibase)
     {
         MUTEX_LOCK(hibase->mutex);

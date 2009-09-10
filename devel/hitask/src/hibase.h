@@ -19,7 +19,7 @@ extern "C" {
 #define HIBASE_PATH_MAX		    256
 #define PATTERN_LEN_MAX		    4096
 #define TABLE_INCRE_NUM         256
-#define TEMPLATE_INCRE_NUM      100
+#define TEMPLATE_INCRE_NUM      1000
 #define PNODE_INCRE_NUM         10000
 #define URLNODE_INCRE_NUM       10000
 #define PNODE_CHILDS_MAX        10000
