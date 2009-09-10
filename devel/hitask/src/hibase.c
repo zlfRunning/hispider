@@ -21,88 +21,6 @@
 #define  HIBASE_QTASK_NAME          "hibase.qtask"
 #define  HIBASE_QWAIT_NAME          "hibase.qwait"
 #define  HIBASE_ISTATE_NAME         "hibase.istate"
-#define _EXIT_(format...)                                                               \
-do                                                                                      \
-{                                                                                       \
-    fprintf(stderr, "%s::%d ", __FILE__, __LINE__);                                     \
-    fprintf(stderr, format);                                                            \
-    _exit(-1);                                                                          \
-}while(0)
-#define HIO_INCRE(io, type, incre_num)                                                  \
-do                                                                                      \
-{                                                                                       \
-    if(io.fd  > 0 && incre_num > 0)                                                     \
-    {                                                                                   \
-        io.size += ((off_t)sizeof(type) * (off_t)incre_num);                            \
-        ftruncate(io.fd, io.size);                                                      \
-        io.left += incre_num;                                                           \
-        io.total = io.size/(off_t)sizeof(type);                                         \
-    }                                                                                   \
-}while(0)
-#define HIO_MMAP(io, type, incre_num)                                                   \
-do                                                                                      \
-{                                                                                       \
-    if(io.fd > 0 && incre_num > 0)                                                      \
-    {                                                                                   \
-        if(io.map && io.map != (void *)(-1))                                            \
-        {                                                                               \
-            msync(io.map, io.size, MS_SYNC);                                            \
-            munmap(io.map, io.size);                                                    \
-        }                                                                               \
-        io.size += ((off_t)sizeof(type) * (off_t)incre_num);                            \
-        ftruncate(io.fd, io.size);                                                      \
-        io.left += incre_num;                                                           \
-        io.total = io.size/(off_t)sizeof(type);                                         \
-        if((io.map = mmap(NULL, io.size, PROT_READ|PROT_WRITE, MAP_SHARED,              \
-                        io.fd, 0)) == (void *)-1)                                       \
-        {                                                                               \
-            _EXIT_("mmap %d size:%lld failed, %s\n", io.fd,                             \
-                    (long long int)io.size, strerror(errno));                           \
-        }                                                                               \
-    }                                                                                   \
-}while(0)
-#define HIO_MAP(io, type) ((io.map && io.map != (void *)-1)?(type *)io.map : NULL)
-#define HIO_MUNMAP(io)                                                                  \
-do                                                                                      \
-{                                                                                       \
-    if(io.map && io.size > 0)                                                           \
-    {                                                                                   \
-        msync(io.map, io.size, MS_SYNC);                                                \
-        munmap(io.map, io.size);                                                        \
-        io.map = NULL;                                                                  \
-    }                                                                                   \
-}while(0)
-#define HIO_INIT(io, file, st, type)                                                    \
-do                                                                                      \
-{                                                                                       \
-    if(file && (io.fd = open(file, O_CREAT|O_RDWR, 0644)) > 0                           \
-            && fstat(io.fd, &st) == 0)                                                  \
-    {                                                                                   \
-        io.size = st.st_size;                                                           \
-        io.total = (st.st_size/(off_t)sizeof(type));                                    \
-    }                                                                                   \
-    else                                                                                \
-    {                                                                                   \
-        _EXIT_("initialize file(%s) failed, %s", file, strerror(errno));                \
-    }                                                                                   \
-}while(0)
-#define HIO_CLEAN(io)                                                                   \
-{                                                                                       \
-    if(io.map && io.size > 0)                                                           \
-    {                                                                                   \
-        msync(io.map, io.size, MS_SYNC);                                                \
-        munmap(io.map, io.size);                                                        \
-        io.map = NULL;                                                                  \
-    }                                                                                   \
-    if(io.fd > 0)                                                                       \
-    {                                                                                   \
-        close(io.fd);                                                                   \
-        io.fd = 0;                                                                      \
-        io.left = 0;                                                                    \
-        io.total = 0;                                                                   \
-    }                                                                                   \
-    io.size = 0;                                                                        \
-}
 //tables
 static char *table_data_types[] = {"null", "int", "float", "null", "text",
     "null","null","null","blob"};
@@ -1513,6 +1431,57 @@ int hibase_get_pnode_urlnodes(HIBASE *hibase, int nodeid, URLNODE **purlnodes)
     return n;
 }
 
+/* pop urlnodeid for download task */
+int hibase_pop_urlnode(HIBASE *hibase, URLNODE *urlnode)
+{
+    int urlnodeid = -1, x = 0, *px = NULL;
+
+    if(hibase && hibase->qtask && hibase->istate && urlnode)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        while(FQTOTAL(hibase->qtask) > 0 || hibase->istate->urlnodeid_current
+            < hibase->urlnodeio.current)
+        {
+            px = &x;
+            if(FQUEUE_POP(hibase->qtask, int, px) == 0)
+            {
+                urlnodeid = x;
+            }
+            else if(hibase->istate->urlnodeid_current < hibase->urlnodeio.current)
+            {
+                urlnodeid = hibase->istate->urlnodeid_current++;
+            }
+            if(urlnodeid >= 0 && hibase->urlnodeio.fd > 0 && pread(hibase->urlnodeio.fd, 
+                urlnode, sizeof(URLNODE), (off_t)urlnodeid * (off_t)sizeof(URLNODE)) > 0
+                && urlnode->status > 0)
+            {
+                    break;
+            }
+            else urlnodeid = -1;
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return urlnodeid;
+}
+
+/* pop urlnodeid from wait queue */
+int hibase_pop_task_urlnodeid(HIBASE *hibase)
+{
+    int urlnodeid = -1, x = 0, *px = NULL;
+    if(hibase)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        px = &x;
+        if(hibase->qwait && FQTOTAL(hibase->qwait) > 0
+            && FQUEUE_POP(hibase->qwait, int, px) == 0)
+        {
+            urlnodeid = x;
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return urlnodeid;
+}
+
 /* clean */
 void hibase_clean(HIBASE **phibase)
 {
@@ -1583,6 +1552,8 @@ HIBASE * hibase_init()
         hibase->get_urlnode_childs  = hibase_get_urlnode_childs;
         hibase->get_pnode_urlnodes  = hibase_get_pnode_urlnodes;
         hibase->free_urlnodes       = hibase_free_urlnodes;
+        hibase->pop_urlnode         = hibase_pop_urlnode;
+        hibase->pop_task_urlnodeid  = hibase_pop_task_urlnodeid;
         hibase->clean               = hibase_clean;
     }
     return hibase;

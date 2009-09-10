@@ -35,6 +35,8 @@ static int is_need_extract_link = 0;
 static char *authorization_name = "Hitask Administration System";
 static void *argvmap = NULL;
 static int proxy_timeout = 2000000;
+static int histore_ntask = 0;
+static int histore_task_running = 0;
 static char *e_argvs[] = 
 {
     "op", 
@@ -290,6 +292,7 @@ void adns_heartbeat_handler(void *arg)
             adns->newtransaction(adns, conn, id);
         }
     }
+    return ;
 }
 
 /* packet reader */
@@ -650,7 +653,8 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
 {
     char buf[HTTP_BUF_SIZE], file[HTTP_PATH_MAX], *host = NULL, 
         *ip = NULL, *p = NULL, *end = NULL;
-    int urlid = 0, n = 0, ips = 0, err = 0;
+    int urlid = 0, referid = -1, urlnodeid = -1, n = 0, ips = 0, err = 0;
+    URLNODE urlnode = {0}, parent = {0};
     struct stat st = {0};
     HTTP_REQ http_req = {0};
 
@@ -754,7 +758,20 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
                 ltask->set_url_status(ltask, urlid, NULL, URL_STATUS_ERR, err);
             }
             /* get new task */
-            if(ltask->get_task(ltask, buf, &n) >= 0) 
+            if((urlnodeid = hibase->pop_urlnode(hibase, &urlnode)) >= 0 && urlnode.urlid > 0)
+            {
+                if(urlnode.parentid>0 && hibase->get_urlnode(hibase,urlnode.parentid,&parent) > 0)
+                {
+                    referid = parent.urlid;
+                }
+                if((ltask->get_task(ltask, urlnode.urlid, referid, 
+                        urlnodeid, -1, buf, &n)) >= 0 && n > 0)
+                {
+                    return conn->push_chunk(conn, buf, n);
+                }
+                else goto err_end;
+            }
+            else if(ltask->get_task(ltask, -1, -1, -1, -1, buf, &n) >= 0 && n > 0) 
             {
                 return conn->push_chunk(conn, buf, n);
             }
@@ -1291,7 +1308,7 @@ int hitaskd_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA
     if(conn)
     {   if(conn->evstate == EVSTATE_WAIT)
         {
-            if(ltask->get_task(ltask, buf, &n) >= 0) 
+            if(ltask->get_task(ltask, -1, -1, -1, -1, buf, &n) >= 0 && n > 0) 
             {
                 conn->over_evstate(conn);
                 return conn->push_chunk(conn, buf, n);
@@ -1569,9 +1586,18 @@ void histore_task_handler(void *arg)
             }
             if(content) free(content);
             if(templates)hibase->free_templates(templates);
-            //uncompress
         }
         if(block)ltask->free_content(block); 
+    }
+    //new task 
+    if((id = hibase->pop_task_urlnodeid(hibase)) >= 0)
+    {
+        id++;
+        histore->newtask(histore, &histore_task_handler, &id);
+    }
+    else
+    {
+        histore_task_running--;
     }
     return ;
 }
@@ -1584,6 +1610,27 @@ int histore_oob_handler(CONN *conn, CB_DATA *oob)
         return 0;
     }
     return -1;
+}
+
+/* hearbeat handler */
+void histore_heartbeat_handler(void *arg)
+{
+    int urlnodeid = -1;
+
+    if(arg && arg == histore && histore_ntask > 0)
+    {
+        while(histore_task_running < histore_ntask)
+        {
+            if((urlnodeid = hibase->pop_task_urlnodeid(hibase)) >= 0)
+            {
+                urlnodeid++;
+                histore->newtask(histore, &histore_task_handler, (void *)&urlnodeid);
+                histore_task_running++;
+            }
+            else break;
+        }
+    }
+    return ;
 }
 
 /* Initialize from ini file */
@@ -1724,7 +1771,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
     histore->service_type = iniparser_getint(dict, "HISTORE:service_type", S_SERVICE);
     histore->service_name = iniparser_getstr(dict, "HISTORE:service_name");
     histore->nprocthreads = iniparser_getint(dict, "HISTORE:nprocthreads", 1);
-    histore->ndaemons = iniparser_getint(dict, "HISTORE:ndaemons", 0);
+    histore_ntask = histore->ndaemons = iniparser_getint(dict, "HISTORE:ndaemons", 8);
     histore->set_log(histore, iniparser_getstr(dict, "HISTORE:logfile"));
     histore->session.packet_type = iniparser_getint(dict, "HISTORE:packet_type",PACKET_DELIMITER);
     histore->session.packet_delimiter = iniparser_getstr(dict, "HISTORE:packet_delimiter");
@@ -1753,6 +1800,8 @@ int sbase_initialize(SBASE *sbase, char *conf)
     histore->session.timeout_handler = &histore_timeout_handler;
     histore->session.error_handler = &histore_error_handler;
     histore->session.oob_handler = &histore_oob_handler;
+    interval = iniparser_getint(dict, "HISTORE:heartbeat_interval", SB_HEARTBEAT_INTERVAL);
+    histore->set_heartbeat(histore, interval, &histore_heartbeat_handler, histore);
     if((p = iniparser_getstr(dict, "HISTORE:access_log"))){LOGGER_INIT(histore_logger, p);}
     /* dns service */
     if((adns = service_init()) == NULL)

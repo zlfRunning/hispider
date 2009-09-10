@@ -138,7 +138,7 @@ typedef struct _ITEMPLATE
 /* state info */
 typedef struct _ISTATE
 {
-    int task_current;
+    int urlnodeid_current;
     int urlnode_total;
 }ISTATE;
 /* hibase io/map */
@@ -218,6 +218,8 @@ typedef struct _HIBASE
     int     (*get_urlnode_childs)(struct _HIBASE *, int urlnodeid, URLNODE **childs);
     int     (*get_pnode_urlnodes)(struct _HIBASE *, int nodeid, URLNODE **urlnodes);
     void    (*free_urlnodes)(URLNODE *urlnodes);
+    int     (*pop_urlnode)(struct _HIBASE *, URLNODE *urlnode);
+    int     (*pop_task_urlnodeid)(struct _HIBASE *);
     void 	(*clean)(struct _HIBASE **);	
 }HIBASE;
 /* hibase initialize */

@@ -877,7 +877,8 @@ err:
 }
 
 /* pop url */
-int ltask_pop_url(LTASK *task, char *url, int *itime, char *refer, char *cookie)
+int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime, 
+        int referid, char *refer, char *cookie)
 {
     int urlid = -1, n = -1, x = 0;
     LHOST *host_node = NULL;
@@ -887,48 +888,52 @@ int ltask_pop_url(LTASK *task, char *url, int *itime, char *refer, char *cookie)
     if(task && url)
     {
         MUTEX_LOCK(task->mutex);
-        if(FQUEUE_POP(task->qtask, LNODE, &node) == 0)
-        {
-            if(node.type == Q_TYPE_HOST && node.id >= 0)
-            {
-                host_node = (LHOST *)(task->hostio.map + node.id * sizeof(LHOST));
-                urlid = host_node->url_current_id;
-                if(host_node->url_left > 1)
-                {
-                    pnode = &node;
-                    FQUEUE_PUSH(task->qtask, LNODE, pnode);
-                }
-            }
-            else if(node.type == Q_TYPE_URL && node.id >= 0)
-            {
-                urlid = node.id;
-            }
-            else 
-            {
-                DEBUG_LOGGER(task->logger, "Unknown task type:%d", node.type);
-                goto end;
-            }
-        }
+        if(url_id >= 0) urlid = url_id;
         else
         {
-            x = task->state->host_current;
-            DEBUG_LOGGER(task->logger, "QURL host:%d", x);
-            do
+            if(FQUEUE_POP(task->qtask, LNODE, &node) == 0)
             {
-                host_node = (LHOST *)(task->hostio.map 
-                        + task->state->host_current * sizeof(LHOST));
-                if(task->state->host_current++ == task->state->host_total) 
-                    task->state->host_current = 0;
-                if(host_node && host_node->status >= 0 && host_node->url_left > 0)
+                if(node.type == Q_TYPE_HOST && node.id >= 0)
                 {
+                    host_node = (LHOST *)(task->hostio.map + node.id * sizeof(LHOST));
                     urlid = host_node->url_current_id;
-                    DEBUG_LOGGER(task->logger, "urlid:%d current:%d left:%d total:%d", urlid, 
-                            task->state->host_current, host_node->url_left, host_node->url_total);
-                    break;
+                    if(host_node->url_left > 1)
+                    {
+                        pnode = &node;
+                        FQUEUE_PUSH(task->qtask, LNODE, pnode);
+                    }
                 }
-                else host_node = NULL;
-                if(x == task->state->host_current) break;
-            }while(host_node == NULL);
+                else if(node.type == Q_TYPE_URL && node.id >= 0)
+                {
+                    urlid = node.id;
+                }
+                else 
+                {
+                    DEBUG_LOGGER(task->logger, "Unknown task type:%d", node.type);
+                    goto end;
+                }
+            }
+            else
+            {
+                x = task->state->host_current;
+                DEBUG_LOGGER(task->logger, "QURL host:%d", x);
+                do
+                {
+                    host_node = (LHOST *)(task->hostio.map 
+                            + task->state->host_current * sizeof(LHOST));
+                    if(task->state->host_current++ == task->state->host_total) 
+                        task->state->host_current = 0;
+                    if(host_node && host_node->status >= 0 && host_node->url_left > 0)
+                    {
+                        urlid = host_node->url_current_id;
+                        DEBUG_LOGGER(task->logger, "urlid:%d current:%d left:%d total:%d", urlid, 
+                        task->state->host_current, host_node->url_left, host_node->url_total);
+                        break;
+                    }
+                    else host_node = NULL;
+                    if(x == task->state->host_current) break;
+                }while(host_node == NULL);
+            }
         }
         /* read url */
         DEBUG_LOGGER(task->logger, "READURL urlid:%d", urlid);
@@ -945,9 +950,10 @@ int ltask_pop_url(LTASK *task, char *url, int *itime, char *refer, char *cookie)
             host_node->url_left--;
             //refer
             refer[0] = '\0';
-            if((n = meta.parent) >= 0 && pread(task->meta_fd, &meta, sizeof(LMETA),
-                        (off_t)(n*sizeof(LMETA))) > 0 && meta.url_len <= HTTP_URL_MAX 
-                    && meta.status >= 0)
+            if(referid >= 0) n = referid;
+            else n = meta.parent;
+            if(n >= 0 && pread(task->meta_fd, &meta, sizeof(LMETA), (off_t)(n*sizeof(LMETA))) > 0 
+                    && meta.url_len <= HTTP_URL_MAX && meta.status >= 0)
             {
                 pread(task->url_fd, refer, meta.url_len, meta.url_off);
                 refer[meta.url_len] = '\0';
@@ -1074,7 +1080,8 @@ int ltask_set_url_level(LTASK *task, int urlid, char *url, short level)
 }
 
 /* NEW TASK */
-int ltask_get_task(LTASK *task, char *buf, int *nbuf)
+int ltask_get_task(LTASK *task, int url_id, int referid, int uuid, 
+        int userid, char *buf, int *nbuf)
 {
     char url[HTTP_URL_MAX], date[64], refer[HTTP_URL_MAX], cookie[HTTP_COOKIE_MAX], 
          ch = 0, *p = NULL, *ps = NULL, *path = NULL;
@@ -1082,8 +1089,8 @@ int ltask_get_task(LTASK *task, char *buf, int *nbuf)
     int urlid = -1, ip = 0, port = 0, itime = 0;
     LPROXY proxy = {0};
 
-    if(task && buf && nbuf  && task->state && task->state->running 
-            && (urlid = ltask_pop_url(task, url, &itime, refer, cookie)) >= 0)
+    if(task && buf && task->state && task->state->running
+        && (urlid = ltask_pop_url(task, url_id, url, &itime, referid, refer, cookie)) >= 0)
     {
         p = ps = url + strlen(HTTP_PREF);
         while(*p != '\0' && *p != ':' && *p != '/')++p;
@@ -1103,7 +1110,7 @@ int ltask_get_task(LTASK *task, char *buf, int *nbuf)
         if(path == NULL || *path == '\0')
         {
             p += sprintf(p, "HTTP/1.0 200 OK\r\nFrom: %ld\r\nLocation: /\r\n"
-                        "Host: %s\r\nServer: %d.%d.%d.%d\r\nTE:%d\r\n", 
+                    "Host: %s\r\nServer: %d.%d.%d.%d\r\nTE:%d\r\n", 
                     (long)urlid, ps, sip[0], sip[1], sip[2], sip[3], port);
         }
         else
@@ -1116,6 +1123,8 @@ int ltask_get_task(LTASK *task, char *buf, int *nbuf)
             p += sprintf(p, "Last-Modified: %s\r\n", date);
         if(refer[0] != '\0') p += sprintf(p, "Referer: %s\r\n", refer);
         if(cookie[0] != '\0') p += sprintf(p, "Cookie: %s\r\n", cookie);
+        if(uuid >= 0) p += sprintf(p, "UUID: %d\r\n", uuid);
+        if(userid >= 0) p += sprintf(p, "UserID: %d\r\n", userid);
         if(task->state->is_use_proxy && ltask_get_proxy(task, &proxy) >= 0)
         {
             pip = (unsigned char *)&(proxy.ip);
