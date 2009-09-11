@@ -770,6 +770,11 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url, int fl
             {
                 *pp++ = *p++ + ('a' - 'A');
             }
+            else if(*((unsigned char *)p) > 127 || *p == 0x20)
+            {
+                pp += sprintf(pp, "%%%02x", *((unsigned char *)p));
+                ++p;
+            }
             else
             {
                 *pp++ = *p++;
