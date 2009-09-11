@@ -741,9 +741,8 @@ int hibase_get_pnode(HIBASE *hibase, int pnodeid, PNODE *ppnode)
     if(hibase && hibase->mpnode && ppnode)
     {
         MUTEX_LOCK(hibase->mutex);
-        if(pnodeid >= 0 && pnodeid < hibase->pnodeio.total 
-                && (pnode = (PNODE *)(hibase->pnodeio.map)) 
-                && pnode != (PNODE *)-1 && pnode[pnodeid].status > 0)
+        if(pnodeid > 0 && pnodeid < hibase->pnodeio.total 
+            && (pnode = HIO_MAP(hibase->pnodeio, PNODE)) && pnode[pnodeid].status > 0)
         {
             memcpy(ppnode, &(pnode[pnodeid]), sizeof(PNODE));
             ret = pnodeid;
@@ -1397,12 +1396,12 @@ int hibase_get_urlnode(HIBASE *hibase, int urlnodeid, URLNODE *urlnode)
     URLNODE *urlnodes = NULL;
     int ret = -1;
 
-    if(hibase && urlnode && urlnodeid >= 0 && urlnodeid < hibase->urlnodeio.total)
+    if(hibase && urlnode && urlnodeid > 0 && urlnodeid < hibase->urlnodeio.total)
     {
         MUTEX_LOCK(hibase->mutex);
         if((urlnodes = HIO_MAP(hibase->urlnodeio, URLNODE)))
         {
-            memcpy(&(urlnodes[urlnodeid]), urlnode, sizeof(URLNODE));
+            memcpy(urlnode, &(urlnodes[urlnodeid]), sizeof(URLNODE));
             ret = urlnodeid;
         }
         MUTEX_UNLOCK(hibase->mutex);
@@ -1501,11 +1500,10 @@ int hibase_pop_urlnode(HIBASE *hibase, URLNODE *urlnode)
                 else if(hibase->istate->urlnodeio_current <= hibase->urlnodeio.current)
                 {
                     urlnodeid = hibase->istate->urlnode_task_current++;
+                    if(purlnode[urlnodeid].level > 0) continue;
                 }
                 if(urlnodeid > 0 &&  purlnode[urlnodeid].status > 0)
                 {
-                    if(x != urlnodeid && purlnode[urlnodeid].level > 0) 
-                        continue;
                     memcpy(urlnode, &(purlnode[urlnodeid]), sizeof(URLNODE));
                     break;
                 }
@@ -1516,6 +1514,25 @@ int hibase_pop_urlnode(HIBASE *hibase, URLNODE *urlnode)
         MUTEX_UNLOCK(hibase->mutex);
     }
     return urlnodeid;
+}
+
+/* push urlnodeid from wait queue */
+int hibase_push_task_urlnodeid(HIBASE *hibase, int urlnodeid)
+{
+    int id = -1, *px = NULL;
+
+    if(hibase && urlnodeid > 0)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        px = &urlnodeid;
+        if(hibase->qwait)
+        {
+            FQUEUE_PUSH(hibase->qwait, int, px);
+            id = urlnodeid;
+        }
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return id;
 }
 
 /* pop urlnodeid from wait queue */
@@ -1608,6 +1625,7 @@ HIBASE * hibase_init()
         hibase->get_pnode_urlnodes  = hibase_get_pnode_urlnodes;
         hibase->free_urlnodes       = hibase_free_urlnodes;
         hibase->pop_urlnode         = hibase_pop_urlnode;
+        hibase->push_task_urlnodeid = hibase_push_task_urlnodeid;
         hibase->pop_task_urlnodeid  = hibase_pop_task_urlnodeid;
         hibase->clean               = hibase_clean;
     }

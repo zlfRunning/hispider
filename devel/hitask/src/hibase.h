@@ -222,6 +222,7 @@ typedef struct _HIBASE
     int     (*get_pnode_urlnodes)(struct _HIBASE *, int nodeid, URLNODE **urlnodes);
     void    (*free_urlnodes)(URLNODE *urlnodes);
     int     (*pop_urlnode)(struct _HIBASE *, URLNODE *urlnode);
+    int     (*push_task_urlnodeid)(struct _HIBASE *, int urlnodeid);
     int     (*pop_task_urlnodeid)(struct _HIBASE *);
     void 	(*clean)(struct _HIBASE **);	
 }HIBASE;
