@@ -700,7 +700,9 @@ int sbase_initialize(SBASE *sbase, char *conf)
     sbase->connections_limit = iniparser_getint(dict, "SBASE:connections_limit", SB_CONN_MAX);
     setrlimiter("RLIMIT_NOFILE", RLIMIT_NOFILE, sbase->connections_limit);
     sbase->usec_sleep = iniparser_getint(dict, "SBASE:usec_sleep", SB_USEC_SLEEP);
+#ifdef _DEBUG
     sbase->set_log(sbase, iniparser_getstr(dict, "SBASE:logfile"));
+#endif
     sbase->set_evlog(sbase, iniparser_getstr(dict, "SBASE:evlogfile"));
     /* initialize service */
     if((service = service_init()) == NULL)
@@ -719,7 +721,9 @@ int sbase_initialize(SBASE *sbase, char *conf)
     service->service_name = iniparser_getstr(dict, "HITASK:service_name");
     service->nprocthreads = iniparser_getint(dict, "HITASK:nprocthreads", 1);
     service->ndaemons = iniparser_getint(dict, "HITASK:ndaemons", 0);
+#ifdef _DEBUG
     service->set_log(service, iniparser_getstr(dict, "HITASK:logfile"));
+#endif
     service->session.packet_type = iniparser_getint(dict, "HITASK:packet_type",PACKET_DELIMITER);
     service->session.packet_delimiter = iniparser_getstr(dict, "HITASK:packet_delimiter");
     p = s = service->session.packet_delimiter;

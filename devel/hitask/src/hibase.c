@@ -1608,6 +1608,7 @@ HIBASE * hibase_init()
         hibase->add_pnode           = hibase_add_pnode;
         hibase->get_pnode           = hibase_get_pnode;
         hibase->get_pnode_templates = hibase_get_pnode_templates;
+        hibase->free_templates      = hibase_free_templates;
         hibase->get_pnode_childs    = hibase_get_pnode_childs;
         hibase->view_pnode_childs   = hibase_view_pnode_childs;
         hibase->update_pnode        = hibase_update_pnode;

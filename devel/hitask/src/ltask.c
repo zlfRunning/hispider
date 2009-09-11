@@ -95,6 +95,7 @@ int ltask_set_basedir(LTASK *task, char *dir)
                 }
                 task->state->last_usec = PT_L_USEC(task->timer);
                 task->state->speed = 0;
+                task->state->running = 1;
             }
             else
             {
@@ -1546,6 +1547,7 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
         }
         MUTEX_LOCK(task->mutex);
         fstat(task->doc_fd, &st); 
+        memset(buf, 0, HTTP_BUF_SIZE);
         pdocheader = (LDOCHEADER *)buf;
         url = buf + sizeof(LDOCHEADER);
         if(pread(task->meta_fd, &meta, sizeof(LMETA), (off_t)(urlid * sizeof(LMETA))) > 0 )
@@ -1553,7 +1555,6 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
             DEBUG_LOGGER(task->logger, "url:%s nurl:%d status:%d url_off:%lld", 
                     url, meta.url_len, meta.status, meta.url_off);
         }else goto end;
-        memset(buf, 0, HTTP_BUF_SIZE);
         if(meta.url_len > 0 && meta.url_len <= HTTP_URL_MAX && meta.status >= 0 
                 && (n = pread(task->url_fd, url, meta.url_len, meta.url_off)) > 0)
         {
@@ -1568,19 +1569,22 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
             pdocheader->ncontent = ncontent;
             pdocheader->total = pdocheader->ntype + 1 + pdocheader->nurl + 1 + ncontent;
             if((n = (p - buf)) > 0 && pwrite(task->doc_fd, buf, n, st.st_size) > 0
-                    && (meta.content_off = st.st_size) >= 0
-                    && pwrite(task->doc_fd, content, ncontent, meta.content_off) > 0)
+                    && (meta.content_off = st.st_size) >= 0 && pwrite(task->doc_fd, 
+                        content, ncontent, (meta.content_off+(off_t)n)) > 0)
             {
                 meta.content_len = pdocheader->total + sizeof(LDOCHEADER);
                 meta.status = 0;
                 pwrite(task->meta_fd, &meta, sizeof(LMETA), (off_t)(urlid * sizeof(LMETA)));
-                ret = 0;
                 if(task->state)
                 {
                     task->state->doc_total_zsize += (off_t)ncontent;
                     task->state->doc_total_size += (off_t)ncontent;
                     task->state->url_ok++;
                 }
+                DEBUG_LOGGER(task->logger, "nurl:%d[%s] ntype:%d[%s] ncontent:%d total:%d ", 
+                        pdocheader->nurl, url, pdocheader->ntype, type, pdocheader->ncontent, 
+                        meta.content_len);
+                ret = 0;
             }
         }
         if(date)
@@ -1628,6 +1632,8 @@ int ltask_get_content(LTASK *task, int urlid, char **block)
         if(pread(task->meta_fd, &meta, sizeof(LMETA), (off_t)urlid * (off_t)sizeof(LMETA)) > 0
                 && meta.content_len > 0 && (*block = (char *)calloc(1, meta.content_len)))
         {
+            fprintf(stdout, "%s:%d read %d from %lld\n",
+                    __FILE__, __LINE__, meta.content_len, meta.content_off);
             if(pread(task->doc_fd, *block, meta.content_len, meta.content_off) > 0)
             {
                 n = meta.content_len;

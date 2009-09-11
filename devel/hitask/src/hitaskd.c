@@ -1473,7 +1473,7 @@ int histore_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
 void histore_task_handler(void *arg)
 {
     char *block = NULL, *url = NULL, *type = NULL, *content = NULL, *p = NULL, 
-         *zdata = NULL, *end = NULL, *pp = NULL, newurl[HTTP_URL_MAX];
+         *zdata = NULL, *e = NULL, *pp = NULL, *host = NULL, newurl[HTTP_URL_MAX];
     int id = -1, len = 0, n = -1, count = -1, i = -1, flag = 0, 
         start_offset = 0, erroffset = 0, res[FIELD_NUM_MAX * 2], 
         nres = 0, j = 0, x = 0, nx = 0, urlid = 0, nodeid = 0;
@@ -1486,129 +1486,141 @@ void histore_task_handler(void *arg)
     pcre *reg = NULL;
     PRES *pres = NULL;
 
-    if(arg && (id  = (int)((long)arg)) > 0)
+    if(arg && (id  = (int)((long)arg)) > 0
+        && hibase->get_urlnode(hibase, id, &urlnode) > 0 && urlnode.nodeid > 0 
+        && hibase->get_pnode(hibase, urlnode.nodeid, &pnode) > 0 
+        && (len = ltask->get_content(ltask, urlnode.urlid, &block)) > 0) 
     {
-        fprintf(stdout, "%s::%d ready for deal task:%ld arg:%p\n", __FILE__, __LINE__, id, arg);
-        if(hibase->get_urlnode(hibase, id, &urlnode) > 0 && urlnode.nodeid > 0 
-                && hibase->get_pnode(hibase, urlnode.nodeid, &pnode) > 0 
-                && (len = ltask->get_content(ltask, urlnode.urlid, &block)) > 0 
-                && len > sizeof(LDOCHEADER)
-                )
-        {
-            fprintf(stdout, "%s::%d ready for deal url:%d nodeid:%d content_len:%d \n", 
-                    __FILE__, __LINE__, urlnode.urlid, urlnode.nodeid, len);
-            if((docheader = (LDOCHEADER *)block) && (count = hibase->get_pnode_templates(hibase, 
-                    urlnode.nodeid, &templates)) > 0 && templates)
-            {
-                url = block + sizeof(LDOCHEADER);
-                type = url + docheader->nurl + 1;
-                zdata = type + docheader->ntype + 1;
-                ndata = len * 20;
-                fprintf(stdout, "%s::%d ready for deal url:%s type:%s\n", 
-                    __FILE__, __LINE__, url, type);
-                if(zdata < (block + len) && (content = (char *)calloc(1, ndata))
-                        && zdecompress((Bytef *)zdata, (uLong )docheader->ncontent, 
-                            (Bytef *)content, (uLong *)&ndata) == 0)
-                {
-                    for(i = 0; i < count; i++)
-                    {
-                        flag = PCRE_DOTALL|PCRE_MULTILINE|PCRE_EXTENDED|PCRE_UTF8;
-                        if(templates[i].flags & TMP_IS_IGNORECASE) flag |= PCRE_CASELESS;
-                        if((reg = pcre_compile(templates[i].pattern, flag, &error, &erroffset, NULL))) 
-                        {
-                            nres = FIELD_NUM_MAX * 2;
-                            pres = (PRES *)res;
-                            while(start_offset >= 0)
-                            {
-                                if((n = pcre_exec(reg, NULL, content, ndata, 
-                                                start_offset, 0, res, nres)) > 0 )
-                                {
-                                    if(templates[i].flags & TMP_IS_LINK)
-                                    {
-                                        //link
-                                        p = templates[i].link;
-                                        pp = newurl;
-                                        while(*p != '\0' && pp < end)
-                                        {
-                                            if(*p == '<')
-                                            {
-                                                ++p;
-                                                if(*p == '\0') goto err_next;
-                                                x = atoi(p) - 1;
-                                                if(x >= n && x < 0) goto err_next;
-                                                if((nx = pres[x].end  -  pres[x].start) > (end - pp))
-                                                    goto err_next;
-                                                if(nx > 0)
-                                                {
-                                                    memcpy(pp, content + pres[i].start, nx);
-                                                    pp += nx;
-                                                }
-                                                while(*p != '\0' && *p != '>')++p;
-                                            }
-                                            else *pp++ = *p++;
-                                        }
-                                        *pp++ = '\0';
-                                        if((nodeid = templates[i].linkmap.nodeid > 0)  
-                                                && (urlid = ltask->add_url(ltask, urlnode.urlid, 0, newurl, 
-                                                        (templates[i].linkmap.flag & REG_IS_POST))) >= 0)
-                                        {
-                                            hibase->add_urlnode(hibase, nodeid, urlnode.id, 
-                                                    urlid, urlnode.level);
-                                            goto ok_next;
-                                        }
-err_next:
-                                        ERROR_LOGGER(hitaskd_logger, 
-                                                "link error link:%s pattern:%s url:%s",
-                                                templates[i].link, templates[i].pattern, url);
-                                    }
-                                    else
-                                    {
-                                        for(j = 0; j < n; j++)
-                                        {
-                                            //handling data
-                                            if(j < templates[i].nfields 
-                                                    && (templates[i].map[i].flag & REG_IS_URL))
-                                            {
 
-                                            }
-                                            else
+        fprintf(stdout, "%s::%d ready for deal task:%ld arg:%p\n", __FILE__, __LINE__, id, arg);
+        if(len > sizeof(LDOCHEADER) && (docheader = (LDOCHEADER *)block)
+            && (count = hibase->get_pnode_templates(hibase, urlnode.nodeid, &templates)) > 0) 
+        {
+        fprintf(stdout, "%s::%d ready for deal url:%d nodeid:%d "
+                "content_len:%d nurl:%d ntype:%d ncentent:%d\n", 
+                __FILE__, __LINE__, urlnode.urlid, urlnode.nodeid, len,
+                docheader->nurl, docheader->ntype, docheader->ncontent);
+            url = block + sizeof(LDOCHEADER);
+            type = url + docheader->nurl + 1;
+            zdata = type + docheader->ntype + 1;
+            ndata = docheader->ncontent * 10;
+            fprintf(stdout, "%s::%d ready for deal url:%s type:%s ncontent:%d\n", 
+                    __FILE__, __LINE__, url, type, docheader->ncontent);
+            if(zdata < (block + len) && (content = (char *)calloc(1, ndata))
+                    && zdecompress((Bytef *)zdata, (uLong )docheader->ncontent, 
+                        (Bytef *)content, (uLong *)&ndata) == 0)
+            {
+                //fprintf(stdout, "%s::%d ndata:%d content:%s\n", 
+                //__FILE__, __LINE__, ndata, content);
+                for(i = 0; i < count; i++)
+                {
+                    flag = PCRE_DOTALL|PCRE_MULTILINE|PCRE_UTF8;
+                    if(templates[i].flags & TMP_IS_IGNORECASE) flag |= PCRE_CASELESS;
+                    if((reg = pcre_compile(templates[i].pattern, flag, &error, &erroffset, NULL))) 
+                    {
+                        nres = FIELD_NUM_MAX * 2;
+                        pres = (PRES *)res;
+                        while(start_offset >= 0)
+                        {
+                            if((n = pcre_exec(reg, NULL, content, ndata, 
+                                            start_offset, 0, res, nres)) > 0 )
+                            {
+                                if(templates[i].flags & TMP_IS_LINK)
+                                {
+                                    //link
+                                    p = templates[i].link;
+                                    pp = newurl;
+                                    while(*p != '\0' && pp < e)
+                                    {
+                                        if(*p == '<')
+                                        {
+                                            ++p;
+                                            if(*p == '\0') goto err_next;
+                                            x = atoi(p) - 1;
+                                            if(x >= n && x < 0) goto err_next;
+                                            if((nx = pres[x].end  -  pres[x].start) > (e - pp))
+                                                goto err_next;
+                                            if(nx > 0)
                                             {
-                                                fprintf(stdout, "%s::%d %d-%d %.*s\n", __FILE__, 
-                                                        __LINE__, i, j, pres[i].end  -  pres[i].start, 
-                                                        content + pres[i].start);
+                                                memcpy(pp, content + pres[i].start, nx);
+                                                pp += nx;
                                             }
-                                            start_offset = pres[i].end;
+                                            while(*p != '\0' && *p != '>')++p;
                                         }
+                                        else *pp++ = *p++;
                                     }
-ok_next:
-                                    if((templates[i].flags & TMP_IS_GLOBAL) == 0)
-                                        start_offset = -1;
+                                    *pp++ = '\0';
+                                    if((nodeid = templates[i].linkmap.nodeid > 0)  && (urlid = 
+                                        ltask->add_url(ltask, urlnode.urlid, 0, newurl, 
+                                        (templates[i].linkmap.flag & REG_IS_POST))) >= 0)
+                                    {
+                                        hibase->add_urlnode(hibase, nodeid, urlnode.id, 
+                                                urlid, urlnode.level);
+                                        goto ok_next;
+                                    }
+                                    err_next:
+                                    ERROR_LOGGER(hitaskd_logger, 
+                                            "link error link:%s pattern:%s url:%s",
+                                            templates[i].link, templates[i].pattern, url);
                                 }
                                 else
                                 {
-                                    start_offset = -1;
-                                    if(n == PCRE_ERROR_NOMATCH)
+                                    for(j = 0; j < n; j++)
                                     {
-                                        fprintf(stdout, "No match result with pattern[%s] at url[%s]\n", 
-                                                templates[i].pattern, url);
+                                        //handling data
+                                        if(j < templates[i].nfields && (templates[i].map[j].flag 
+                                            & REG_IS_URL) && (p = content + pres[j].start)
+                                            && (e = content + pres[j].end))
+                                        {
+                                            if(*p == '/')
+                                            {
+                                            }
+                                            else if(*p == '.')
+                                            {
+                                            }
+                                            else if(strncasecmp(p, "http://", 7) == 0)
+                                            {
+                                            }
+                                            else
+                                            {
+                                            }
+                                        else
+                                        {
+                                            fprintf(stdout, "%s::%d %d-%d %.*s\n", __FILE__, 
+                                                    __LINE__, i, j, pres[j].end  -  pres[j].start, 
+                                                    content + pres[j].start);
+                                        }
+                                        start_offset = pres[j].end;
                                     }
                                 }
+ok_next:
+                                if((templates[i].flags & TMP_IS_GLOBAL) == 0)
+                                    start_offset = -1;
                             }
-                            pcre_free(reg);
+                            else
+                            {
+                                start_offset = -1;
+                                if(n == PCRE_ERROR_NOMATCH)
+                                {
+                                    fprintf(stdout, "No match result with pattern[%s] at url[%s]\n", 
+                                            templates[i].pattern, url);
+                                }
+                            }
                         }
-                        else
-                        {
-                            //error
-                            fprintf(stdout, "%s::%d pcre compile error:%s at offset:%d\n", 
-                                    __FILE__, __LINE__, error, erroffset);
-                        }
+                        pcre_free(reg);
+                    }
+                    else
+                    {
+                        //error
+                        fprintf(stdout, "%s::%d pcre compile error:%s at offset:%d\n", 
+                                __FILE__, __LINE__, error, erroffset);
                     }
                 }
-                if(content) free(content);
-                if(templates)hibase->free_templates(templates);
             }
-            if(block)ltask->free_content(block); 
+            if(content) free(content);
+            if(templates)hibase->free_templates(templates);
         }
+        if(block)ltask->free_content(block); 
     }
     //new task 
     if((id = hibase->pop_task_urlnodeid(hibase)) > 0)
@@ -1676,7 +1688,9 @@ int sbase_initialize(SBASE *sbase, char *conf)
     sbase->connections_limit = iniparser_getint(dict, "SBASE:connections_limit", SB_CONN_MAX);
     setrlimiter("RLIMIT_NOFILE", RLIMIT_NOFILE, sbase->connections_limit);
     sbase->usec_sleep = iniparser_getint(dict, "SBASE:usec_sleep", SB_USEC_SLEEP);
+#ifdef _DEBUG
     sbase->set_log(sbase, iniparser_getstr(dict, "SBASE:logfile"));
+#endif
     sbase->set_evlog(sbase, iniparser_getstr(dict, "SBASE:evlogfile"));
     /* HITASKD */
     if((hitaskd = service_init()) == NULL)
@@ -1693,7 +1707,9 @@ int sbase_initialize(SBASE *sbase, char *conf)
     hitaskd->service_name = iniparser_getstr(dict, "HITASKD:service_name");
     hitaskd->nprocthreads = iniparser_getint(dict, "HITASKD:nprocthreads", 1);
     hitaskd->ndaemons = iniparser_getint(dict, "HITASKD:ndaemons", 1);
+#ifdef _DEBUG
     hitaskd->set_log(hitaskd, iniparser_getstr(dict, "HITASKD:logfile"));
+#endif
     hitaskd->session.packet_type = iniparser_getint(dict, "HITASKD:packet_type",PACKET_DELIMITER);
     hitaskd->session.packet_delimiter = iniparser_getstr(dict, "HITASKD:packet_delimiter");
     p = s = hitaskd->session.packet_delimiter;
@@ -1795,7 +1811,9 @@ int sbase_initialize(SBASE *sbase, char *conf)
     histore->service_name = iniparser_getstr(dict, "HISTORE:service_name");
     histore->nprocthreads = iniparser_getint(dict, "HISTORE:nprocthreads", 1);
     histore_ntask = histore->ndaemons = iniparser_getint(dict, "HISTORE:ndaemons", 8);
+#ifdef _DEBUG
     histore->set_log(histore, iniparser_getstr(dict, "HISTORE:logfile"));
+#endif
     histore->session.packet_type = iniparser_getint(dict, "HISTORE:packet_type",PACKET_DELIMITER);
     histore->session.packet_delimiter = iniparser_getstr(dict, "HISTORE:packet_delimiter");
     p = s = histore->session.packet_delimiter;
@@ -1839,7 +1857,9 @@ int sbase_initialize(SBASE *sbase, char *conf)
     adns->service_name = iniparser_getstr(dict, "ADNS:service_name");
     adns->nprocthreads = iniparser_getint(dict, "ADNS:nprocthreads", 1);
     adns->ndaemons = iniparser_getint(dict, "ADNS:ndaemons", 0);
+#ifdef _DEBUG
     adns->set_log(adns, iniparser_getstr(dict, "ADNS:logfile"));
+#endif
     adns->session.packet_type = iniparser_getint(dict, "ADNS:packet_type", PACKET_CUSTOMIZED);
     adns->session.buffer_size = iniparser_getint(dict, "ADNS:buffer_size", SB_BUF_SIZE);
     adns->session.packet_reader = &adns_packet_reader;
