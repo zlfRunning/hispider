@@ -1625,18 +1625,21 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URL
                             for(j = 0; j < count; j++)
                             {
                                 //handling data
-                                if(j < templates[i].nfields && (templates[i].map[j].flag 
-                                            & REG_IS_URL) && (p = (content + pres[j].start))
-                                        && (e = (content + pres[j].end)) && (x = (e - p)) > 0 
-                                        && x < HTTP_URL_MAX)
+                                fprintf(stdout, "%s::%d nfields:%d flag:%d\n", __FILE__, __LINE__, 
+                                        templates[i].nfields, templates[i].map[j].flag);
+                                if((templates[i].map[j].flag & REG_IS_URL) 
+                                    && (x = (pres[j].end - pres[j].start)) > 0 
+                                    && x < HTTP_URL_MAX && j < templates[i].nfields)
                                 {
                                     //add to urlnode
+                                    p = content + pres[j].start;
+                                    e = content + pres[j].end;
                                     pp = newurl;
                                     s = url; 
                                     es = url + docheader->nurl;
                                     CPURL(s, es, p, e, pp, end, host, path, last);
                                     if((x = (pp - newurl)) > 0 && (urlid = ltask->add_url(ltask,
-                                            urlnode->urlid, 0, newurl,  0)) >= 0)
+                                                    urlnode->urlid, 0, newurl,  0)) >= 0)
                                     {   
                                         hibase->add_urlnode(hibase, nodeid, urlnode->id, 
                                                 urlid, urlnode->level);
@@ -1652,7 +1655,7 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URL
                                 start_offset = pres[j].end;
                             }
                         }
-ok_next:
+                        ok_next:
                         if((templates[i].flags & TMP_IS_GLOBAL) == 0)
                             start_offset = -1;
                     }
