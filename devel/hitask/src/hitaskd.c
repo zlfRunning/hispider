@@ -1496,7 +1496,8 @@ do                                                                              
     if((nodeid = templates[i].linkmap.nodeid > 0) && (urlid = ltask->add_url(ltask,         \
         urlnode->urlid, 0, newurl,  (templates[i].linkmap.flag & REG_IS_POST))) >= 0)       \
     {                                                                                       \
-        hibase->add_urlnode(hibase, nodeid, urlnode->id, urlid, urlnode->level);            \
+        hibase->add_urlnode(hibase, templates[i].linkmap.nodeid, urlnode->id,               \
+                urlid, urlnode->level);                                                     \
         goto ok_next;                                                                       \
     }                                                                                       \
 err_next:                                                                                   \
@@ -1504,15 +1505,16 @@ err_next:                                                                       
             templates[i].link, templates[i].pattern, url);                                  \
 }while(0)
 
-#define CPURL(s, es, p, e, pp, end, host, path, last)                                       \
+#define CPURL(s, es, p, e, pp, epp, end, host, path, last)                                  \
 do                                                                                          \
 {                                                                                           \
     if(strncasecmp(p, "http:\/\/", 7) == 0)                                                 \
     {                                                                                       \
-        while(p < e)                                                                        \
+        while(p < e && pp < epp)                                                            \
         {                                                                                   \
             if(*((unsigned char *)p) > 127 || *p == 0x20)                                   \
             {                                                                               \
+                if(pp > (epp - 3)) break;                                                   \
                 pp += sprintf(pp, "%%%02x", *((unsigned char *)p));                         \
                 ++p;                                                                        \
             }                                                                               \
@@ -1525,23 +1527,25 @@ do                                                                              
         end = NULL;                                                                         \
         path = NULL;                                                                        \
         last = NULL;                                                                        \
-        while(s < es)                                                                       \
+        while(s < es && pp < epp)                                                           \
         {                                                                                   \
             if(*s == ':' && *(s+1) == '/' && *(s+2) == '/')                                 \
             {                                                                               \
+                if(pp > (epp - 3)) break;                                                   \
                 *pp++ = *s++;                                                               \
                 *pp++ = *s++;                                                               \
                 *pp++ = *s++;                                                               \
                 host = pp;                                                                  \
             }                                                                               \
-            else if(host && *s == '/')                                                      \
+            else if(host && path == NULL && *s == '/')                                      \
             {                                                                               \
-                path = pp;                                                                  \
+                last = path = pp;                                                           \
                 *pp++ = *s++;                                                               \
             }                                                                               \
-            else if(path && *s == '?')                                                      \
+            else if(path && end == NULL && *s == '?')                                       \
             {                                                                               \
                 end = pp;                                                                   \
+                *pp++ = *s++;                                                               \
             }                                                                               \
             else if(path && end == NULL && *s == '/')                                       \
             {                                                                               \
@@ -1570,13 +1574,14 @@ do                                                                              
                     while(last > path && *last != '/') --last;                              \
                 }                                                                           \
             }                                                                               \
-            if(last == '/')last++;                                                          \
+            if(*last == '/')last++;                                                         \
             pp = last;                                                                      \
         }                                                                                   \
-        while(p < e)                                                                        \
+        while(p < e && pp < epp)                                                            \
         {                                                                                   \
             if(*((unsigned char *)p) > 127 || *p == 0x20)                                   \
             {                                                                               \
+                if(pp > (epp - 3)) break;                                                   \
                 pp += sprintf(pp, "%%%02x", *((unsigned char *)p));                         \
                 ++p;                                                                        \
             }else *pp++ = *p++;                                                             \
@@ -1589,10 +1594,11 @@ do                                                                              
 void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URLNODE *urlnode,
         LDOCHEADER *docheader, char *content, int ncontent, char *url, char *type)
 {
-    char *p = NULL, *e = NULL, *pp = NULL, *s = NULL, *es = NULL, *end = NULL, 
+    char *p = NULL, *e = NULL, *pp = NULL, *epp = NULL, *s = NULL, *es = NULL, *end = NULL, 
          *host = NULL, *path = NULL, *last = NULL, newurl[HTTP_URL_MAX];
     int i = -1, j = 0, flag = 0, start_offset = 0, erroffset = 0, res[FIELD_NUM_MAX * 2], 
-        nres = 0, n = 0, count = 0, x = 0, nx = 0, urlid = 0, nodeid = 0;
+        nres = 0, n = 0, count = 0, x = 0, nx = 0, urlid = 0, nodeid = 0, id = 0,
+        start = 0, over = 0, length = 0;
     const char *error = NULL;
     pcre *reg = NULL;
     PRES *pres = NULL;
@@ -1618,41 +1624,55 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URL
                         {
                             //link
                             MATCHEURL(templates, i, pp, e, newurl, p, x, nx, pres, 
-                                    content,urlnode, nodeid, urlid, url);
+                                    content, urlnode, nodeid, urlid, url);
                         }
                         else
                         {
-                            for(j = 0; j < count; j++)
+                            for(j = 1; j < count; j++)
                             {
+                                x = j - 1;
+                                start = res[2*j];
+                                start_offset = over = res[2*j+1];
+                                length = over - start;
+                                fprintf(stdout, "%s::%d %.*s\n", __FILE__,
+                                        __LINE__,length, content+start);
                                 //handling data
-                                fprintf(stdout, "%s::%d nfields:%d flag:%d\n", __FILE__, __LINE__, 
-                                        templates[i].nfields, templates[i].map[j].flag);
-                                if((templates[i].map[j].flag & REG_IS_URL) 
-                                    && (x = (pres[j].end - pres[j].start)) > 0 
-                                    && x < HTTP_URL_MAX && j < templates[i].nfields)
+                                fprintf(stdout, "%s::%d count:%d nfields:%d flag:%d\n",  __FILE__, 
+                                    __LINE__,count, templates[i].nfields, templates[i].map[x].flag);
+                                if((templates[i].map[x].flag & REG_IS_URL) && length > 0 
+                                        && length < HTTP_URL_MAX && x < templates[i].nfields)
                                 {
                                     //add to urlnode
-                                    p = content + pres[j].start;
-                                    e = content + pres[j].end;
+                                    p = content + start;
+                                    e = content + over;
                                     pp = newurl;
+                                    epp = pp + HTTP_URL_MAX - 1;
                                     s = url; 
                                     es = url + docheader->nurl;
-                                    CPURL(s, es, p, e, pp, end, host, path, last);
-                                    if((x = (pp - newurl)) > 0 && (urlid = ltask->add_url(ltask,
-                                                    urlnode->urlid, 0, newurl,  0)) >= 0)
+                                    CPURL(s, es, p, e, pp, epp, end, host, path, last);
+                                    n = (pp - newurl);
+                                    if(n > 0 && (urlid = ltask->add_url(ltask, urlnode->urlid, 
+                                                    0, newurl,  0)) >= 0)
                                     {   
-                                        hibase->add_urlnode(hibase, nodeid, urlnode->id, 
+                                        id = hibase->add_urlnode(hibase, templates[i].map[x].nodeid, 
+                                                urlnode->id, urlid, urlnode->level);
+                                        fprintf(stdout, "%s::%d newurl:%s id:%d x:%d "
+                                                "nodeid:%d parent:%d urlid:%d level:%d\n", 
+                                                __FILE__, __LINE__, newurl, id, x, 
+                                                templates[i].map[x].nodeid, urlnode->id,
                                                 urlid, urlnode->level);
-                                        fprintf(stdout, "%s::%d newurl:%s\n", __FILE__, __LINE__, newurl);
+                                    }
+                                    else
+                                    {
+                                        fprintf(stdout, "%s::%d newurl:%s failed\n", __FILE__, 
+                                                __LINE__, newurl);
                                     }
                                 }
                                 else
                                 {
-                                    fprintf(stdout, "%s::%d %d-%d %.*s\n", __FILE__, 
-                                            __LINE__, i, j, pres[j].end  -  pres[j].start, 
-                                            content + pres[j].start);
+                                    fprintf(stdout, "%s::%d %d-%d %.*s\n", __FILE__, __LINE__, 
+                                        i, j, length, content + start);
                                 }
-                                start_offset = pres[j].end;
                             }
                         }
                         ok_next:
@@ -1679,6 +1699,7 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URL
             }
         }
     }
+    return ;
 }
 
 /* task handler */
@@ -1689,6 +1710,7 @@ void histore_task_handler(void *arg)
     LDOCHEADER *docheader = NULL;
     ITEMPLATE *templates = NULL;
     URLNODE urlnode = {0};
+    void *argx = NULL;
     PNODE pnode = {0};
     size_t ndata = 0;
 
@@ -1730,8 +1752,9 @@ void histore_task_handler(void *arg)
     //new task 
     if((id = hibase->pop_task_urlnodeid(hibase)) > 0)
     {
-        arg = (void *)((long) id);
-        histore->newtask(histore, &histore_task_handler, arg);
+        argx = (void *)((long) id);
+        histore->newtask(histore, &histore_task_handler, argx);
+        fprintf(stdout, "%s::%d id:%d\n", __FILE__, __LINE__, id);
     }
     else
     {
