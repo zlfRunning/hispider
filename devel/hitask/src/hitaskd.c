@@ -1307,13 +1307,32 @@ err_end:
 /* hitaskd timeout handler */
 int hitaskd_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
+    int n = 0, urlnodeid = -1, urlid = -1, referid = -1;
+    URLNODE urlnode = {0}, parent = {0};
     char buf[HTTP_BUF_SIZE];
-    int n = 0;
 
     if(conn)
     {   if(conn->evstate == EVSTATE_WAIT)
         {
-            if(ltask->get_task(ltask, -1, -1, -1, -1, buf, &n) >= 0 && n > 0) 
+            if((urlnodeid = hibase->pop_urlnode(hibase, &urlnode)) > 0 
+                    && (urlid = urlnode.urlid) >= 0)
+            {
+                fprintf(stdout, "%d::usernodeid:%d userid:%d\n", __LINE__, urlnodeid, urlid);
+                if(urlnode.parentid> 0 && hibase->get_urlnode(hibase,urlnode.parentid,&parent) > 0)
+                {
+                    referid = parent.urlid;
+                }
+                if((ltask->get_task(ltask, urlnode.urlid, referid, 
+                        urlnodeid, -1, buf, &n)) >= 0 && n > 0)
+                {
+                    fprintf(stdout, "%d::usernodeid:%d userid:%d %s\n", 
+                        __LINE__, urlnodeid, urlid, buf);
+                    conn->over_evstate(conn);
+                    return conn->push_chunk(conn, buf, n);
+                }
+                return -1;
+            }
+            else if(ltask->get_task(ltask, -1, -1, -1, -1, buf, &n) >= 0 && n > 0) 
             {
                 conn->over_evstate(conn);
                 return conn->push_chunk(conn, buf, n);
@@ -1607,27 +1626,35 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URL
     if(templates && ntemplates > 0 && pnode && urlnode && docheader && content 
             && ncontent > 0 && url && type)
     {
+        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
         for(i = 0; i < ntemplates; i++)
         {
+        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
             flag = PCRE_DOTALL|PCRE_MULTILINE|PCRE_UTF8;
             if(templates[i].flags & TMP_IS_IGNORECASE) flag |= PCRE_CASELESS;
             if((reg = pcre_compile(templates[i].pattern, flag, &error, &erroffset, NULL))) 
             {
                 nres = FIELD_NUM_MAX * 2;
                 pres = (PRES *)res;
+                start_offset = 0;
+        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
                 while(start_offset >= 0)
                 {
                     if((count = pcre_exec(reg, NULL, content, ncontent, 
                                     start_offset, 0, res, nres)) > 0 )
                     {
+        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
                         if(templates[i].flags & TMP_IS_LINK)
                         {
+        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
                             //link
                             MATCHEURL(templates, i, pp, e, newurl, p, x, nx, pres, 
                                     content, urlnode, nodeid, urlid, url);
+        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
                         }
                         else
                         {
+        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
                             for(j = 1; j < count; j++)
                             {
                                 x = j - 1;
@@ -1674,19 +1701,23 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URL
                                         i, j, length, content + start);
                                 }
                             }
+        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
                         }
+        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
                         ok_next:
                         if((templates[i].flags & TMP_IS_GLOBAL) == 0)
                             start_offset = -1;
                     }
                     else
                     {
+        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
                         start_offset = -1;
                         if(n == PCRE_ERROR_NOMATCH)
                         {
                             fprintf(stdout, "No match result with pattern[%s] at url[%s]\n", 
                                     templates[i].pattern, url);
                         }
+        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
                     }
                 }
                 pcre_free(reg);
@@ -1731,20 +1762,28 @@ void histore_task_handler(void *arg)
             url = block + sizeof(LDOCHEADER);
             type = url + docheader->nurl + 1;
             zdata = type + docheader->ntype + 1;
-            ndata = docheader->ncontent * 10;
-            fprintf(stdout, "%s::%d ready for deal url:%s type:%s ncontent:%d\n", 
-                    __FILE__, __LINE__, url, type, docheader->ncontent);
-            if(zdata < (block + len) && (content = (char *)calloc(1, ndata))
-                    && zdecompress((Bytef *)zdata, (uLong )docheader->ncontent, 
-                        (Bytef *)content, (uLong *)&ndata) == 0)
+            ndata = docheader->ncontent * 16;
+            fprintf(stdout, "%s::%d ready for deal url:%s type:%s ncontent:%d -> ndata:%d\n", 
+                    __FILE__, __LINE__, url, type, docheader->ncontent, ndata);
+            if(type && strncasecmp(type, "text", 4) == 0 && zdata < (block + len) 
+                    && (content = (char *)calloc(1, ndata)))
             {
-                histore_data_matche(templates, count, &pnode, &urlnode,
-                    docheader, content, ndata, url, type);
-                //fprintf(stdout, "%s::%d ndata:%d content:%s\n", 
-                //__FILE__, __LINE__, ndata, content);
-               
+                    fprintf(stdout, "%s::%d ready for decompress %d:%d \n", __FILE__, __LINE__, 
+                            docheader->ncontent, ndata);
+                if(zdecompress((Bytef *)zdata, (uLong )docheader->ncontent, 
+                            (Bytef *)content, (uLong *)&ndata) == 0)
+                {
+                    fprintf(stdout, "%s::%d ndata:%d\n", __FILE__, __LINE__, ndata);
+                    histore_data_matche(templates, count, &pnode, &urlnode,
+                            docheader, content, ndata, url, type);
+                }
+                else
+                {
+                    fprintf(stdout, "%s::%d decompress failed, %s\n", 
+                            __FILE__, __LINE__, strerror(errno));
+                }
+                if(content) free(content);
             }
-            if(content) free(content);
             if(templates)hibase->free_templates(templates);
         }
         if(block)ltask->free_content(block); 
