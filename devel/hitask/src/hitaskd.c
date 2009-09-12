@@ -1487,41 +1487,34 @@ int histore_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
     }
     return -1;
 }
-#define MATCHEURL(templates, i, pp, e, newurl, p, x, nx, pres, content,urlnode, nodeid, urlid, url)\
+#define MATCHEURL(count, p, pp, epp, s, es, x, pres, content)                               \
 do                                                                                          \
 {                                                                                           \
-    pp = newurl;                                                                            \
-    p = templates[i].link;                                                                  \
-    while(*p != '\0' && pp < e)                                                             \
+    while(*p != '\0' && pp < epp)                                                           \
     {                                                                                       \
         if(*p == '<')                                                                       \
         {                                                                                   \
             ++p;                                                                            \
-            if(*p == '\0') goto err_next;                                                   \
+            if(*p == '\0') goto errbreak;                                                   \
             x = atoi(p) - 1;                                                                \
-            if(x >= n && x < 0) goto err_next;                                              \
-            if((nx = pres[x].end  -  pres[x].start) > (e - pp))                             \
-                goto err_next;                                                              \
-            if(nx > 0)                                                                      \
+            if(x >= count && x < 0) goto errbreak;                                          \
+            s = content + pres[x].start;                                                    \
+            es = content + pres[x].end;                                                     \
+            while(s < es && pp < epp)                                                       \
             {                                                                               \
-                memcpy(pp, content + pres[i].start, nx);                                    \
-                pp += nx;                                                                   \
+                if(*((unsigned char *)s) > 127 || *s == 0x20)                               \
+                {                                                                           \
+                    if(pp > (epp - 3)) goto errbreak;                                       \
+                    pp += sprintf(pp, "%%%02x", *((unsigned char *)s));                     \
+                }else *pp++ = *s++;                                                         \
             }                                                                               \
             while(*p != '\0' && *p != '>')++p;                                              \
         }                                                                                   \
         else *pp++ = *p++;                                                                  \
     }                                                                                       \
-    *pp++ = '\0';                                                                           \
-    if((nodeid = templates[i].linkmap.nodeid > 0) && (urlid = ltask->add_url(ltask,         \
-        urlnode->urlid, 0, newurl,  (templates[i].linkmap.flag & REG_IS_POST))) >= 0)       \
-    {                                                                                       \
-        hibase->add_urlnode(hibase, templates[i].linkmap.nodeid, urlnode->id,               \
-                urlid, urlnode->level);                                                     \
-        goto ok_next;                                                                       \
-    }                                                                                       \
-err_next:                                                                                   \
-    ERROR_LOGGER(hitaskd_logger, "link error link:%s pattern:%s url:%s",                    \
-            templates[i].link, templates[i].pattern, url);                                  \
+    *pp = '\0';break;                                                                       \
+errbreak:                                                                                   \
+    --pp;                                                                                   \
 }while(0)
 
 #define CPURL(s, es, p, e, pp, epp, end, host, path, last)                                  \
@@ -1605,7 +1598,7 @@ do                                                                              
                 ++p;                                                                        \
             }else *pp++ = *p++;                                                             \
         }                                                                                   \
-        *pp++ = '\0';                                                                       \
+        *pp = '\0';                                                                         \
     }                                                                                       \
 }while(0)
 
@@ -1616,7 +1609,7 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URL
     char *p = NULL, *e = NULL, *pp = NULL, *epp = NULL, *s = NULL, *es = NULL, *end = NULL, 
          *host = NULL, *path = NULL, *last = NULL, newurl[HTTP_URL_MAX];
     int i = -1, j = 0, flag = 0, start_offset = 0, erroffset = 0, res[FIELD_NUM_MAX * 2], 
-        nres = 0, n = 0, count = 0, x = 0, nx = 0, urlid = 0, nodeid = 0, id = 0,
+        nres = 0, n = 0, count = 0, x = 0, urlid = 0, nodeid = 0, id = 0,
         start = 0, over = 0, length = 0;
     const char *error = NULL;
     pcre *reg = NULL;
@@ -1626,10 +1619,8 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URL
     if(templates && ntemplates > 0 && pnode && urlnode && docheader && content 
             && ncontent > 0 && url && type)
     {
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
         for(i = 0; i < ntemplates; i++)
         {
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
             flag = PCRE_DOTALL|PCRE_MULTILINE|PCRE_UTF8;
             if(templates[i].flags & TMP_IS_IGNORECASE) flag |= PCRE_CASELESS;
             if((reg = pcre_compile(templates[i].pattern, flag, &error, &erroffset, NULL))) 
@@ -1637,35 +1628,48 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URL
                 nres = FIELD_NUM_MAX * 2;
                 pres = (PRES *)res;
                 start_offset = 0;
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
                 while(start_offset >= 0)
                 {
                     if((count = pcre_exec(reg, NULL, content, ncontent, 
                                     start_offset, 0, res, nres)) > 0 )
                     {
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
+                        if((templates[i].flags & TMP_IS_GLOBAL)) 
+                            start_offset = pres[count - 1].end;
+                        else start_offset = -1;
                         if(templates[i].flags & TMP_IS_LINK)
                         {
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
                             //link
-                            MATCHEURL(templates, i, pp, e, newurl, p, x, nx, pres, 
-                                    content, urlnode, nodeid, urlid, url);
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
+                            p = templates[i].link;
+                            pp = newurl;
+                            epp = newurl + HTTP_URL_MAX;
+                            MATCHEURL(count, p, pp, epp, s, es, x, pres, content);
+
+                            if(pp>newurl && *pp == '\0'&& (nodeid=templates[i].linkmap.nodeid>0) 
+                                    && (urlid = ltask->add_url(ltask,  urlnode->urlid, 0, newurl,  
+                                            (templates[i].linkmap.flag & REG_IS_POST))) >= 0)
+                            {
+                                hibase->add_urlnode(hibase, templates[i].linkmap.nodeid, 
+                                        urlnode->id, urlid, urlnode->level);
+                            }
+                            else
+                            {
+                                ERROR_LOGGER(hitaskd_logger, "link error link:%s pattern:%s url:%s",
+                                        templates[i].link, templates[i].pattern, url);
+                            }
                         }
                         else
                         {
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
                             for(j = 1; j < count; j++)
                             {
                                 x = j - 1;
                                 start = res[2*j];
-                                start_offset = over = res[2*j+1];
+                                over = res[2*j+1];
                                 length = over - start;
-                                fprintf(stdout, "%s::%d %.*s\n", __FILE__,
-                                        __LINE__,length, content+start);
+                                //fprintf(stdout, "%s::%d %.*s\n", __FILE__,__LINE__,
+                                //length, content+start);
                                 //handling data
-                                fprintf(stdout, "%s::%d count:%d nfields:%d flag:%d\n",  __FILE__, 
-                                    __LINE__,count, templates[i].nfields, templates[i].map[x].flag);
+                                //fprintf(stdout, "%s::%d count:%d nfields:%d flag:%d\n",  __FILE__, 
+                                //__LINE__,count, templates[i].nfields, templates[i].map[x].flag);
                                 if((templates[i].map[x].flag & REG_IS_URL) && length > 0 
                                         && length < HTTP_URL_MAX && x < templates[i].nfields)
                                 {
@@ -1678,52 +1682,46 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URL
                                     es = url + docheader->nurl;
                                     CPURL(s, es, p, e, pp, epp, end, host, path, last);
                                     n = (pp - newurl);
-                                    if(n > 0 && (urlid = ltask->add_url(ltask, urlnode->urlid, 
-                                                    0, newurl,  0)) >= 0)
+                                    if(pp > newurl && *pp == '\0' && (urlid = ltask->add_url(
+                                                    ltask, urlnode->urlid, 0, newurl,  0)) >= 0)
                                     {   
                                         id = hibase->add_urlnode(hibase, templates[i].map[x].nodeid, 
                                                 urlnode->id, urlid, urlnode->level);
-                                        fprintf(stdout, "%s::%d newurl:%s id:%d x:%d "
-                                                "nodeid:%d parent:%d urlid:%d level:%d\n", 
-                                                __FILE__, __LINE__, newurl, id, x, 
-                                                templates[i].map[x].nodeid, urlnode->id,
-                                                urlid, urlnode->level);
+                                        //fprintf(stdout, "%s::%d newurl:%s id:%d x:%d "
+                                        //        "nodeid:%d parent:%d urlid:%d level:%d\n", 
+                                        //        __FILE__, __LINE__, newurl, id, x, 
+                                        //        templates[i].map[x].nodeid, urlnode->id,
+                                        //        urlid, urlnode->level);
                                     }
                                     else
                                     {
-                                        fprintf(stdout, "%s::%d newurl:%s failed\n", __FILE__, 
-                                                __LINE__, newurl);
+                                        ERROR_LOGGER(hitaskd_logger, "matche %s url:%s failed",
+                                                templates[i].pattern, url);
                                     }
                                 }
                                 else
                                 {
-                                    fprintf(stdout, "%s::%d %d-%d %.*s\n", __FILE__, __LINE__, 
-                                        i, j, length, content + start);
+                                    fprintf(stdout, "%s::%d [%d][%d] %d-%d length:%d\n",
+                                            __FILE__, __LINE__, i, j, start, over, length);
                                 }
                             }
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
                         }
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
-                        ok_next:
-                        if((templates[i].flags & TMP_IS_GLOBAL) == 0)
-                            start_offset = -1;
                     }
                     else
                     {
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
                         start_offset = -1;
                         if(n == PCRE_ERROR_NOMATCH)
                         {
                             fprintf(stdout, "No match result with pattern[%s] at url[%s]\n", 
                                     templates[i].pattern, url);
                         }
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
                     }
                 }
                 pcre_free(reg);
             }
             else
             {
+                //fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
                 //error
                 fprintf(stdout, "%s::%d pcre compile error:%s at offset:%d\n", 
                         __FILE__, __LINE__, error, erroffset);
@@ -1755,32 +1753,31 @@ void histore_task_handler(void *arg)
         if(len > sizeof(LDOCHEADER) && (docheader = (LDOCHEADER *)block)
             && (count = hibase->get_pnode_templates(hibase, urlnode.nodeid, &templates)) > 0) 
         {
-        fprintf(stdout, "%s::%d ready for deal url:%d nodeid:%d "
-                "content_len:%d nurl:%d ntype:%d ncentent:%d\n", 
-                __FILE__, __LINE__, urlnode.urlid, urlnode.nodeid, len,
-                docheader->nurl, docheader->ntype, docheader->ncontent);
+            //fprintf(stdout, "%s::%d ready for deal url:%d nodeid:%d "
+            //    "content_len:%d nurl:%d ntype:%d ncentent:%d\n", 
+            //    __FILE__, __LINE__, urlnode.urlid, urlnode.nodeid, len,
+            //    docheader->nurl, docheader->ntype, docheader->ncontent);
             url = block + sizeof(LDOCHEADER);
             type = url + docheader->nurl + 1;
             zdata = type + docheader->ntype + 1;
             ndata = docheader->ncontent * 16;
-            fprintf(stdout, "%s::%d ready for deal url:%s type:%s ncontent:%d -> ndata:%d\n", 
-                    __FILE__, __LINE__, url, type, docheader->ncontent, ndata);
+            //fprintf(stdout, "%s::%d ready for deal url:%s type:%s ncontent:%d -> ndata:%d\n", 
+            //        __FILE__, __LINE__, url, type, docheader->ncontent, ndata);
             if(type && strncasecmp(type, "text", 4) == 0 && zdata < (block + len) 
                     && (content = (char *)calloc(1, ndata)))
             {
-                    fprintf(stdout, "%s::%d ready for decompress %d:%d \n", __FILE__, __LINE__, 
-                            docheader->ncontent, ndata);
+                //fprintf(stdout, "%s::%d ready for decompress %d:%d \n", __FILE__, __LINE__, 
+                //           docheader->ncontent, ndata);
                 if(zdecompress((Bytef *)zdata, (uLong )docheader->ncontent, 
                             (Bytef *)content, (uLong *)&ndata) == 0)
                 {
-                    fprintf(stdout, "%s::%d ndata:%d\n", __FILE__, __LINE__, ndata);
+                    //fprintf(stdout, "%s::%d ndata:%d\n", __FILE__, __LINE__, ndata);
                     histore_data_matche(templates, count, &pnode, &urlnode,
                             docheader, content, ndata, url, type);
                 }
                 else
                 {
-                    fprintf(stdout, "%s::%d decompress failed, %s\n", 
-                            __FILE__, __LINE__, strerror(errno));
+                    ERROR_LOGGER(hitaskd_logger, "decompress failed, %s", strerror(errno));
                 }
                 if(content) free(content);
             }
