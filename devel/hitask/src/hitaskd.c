@@ -1496,8 +1496,8 @@ do                                                                              
         {                                                                                   \
             ++p;                                                                            \
             if(*p == '\0') goto errbreak;                                                   \
-            x = atoi(p) - 1;                                                                \
-            if(x >= count && x < 0) goto errbreak;                                          \
+            x = atoi(p);                                                                    \
+            if(x > count && x < 0) goto errbreak;                                           \
             s = content + pres[x].start;                                                    \
             es = content + pres[x].end;                                                     \
             while(s < es && pp < epp)                                                       \
@@ -1509,6 +1509,8 @@ do                                                                              
                 }else *pp++ = *s++;                                                         \
             }                                                                               \
             while(*p != '\0' && *p != '>')++p;                                              \
+            if(*p == '>')++p;                                                               \
+            else goto errbreak;                                                             \
         }                                                                                   \
         else *pp++ = *p++;                                                                  \
     }                                                                                       \
