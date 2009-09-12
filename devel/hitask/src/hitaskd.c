@@ -1903,7 +1903,9 @@ int sbase_initialize(SBASE *sbase, char *conf)
     hitaskd->session.timeout_handler = &hitaskd_timeout_handler;
     hitaskd->session.error_handler = &hitaskd_error_handler;
     hitaskd->session.oob_handler = &hitaskd_oob_handler;
+#ifdef _DEBUG
     if((p = iniparser_getstr(dict, "HITASKD:access_log"))){LOGGER_INIT(hitaskd_logger,p);}
+#endif
     //argvmap
     TRIETAB_INIT(argvmap);
     if(argvmap == NULL) _exit(-1);
@@ -2009,7 +2011,9 @@ int sbase_initialize(SBASE *sbase, char *conf)
     histore->session.oob_handler = &histore_oob_handler;
     interval = iniparser_getint(dict, "HISTORE:heartbeat_interval", SB_HEARTBEAT_INTERVAL);
     histore->set_heartbeat(histore, interval, &histore_heartbeat_handler, histore);
+#ifdef _DEBUG
     if((p = iniparser_getstr(dict, "HISTORE:access_log"))){LOGGER_INIT(histore_logger, p);}
+#endif
     /* dns service */
     if((adns = service_init()) == NULL)
     {
@@ -2033,7 +2037,9 @@ int sbase_initialize(SBASE *sbase, char *conf)
     adns->session.timeout_handler = &adns_timeout_handler;
     adns->session.error_handler = &adns_error_handler;
     adns->session.transaction_handler = &adns_trans_handler;
+#ifdef _DEBUG
     if((p = iniparser_getstr(dict, "ADNS:access_log"))){LOGGER_INIT(adns_logger, p);}
+#endif
     interval = iniparser_getint(dict, "ADNS:heartbeat_interval", SB_HEARTBEAT_INTERVAL);
     adns->set_heartbeat(adns, interval, &adns_heartbeat_handler, adns);
     p = iniparser_getstr(dict, "ADNS:nameservers");

@@ -775,7 +775,9 @@ int sbase_initialize(SBASE *sbase, char *conf)
         px = &i;
         QUEUE_PUSH(taskqueue, int, px);
     }
+#ifdef _DEBUG
     LOGGER_INIT(logger, iniparser_getstr(dict, "HITASK:access_log"));
+#endif
     fprintf(stdout, "Parsing for server...\n");
     return sbase->add_service(sbase, service);
 }

@@ -1489,8 +1489,8 @@ int hibase_pop_urlnode(HIBASE *hibase, URLNODE *urlnode)
             //fprintf(stdout, "%d::qtotal:%d urlnodeid:%d current:%d\n", __LINE__, 
             //        FQTOTAL(hibase->qtask), hibase->istate->urlnode_task_current, 
             //        hibase->urlnodeio.current);
-            while(FQTOTAL(hibase->qtask) > 0 || hibase->istate->urlnode_task_current
-                    <= hibase->urlnodeio.current)
+            while(FQTOTAL(hibase->qtask)>0||(hibase->urlnodeio.current < hibase->urlnodeio.total
+                && hibase->istate->urlnode_task_current <= hibase->urlnodeio.current))
             {
                 px = &x;
                 if(FQUEUE_POP(hibase->qtask, int, px) == 0)
