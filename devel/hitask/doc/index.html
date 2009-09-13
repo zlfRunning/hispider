@@ -17,19 +17,19 @@
                 width:100%;
                 height:100%;
             }
-            #itab {position:relative;background:#F4FBFF;height:50px; width:100%;
-                top:0px;left:0px;cursor: pointer;}
-            #itab ul{margin:0;padding:0;list-style:none;color:#2F5FA1;cursor: pointer;}
-            #itab li{float:left;background-color:#F4FBFF;border-right:1px solid #FFF;
-                font-weight:bolder;padding:3px 8px 3px 8px;width:120px;height:30px;}
-            #itab .tab-selected{background-color:#D0E9F7; border-right:1px solid #FFF;
-                font-weight:bolder;padding:3px 8px 3px 8px;width:120px;height:30px;}
+            #itab {position:relative;background-color:#F4FBFF;margin:0;padding:0;
+                height:40px; width:100%;top:0px;left:0px;font-size:16pt;cursor:pointer;}
+            #itab ul{margin:0;padding:0;list-style:none;font-weight:bolder;cursor: pointer;}
+            #itab li{float:left;background-color:#2F5FA1;color:#c0c0c0;width:120px; height:40px;
+                border-right:1px solid #ccc;font-weight:bolder;padding:3px 8px 3px 8px;}
+            #itab .tab-selected{background-color:#D0E9F7;color:#2F5FA1;border-right:1px solid #ccc;
+                font-weight:bolder;padding:3px 8px 3px 8px;width:120px;height:40px;}
             #taskinfo{position:absolute;background-color:#D0E9F7; color:#2F5FA1;display:none;
-                border:1px solid #81BEF7; padding:0px;top:36px;height:100%;width:100%;}
+                border:1px solid #81BEF7; padding:0px;left:0px;top:46px;height:100%;width:100%;}
             .ktask{font-size:12pt;font-weight:bold;}
             .vtask{font-size:12pt;font-weight:bold;}
             #database{position:absolute;background-color:#F4FBFF;display:none;
-                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:100%;height:100%;}
+                border:1px solid #81BEF7;padding:0px;left:0px;top:46px;width:100%;height:100%;}
             .dblist{position:relative;padding:0px; background-color:#D0E9F7;height:100%;}
             .dbtitle{position:relative;background-color:#2F5FA1;color:#c0c0c0; height:30px;}
             #dbselect{position:relative;background-color:#D0E9F7;color:#2F5FA1;width:100%;}
@@ -46,8 +46,7 @@
                 border:1px solid #81BEF7;padding-top:10px;padding-left:6px;font-size:12pt;
                 color:#2F5FA1;overflow:auto;display:none;}
             #template{position:absolute;background-color:#F4FBFF;display:none;
-                border:1px solid #81BEF7;padding:0px;left:0px;
-                top:36px;height:100%;width:100%;}
+                border:1px solid #81BEF7;padding:0px;left:0px;top:46px;height:100%;width:100%;}
             .template-tab{height:100%;width:100%;}
             .treetab{background-color:#D0E9F7;height:100%;margin:auto;overflow:auto}
             #tree-title{background-color:#2F5FA1;color:#c0c0c0;font-size:13pt;
@@ -90,16 +89,16 @@
                 cursor:pointer;display:inline;text-align:right;}
             .closetxt{cursor:pointer;font-size:10pt;color:#cccccc;text-align:right;}
             #urlblock{position:absolute;background-color:#F4FBFF;display:none;
-                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:100%;height:100%;}
+                border:1px solid #81BEF7;padding:0px;left:0px;top:46px;width:100%;height:100%;}
             .url-ul{list-style:none;padding:0;margin:0;width:100%;}
             .url-li{background-color:#D0E9F7;cursor: pointer;}
             .url-li-selected{background-color:#F4FBFF;cursor: pointer;}
             #url-header{position:relative;background-color:#2F5FA1;color:#cccccc;
                 height:30px;width:100%;border:1px solid #FFFFFF;}
             #data{position:absolute;background-color:#F4FBFF;display:none;
-                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:100%;height:100%;}
+                border:1px solid #81BEF7;padding:0px;left:0px;top:46px;width:100%;height:100%;}
             #dns{position:absolute;background-color:#F4FBFF;display:none;
-                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:100%;height:100%;}
+                border:1px solid #81BEF7;padding:0px;left:0px;top:46px;width:100%;height:100%;}
             #dns-header{position:relative;background-color:#2F5FA1;color:#cccccc;
                 height:30px;width:100%;border:1px solid #FFFFFF;}
             #dns-list{position:relative;}
@@ -107,7 +106,7 @@
             .dns-li{background-color:#D0E9F7;cursor: pointer;}
             .dns-li-selected{background-color:#F4FBFF;cursor: pointer;}
             #proxy{position:absolute;background-color:#F4FBFF;display:none;
-                border:1px solid #81BEF7;padding:0px;left:0px;top:36px;width:100%;height:100%;}
+                border:1px solid #81BEF7;padding:0px;left:0px;top:46px;width:100%;height:100%;}
             #proxy-header{position:relative;background-color:#2F5FA1;color:#cccccc;
                 height:30px;width:100%;border:1px solid #FFFFFF;}
             #proxy-list{position:relative;}
@@ -115,7 +114,7 @@
             .proxy-li{background-color:#D0E9F7;cursor: pointer;}
             .proxy-li-selected{background-color:#F4FBFF;cursor: pointer;}
             #user{position:absolute;background-color:#D0E9F7; color:#2F5FA1;display:none;
-                border:1px solid #81BEF7; padding:0px;top:36px;height:100%;width:100%;}
+                border:1px solid #81BEF7; padding:0px;left:0px;top:46px;height:100%;width:100%;}
             .listform{margin:0px;display: inline;}
             .node{overflow:hidden;color:black;font-size:12pt;}
             .nodename{color:black;font-size:12pt;cursor:pointer;}
