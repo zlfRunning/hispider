@@ -113,6 +113,7 @@ typedef struct _LMETA
     short depth;
     int flag;
     int date;
+    int last_modified;
     int parent;
     off_t url_off;
     int url_len;
@@ -140,9 +141,9 @@ typedef struct _LSTATE
     short is_use_proxy;
     int   is_extract_image;
     int   url_total;
-    int   url_ok;
-    int   url_error;
-    int   url_tasks;
+    int   url_ntasks;
+    int   url_task_ok;
+    int   url_task_error;
     int   host_current;
     int   host_total;
     off_t doc_total_zsize;
@@ -150,6 +151,7 @@ typedef struct _LSTATE
     off_t last_doc_size;
     long long int last_usec;
     double  speed;
+    double  speed_limit;
 }LSTATE;
 /* IO/MAP */
 typedef struct _LIO
@@ -219,6 +221,7 @@ typedef struct _LTASK
     int (*set_basedir)(struct _LTASK *, char *basedir);
     int (*set_state_running)(struct _LTASK *, int state);
     int (*set_state_proxy)(struct _LTASK *, int state);
+    int (*set_speed_limit)(struct _LTASK *, double speed);
     int (*add_proxy)(struct _LTASK *, char *host);
     int (*get_proxy)(struct _LTASK *, LPROXY *proxy);
     int (*set_proxy_status)(struct _LTASK *, int id, char *host, short status);

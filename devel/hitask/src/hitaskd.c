@@ -75,10 +75,12 @@ static char *e_argvs[] =
 #define E_ARGV_LINKMAP  16
     "urlnodeid",
 #define E_ARGV_URLNODEID 17
-    "level"
+    "level",
 #define E_ARGV_LEVEL     18
+    "speed"
+#define E_ARGV_SPEED     19
 };
-#define E_ARGV_NUM       19
+#define E_ARGV_NUM       20
 static char *e_ops[]=
 {
     "host_up",
@@ -145,10 +147,12 @@ static char *e_ops[]=
 #define E_OP_PROXY_ADD          30
     "proxy_delete",
 #define E_OP_PROXY_DELETE       31
-    "proxy_list"
+    "proxy_list",
 #define E_OP_PROXY_LIST         32
+    "speed_limit"
+#define E_OP_SPEED_LIMIT        33
 };
-#define E_OP_NUM 33
+#define E_OP_NUM 34
 
 /* dns packet reader */
 int adns_packet_reader(CONN *conn, CB_DATA *buffer)
@@ -834,6 +838,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
     HTTP_REQ httpRQ = {0}, *http_req = NULL;
     ITEMPLATE template = {0};
     URLNODE *urlnodes = NULL;
+    double speed = 0.0;
     void *dp = NULL;
 
     if(conn && packet && cache && chunk && chunk->ndata > 0)
@@ -919,6 +924,9 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                                     break;
                                 case E_ARGV_LEVEL:
                                     level = atoi(p);
+                                    break;
+                                case E_ARGV_SPEED:
+                                    speed = atof(p);
                                     break;
                                 default:
                                     break;
@@ -1285,6 +1293,14 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         break;
                     case E_OP_PROXY_LIST:
                         if((n = ltask->view_proxylist(ltask, block)) > 0)
+                        {
+                            conn->push_chunk(conn, block, n);
+                            goto end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_SPEED_LIMIT:
+                        ltask->set_speed_limit(ltask, speed);
+                        if((n = ltask->get_stateinfo(ltask, block)) > 0)
                         {
                             conn->push_chunk(conn, block, n);
                             goto end;

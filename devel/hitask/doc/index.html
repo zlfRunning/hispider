@@ -642,6 +642,89 @@
                 }
                 return HiddenEditor();
             }
+            function LimitSpeed(form)
+            {
+                var xmlHttp = null;
+                var speed = null;
+                if(form && (speed = form['speed'].value) != ''
+                    && (xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    var argv = "op=speed_limit&speed="+speed;
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                ShowTaskInfo(xmlHttp.responseText);
+                            }
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+                return true;
+            }
+
+            //Show Task
+            function ShowTaskInfo(txt)
+            {
+                var taskinfo = null;
+                if(txt && (taskinfo = eval(txt)))
+                {
+                    var speed = taskinfo['speed_limit'];
+                    var htmlstr = "";
+                    htmlstr += "<span class='ktask'>状态:&nbsp;</span>";
+                    htmlstr += "<a href=\"javascript:ViewTask('task_";
+                    htmlstr += taskinfo['status']+"');\" class='vtask'";
+                    htmlstr += ">"+taskinfo['status']+"</a><hr>";
+                    htmlstr += "<span class='ktask'>URL总数:&nbsp;</span>";
+                    htmlstr += "<span class='vtask'>"+taskinfo['url_total'];
+                    htmlstr += "</span><hr>";
+                    htmlstr += "<span class='ktask'>任务总数:&nbsp;</span>";
+                    htmlstr += "<span class='vtask'>"+taskinfo['url_ntasks'];
+                    htmlstr += "</span><hr>";
+                    htmlstr += "<span class='ktask'>任务完成:&nbsp;</span>";
+                    htmlstr += "<span class='vtask'>"+taskinfo['url_task_ok'];
+                    htmlstr += "</span><hr>";
+                    htmlstr += "<span class='ktask'>任务错误:&nbsp;</span>";
+                    htmlstr += "<span class='vtask'>"+taskinfo['url_task_error'];
+                    htmlstr += "</span><hr>";
+                    htmlstr += "<span class='ktask'>文档大小:&nbsp;</span>";
+                    htmlstr += "<span class='vtask'>"+taskinfo['doc_total_zsize'];
+                    htmlstr += "/" + taskinfo['doc_total_size']+"</span><hr>";
+                    htmlstr += "<span class='ktask'>DNS解析:&nbsp;</span>";
+                    htmlstr += "<span class='vtask'>"+taskinfo['host_current'];
+                    htmlstr += "/" + taskinfo['host_total']+"</span><hr>";
+                    htmlstr += "<span class='ktask'>已用时间:&nbsp;</span>";
+                    htmlstr += "<span class='vtask'>["+taskinfo['t_day'];
+                    htmlstr += "&nbsp;Day(s)&nbsp;&nbsp;"+taskinfo['t_hour'];
+                    htmlstr += ":"+taskinfo['t_min'];
+                    htmlstr += ":"+taskinfo['t_sec'];
+                    htmlstr += "&nbsp;+"+taskinfo['t_usec']+"]";
+                    htmlstr += "</span><hr>";
+                    htmlstr += "<span class='ktask'>下载速度:&nbsp;</span>";
+                    htmlstr += "<span class='vtask'>"+taskinfo['speed'];
+                    htmlstr += " (KB/S) </span><hr>";
+                    htmlstr += "<span class='ktask'>速度限制:&nbsp;</span>";
+                    htmlstr += "<span class='vtask'>";
+                    htmlstr += "<form action='javascript:void(0)' class='listform' ";
+                    htmlstr += " onsubmit='LimitSpeed(this)'>";
+                    htmlstr += "<input type=text name=speed value='"+speed+"'> (KB/S) ";
+                    htmlstr += "&nbsp;<input type=submit name='submit' value='OK'>";
+                    htmlstr +=  "（0和负数表示不限速）</form></span><hr>";
+                    var otaskinfo = document.getElementById('taskinfo');
+                    if(otaskinfo) 
+                    {
+                        otaskinfo.style.display = 'inline';
+                        otaskinfo.innerHTML = htmlstr;
+                    }
+                }
+            }
+
+            //view Task
             function ViewTask(op)
             {
                 var xmlHttp = null;
@@ -657,49 +740,7 @@
                         {
                             if(xmlHttp.status == 200)
                             {
-                                var taskinfo = eval(xmlHttp.responseText);
-                                if(taskinfo)
-                                {
-                                    var htmlstr = "";
-                                    htmlstr += "<span class='ktask'>状态:&nbsp;</span>";
-                                    htmlstr += "<a href=\"javascript:ViewTask('task_";
-                                    htmlstr += taskinfo['status']+"');\" class='vtask'";
-                                    htmlstr += ">"+taskinfo['status']+"</a><br>";
-                                    htmlstr += "<span class='ktask'>任务总数:&nbsp;</span>";
-                                    htmlstr += "<span class='vtask'>"+taskinfo['url_tasks'];
-                                    htmlstr += "</span><br>";
-                                    htmlstr += "<span class='ktask'>URL总数:&nbsp;</span>";
-                                    htmlstr += "<span class='vtask'>"+taskinfo['url_total'];
-                                    htmlstr += "</span><br>";
-                                    htmlstr += "<span class='ktask'>URL完成:&nbsp;</span>";
-                                    htmlstr += "<span class='vtask'>"+taskinfo['url_ok'];
-                                    htmlstr += "</span><br>";
-                                    htmlstr += "<span class='ktask'>URL错误:&nbsp;</span>";
-                                    htmlstr += "<span class='vtask'>"+taskinfo['url_error'];
-                                    htmlstr += "</span><br>";
-                                    htmlstr += "<span class='ktask'>文档大小:&nbsp;</span>";
-                                    htmlstr += "<span class='vtask'>"+taskinfo['doc_total_zsize'];
-                                    htmlstr += "/" + taskinfo['doc_total_size']+"</span><br>";
-                                    htmlstr += "<span class='ktask'>DNS解析:&nbsp;</span>";
-                                    htmlstr += "<span class='vtask'>"+taskinfo['host_current'];
-                                    htmlstr += "/" + taskinfo['host_total']+"</span><br>";
-                                    htmlstr += "<span class='ktask'>已用时间:&nbsp;</span>";
-                                    htmlstr += "<span class='vtask'>["+taskinfo['t_day'];
-                                    htmlstr += "&nbsp;Day(s)&nbsp;&nbsp;"+taskinfo['t_hour'];
-                                    htmlstr += ":"+taskinfo['t_min'];
-                                    htmlstr += ":"+taskinfo['t_sec'];
-                                    htmlstr += "&nbsp;+"+taskinfo['t_usec']+"]";
-                                    htmlstr += "</span><br>";
-                                    htmlstr += "<span class='ktask'>当前速度:&nbsp;</span>";
-                                    htmlstr += "<span class='vtask'>"+taskinfo['speed'];
-                                    htmlstr += " (KB/S) </span>\n";
-                                    var otaskinfo = document.getElementById('taskinfo');
-                                    if(otaskinfo) 
-                                    {
-                                        otaskinfo.style.display = 'inline';
-                                        otaskinfo.innerHTML = htmlstr;
-                                    }
-                                }
+                                ShowTaskInfo(xmlHttp.responseText);
                             }
                             
                         }

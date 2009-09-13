@@ -324,6 +324,19 @@ int ltask_set_state_running(LTASK *task, int state)
     return 0;
 }
 
+/* set state speed_limit */
+int ltask_set_speed_limit(LTASK *task, double speed)
+{
+    if(task)
+    {
+        MUTEX_LOCK(task->mutex);
+        if(task->state) task->state->speed_limit = speed;
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return 0;
+}
+
+
 /* set state proxy */
 int ltask_set_state_proxy(LTASK *task, int state)
 {
@@ -948,7 +961,7 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
                 && meta.status >= 0 
                 && (n = pread(task->url_fd, url, meta.url_len, meta.url_off)) > 0)
         {
-            if(itime) *itime = meta.date;
+            if(itime) *itime = meta.last_modified;
             if(host_node == NULL) 
                 host_node = (LHOST *)(task->hostio.map + meta.host_id * sizeof(LHOST));
             url[n] = '\0';
@@ -1034,7 +1047,7 @@ int ltask_set_url_status(LTASK *task, int urlid, char *url, short status, short 
             pwrite(task->meta_fd, &status, sizeof(short), id * sizeof(LMETA));        
             ret = 0;
         }
-        if(status && task->state)task->state->url_error++;
+        if(status && task->state)task->state->url_task_error++;
         if(err){REALLOG(task->errlogger, "%d:%d", id, err);}
         MUTEX_UNLOCK(task->mutex);
     }
@@ -1095,54 +1108,59 @@ int ltask_get_task(LTASK *task, int url_id, int referid, int uuid,
     int urlid = -1, ip = 0, port = 0, itime = 0;
     LPROXY proxy = {0};
 
-    if(task && buf && task->state && task->state->running
-        && (urlid = ltask_pop_url(task, url_id, url, &itime, referid, refer, cookie)) >= 0)
+    if(task && buf && task->state && task->state->running)
     {
-        p = ps = url + strlen(HTTP_PREF);
-        while(*p != '\0' && *p != ':' && *p != '/')++p;
-        ch = *p;
-        *p = '\0';
-        ip = ltask_get_host_ip(task, ps);
-        port = 80;
-        if(ch == ':')
+        //limit
+        if(task->state->speed_limit > 0.0f && task->state->speed > task->state->speed_limit)
+            return urlid;
+        if((urlid = ltask_pop_url(task, url_id, url, &itime, referid, refer, cookie)) >= 0)
         {
-            port = atoi((p+1));
-            while(*p != '\0' && *p != '/')++p;
-            path = (p+1);
+            p = ps = url + strlen(HTTP_PREF);
+            while(*p != '\0' && *p != ':' && *p != '/')++p;
+            ch = *p;
+            *p = '\0';
+            ip = ltask_get_host_ip(task, ps);
+            port = 80;
+            if(ch == ':')
+            {
+                port = atoi((p+1));
+                while(*p != '\0' && *p != '/')++p;
+                path = (p+1);
+            }
+            else if(ch == '/') path = (p+1);
+            sip = (unsigned char *)&ip;
+            p = buf;
+            if(path == NULL || *path == '\0')
+            {
+                p += sprintf(p, "HTTP/1.0 200 OK\r\nFrom: %ld\r\nLocation: /\r\n"
+                        "Host: %s\r\nServer: %d.%d.%d.%d\r\nTE:%d\r\n", 
+                        (long)urlid, ps, sip[0], sip[1], sip[2], sip[3], port);
+            }
+            else
+            {
+                p += sprintf(p, "HTTP/1.0 200 OK\r\nFrom: %ld\r\nLocation: /%s\r\n"
+                        "Host: %s\r\nServer: %d.%d.%d.%d\r\nTE:%d\r\n", 
+                        (long)urlid, path, ps, sip[0], sip[1], sip[2], sip[3], port);
+            }
+            if(itime != 0 && GMTstrdate(itime, date) > 0)
+                p += sprintf(p, "Last-Modified: %s\r\n", date);
+            if(refer[0] != '\0') p += sprintf(p, "Referer: %s\r\n", refer);
+            if(cookie[0] != '\0') p += sprintf(p, "Cookie: %s\r\n", cookie);
+            if(uuid >= 0) p += sprintf(p, "UUID: %d\r\n", uuid);
+            if(userid >= 0) p += sprintf(p, "UserID: %d\r\n", userid);
+            if(task->state->is_use_proxy && ltask_get_proxy(task, &proxy) >= 0)
+            {
+                pip = (unsigned char *)&(proxy.ip);
+                p += sprintf(p, "User-Agent: %d.%d.%d.%d\r\nVia: %d\r\n", 
+                        pip[0], pip[1], pip[2], pip[3], proxy.port);
+            }
+            p += sprintf(p, "%s", "\r\n");
+            *nbuf = p - buf;
+            DEBUG_LOGGER(task->logger, "New TASK[%d] ip[%d.%d.%d.%d:%d] "
+                    "http://%s/%s", urlid, sip[0], sip[1], sip[2], sip[3],
+                    port, ps, path);
+            if(task->state) task->state->url_ntasks++;
         }
-        else if(ch == '/') path = (p+1);
-        sip = (unsigned char *)&ip;
-        p = buf;
-        if(path == NULL || *path == '\0')
-        {
-            p += sprintf(p, "HTTP/1.0 200 OK\r\nFrom: %ld\r\nLocation: /\r\n"
-                    "Host: %s\r\nServer: %d.%d.%d.%d\r\nTE:%d\r\n", 
-                    (long)urlid, ps, sip[0], sip[1], sip[2], sip[3], port);
-        }
-        else
-        {
-            p += sprintf(p, "HTTP/1.0 200 OK\r\nFrom: %ld\r\nLocation: /%s\r\n"
-                    "Host: %s\r\nServer: %d.%d.%d.%d\r\nTE:%d\r\n", 
-                    (long)urlid, path, ps, sip[0], sip[1], sip[2], sip[3], port);
-        }
-        if(itime != 0 && GMTstrdate(itime, date) > 0)
-            p += sprintf(p, "Last-Modified: %s\r\n", date);
-        if(refer[0] != '\0') p += sprintf(p, "Referer: %s\r\n", refer);
-        if(cookie[0] != '\0') p += sprintf(p, "Cookie: %s\r\n", cookie);
-        if(uuid >= 0) p += sprintf(p, "UUID: %d\r\n", uuid);
-        if(userid >= 0) p += sprintf(p, "UserID: %d\r\n", userid);
-        if(task->state->is_use_proxy && ltask_get_proxy(task, &proxy) >= 0)
-        {
-            pip = (unsigned char *)&(proxy.ip);
-            p += sprintf(p, "User-Agent: %d.%d.%d.%d\r\nVia: %d\r\n", 
-                    pip[0], pip[1], pip[2], pip[3], proxy.port);
-        }
-        p += sprintf(p, "%s", "\r\n");
-        *nbuf = p - buf;
-        DEBUG_LOGGER(task->logger, "New TASK[%d] ip[%d.%d.%d.%d:%d] "
-                "http://%s/%s", urlid, sip[0], sip[1], sip[2], sip[3],
-                port, ps, path);
-        if(task->state) task->state->url_tasks++;
     }
     return urlid;
 }
@@ -1491,7 +1509,23 @@ int ltask_list_users(LTASK *task, char *block, int *nblock)
     }
     return 0;
 }
-
+#define UPDATE_SPEED(task, interval)                                                        \
+do                                                                                          \
+{                                                                                           \
+    if(task && task->state)                                                                 \
+    {                                                                                       \
+        if((interval = (int)((PT_L_USEC(task->timer) - task->state->last_usec))) > 0)       \
+        {                                                                                   \
+            task->state->speed = (double)1000000 * (((double)(task->state->doc_total_size   \
+                            - task->state->last_doc_size)/(double)1024)/(double)interval);  \
+        }                                                                                   \
+        if(interval  > L_SPEED_INTERVAL)                                                    \
+        {                                                                                   \
+            task->state->last_usec = PT_L_USEC(task->timer);                                \
+            task->state->last_doc_size = task->state->doc_total_size;                       \
+        }                                                                                   \
+    }                                                                                       \
+}while(0)
 /* get state infomation */
 int ltask_get_stateinfo(LTASK *task, char *block)
 {
@@ -1501,33 +1535,26 @@ int ltask_get_stateinfo(LTASK *task, char *block)
 
     if(task && task->state)
     {
+        MUTEX_LOCK(task->mutex);
         TIMER_SAMPLE(task->timer);
         day  = (PT_SEC_U(task->timer) / 86400);
         hour = ((PT_SEC_U(task->timer) % 86400) /3600);
         min  = ((PT_SEC_U(task->timer) % 3600) / 60);
         sec  = (PT_SEC_U(task->timer) % 60);
         usec = (PT_USEC_U(task->timer) % 1000000ll);
-        if((interval = (int)((PT_L_USEC(task->timer) - task->state->last_usec))) > 0)
-        {
-            task->state->speed = (double)1000000 * (((double)(task->state->doc_total_size 
-                            - task->state->last_doc_size)/(double)1024)/(double)interval);
-        }
-        if(interval  > L_SPEED_INTERVAL)
-        {
-            task->state->last_usec = PT_L_USEC(task->timer);
-            task->state->last_doc_size = task->state->doc_total_size;
-        }
+        UPDATE_SPEED(task, interval);
         p = (char *)running_ops[task->state->running];
-        n = sprintf(buf, "({'status':'%s','url_total':'%d','url_tasks':'%d', 'url_ok':'%d',"
-                "'url_error':'%d', 'doc_total_zsize':'%lld', 'doc_total_size':'%lld',"
+        n = sprintf(buf, "({'status':'%s','url_total':'%d','url_ntasks':'%d', 'url_task_ok':'%d',"
+                "'url_task_error':'%d', 'doc_total_zsize':'%lld', 'doc_total_size':'%lld',"
                 "'host_current':'%d', 'host_total':'%d', 't_day':'%d', 't_hour':'%d',"
-                "'t_min':'%d', 't_sec':'%d', 't_usec':'%d', 'speed':'%f'})", 
-                p, task->state->url_total, task->state->url_tasks,
-                task->state->url_ok, task->state->url_error, task->state->doc_total_zsize, 
+                "'t_min':'%d', 't_sec':'%d', 't_usec':'%d', 'speed':'%f', 'speed_limit':'%f'})", 
+                p, task->state->url_total, task->state->url_ntasks,
+                task->state->url_task_ok, task->state->url_task_error, task->state->doc_total_zsize, 
                 task->state->doc_total_size, task->state->host_current, task->state->host_total, 
-                day, hour, min, sec, usec, task->state->speed);
+                day, hour, min, sec, usec, task->state->speed, task->state->speed_limit);
         ret = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
                 "Content-Length:%d\r\nConnection:close\r\n\r\n%s", n, buf);
+        MUTEX_UNLOCK(task->mutex);
     }
     return ret;
 }
@@ -1537,7 +1564,7 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
         char *content, int ncontent , int is_extract_link)
 {
     char buf[HTTP_BUF_SIZE], *url = NULL, *p = NULL, *data = NULL;
-    int ret = -1, n = 0;
+    int ret = -1, n = 0, interval = 0;
     size_t  ndata = 0;
     LDOCHEADER  *pdocheader = NULL;
     struct stat st = {0};
@@ -1569,8 +1596,8 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
             p += pdocheader->ntype + 1;
             pdocheader->id      = urlid;
             pdocheader->parent  = meta.parent;
-            if(date){meta.date  = pdocheader->date = str2time(date);}
-            else pdocheader->date    = time(NULL);
+            if(date){meta.last_modified = pdocheader->date = str2time(date);}
+            pdocheader->date    = time(NULL);
             pdocheader->ncontent = ncontent;
             pdocheader->total = pdocheader->ntype + 1 + pdocheader->nurl + 1 + ncontent;
             if((n = (p - buf)) > 0 && pwrite(task->doc_fd, buf, n, st.st_size) > 0
@@ -1584,7 +1611,8 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
                 {
                     task->state->doc_total_zsize += (off_t)ncontent;
                     task->state->doc_total_size += (off_t)ncontent;
-                    task->state->url_ok++;
+                    task->state->url_task_ok++;
+                    UPDATE_SPEED(task, interval);
                 }
                 DEBUG_LOGGER(task->logger, "nurl:%d[%s] ntype:%d[%s] ncontent:%d total:%d ", 
                         pdocheader->nurl, url, pdocheader->ntype, type, pdocheader->ncontent, 
@@ -1899,6 +1927,7 @@ LTASK *ltask_init()
         task->set_basedir           = ltask_set_basedir;
         task->set_state_running     = ltask_set_state_running;
         task->set_state_proxy       = ltask_set_state_proxy;
+        task->set_speed_limit       = ltask_set_speed_limit;
         task->add_proxy             = ltask_add_proxy;
         task->get_proxy             = ltask_get_proxy;
         task->set_proxy_status      = ltask_set_proxy_status;

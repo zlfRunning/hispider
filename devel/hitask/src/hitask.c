@@ -89,7 +89,8 @@ int http_download_error(int c_id, int err)
         n = p - buf;
         tasklist[c_id].is_new_host = 0;
         DEBUG_LOGGER(logger, "task %d", tasklist[c_id].taskid);
-        return tasklist[c_id].s_conn->push_chunk(tasklist[c_id].s_conn, buf, n);
+        if(tasklist[c_id].s_conn)
+            return tasklist[c_id].s_conn->push_chunk(tasklist[c_id].s_conn, buf, n);
     }
     return -1;
 }
