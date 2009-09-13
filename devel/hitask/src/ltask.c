@@ -1665,8 +1665,8 @@ int ltask_get_content(LTASK *task, int urlid, char **block)
         if(pread(task->meta_fd, &meta, sizeof(LMETA), (off_t)urlid * (off_t)sizeof(LMETA)) > 0
                 && meta.content_len > 0 && (*block = (char *)calloc(1, meta.content_len)))
         {
-            fprintf(stdout, "%s:%d read %d from %lld\n",
-                    __FILE__, __LINE__, meta.content_len, meta.content_off);
+            //fprintf(stdout, "%s:%d read %d from %lld\n",
+            //        __FILE__, __LINE__, meta.content_len, meta.content_off);
             if(pread(task->doc_fd, *block, meta.content_len, meta.content_off) > 0)
             {
                 n = meta.content_len;

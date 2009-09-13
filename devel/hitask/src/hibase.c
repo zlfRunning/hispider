@@ -1208,7 +1208,7 @@ int hibase_exists_urlnode(HIBASE *hibase, int nodeid, int parentid, int urlid)
                         goto end;
                         break;
                     }
-                    else x = urlnode[x].node_next;
+                    else x = urlnode[x].next;
                 }
                 if(z > 0)
                 {
@@ -1218,7 +1218,7 @@ int hibase_exists_urlnode(HIBASE *hibase, int nodeid, int parentid, int urlid)
                         goto end;
                         break;
                     }
-                    else z = urlnode[z].next;
+                    else z = urlnode[z].node_next;
                 }
             }
         }   

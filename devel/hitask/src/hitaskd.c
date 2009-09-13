@@ -765,7 +765,8 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
             if((urlnodeid = hibase->pop_urlnode(hibase, &urlnode)) > 0 
                     && (urlid = urlnode.urlid) >= 0)
             {
-                fprintf(stdout, "%d::usernodeid:%d userid:%d\n", __LINE__, urlnodeid, urlid);
+                fprintf(stdout, "urlid:%d parent:%d node:%d\n", urlnode.urlid, urlnode.parentid, urlnode.nodeid);
+                //fprintf(stdout, "%d::usernodeid:%d userid:%d\n", __LINE__, urlnodeid, urlid);
                 if(urlnode.parentid> 0 && hibase->get_urlnode(hibase,urlnode.parentid,&parent) > 0)
                 {
                     referid = parent.urlid;
@@ -773,8 +774,7 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
                 if((ltask->get_task(ltask, urlnode.urlid, referid, 
                         urlnodeid, -1, buf, &n)) >= 0 && n > 0)
                 {
-                    fprintf(stdout, "%d::usernodeid:%d userid:%d %s\n", 
-                        __LINE__, urlnodeid, urlid, buf);
+                    //fprintf(stdout,"%d::usernodeid:%d userid:%d %s\n",__LINE__,urlnodeid,urlid,buf);
                     return conn->push_chunk(conn, buf, n);
                 }
                 else goto err_end;
@@ -1333,7 +1333,9 @@ int hitaskd_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA
             if((urlnodeid = hibase->pop_urlnode(hibase, &urlnode)) > 0 
                     && (urlid = urlnode.urlid) >= 0)
             {
-                fprintf(stdout, "%d::usernodeid:%d userid:%d\n", __LINE__, urlnodeid, urlid);
+                fprintf(stdout, "urlid:%d parent:%d node:%d\n", urlnode.urlid, urlnode.parentid, urlnode.nodeid);
+                //fprintf(stdout, "urlid:%d\n", urlnode.urlid);
+                //fprintf(stdout, "%d::usernodeid:%d userid:%d\n", __LINE__, urlnodeid, urlid);
                 if(urlnode.parentid> 0 && hibase->get_urlnode(hibase,urlnode.parentid,&parent) > 0)
                 {
                     referid = parent.urlid;
@@ -1341,8 +1343,8 @@ int hitaskd_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA
                 if((ltask->get_task(ltask, urlnode.urlid, referid, 
                         urlnodeid, -1, buf, &n)) >= 0 && n > 0)
                 {
-                    fprintf(stdout, "%d::usernodeid:%d userid:%d %s\n", 
-                        __LINE__, urlnodeid, urlid, buf);
+                    //fprintf(stdout, "%d::usernodeid:%d userid:%d %s\n", 
+                    //    __LINE__, urlnodeid, urlid, buf);
                     conn->over_evstate(conn);
                     return conn->push_chunk(conn, buf, n);
                 }
@@ -1469,8 +1471,8 @@ int histore_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                 if((n = http_req->headers[HEAD_GEN_UUID]) > 0
                     && (uuid = atoi(http_req->hlines + n)) > 0)
                 {
-                    fprintf(stdout, "%d::over download urlnode:%d doc_len:%d\n", 
-                            __LINE__, uuid, chunk->ndata);
+                    //fprintf(stdout, "%d::over download urlnode:%d doc_len:%d\n", 
+                    //        __LINE__, uuid, chunk->ndata);
                     hibase->push_task_urlnodeid(hibase, uuid);
                 }
             }
@@ -1628,7 +1630,7 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URL
          *host = NULL, *path = NULL, *last = NULL, newurl[HTTP_URL_MAX];
     int i = -1, j = 0, flag = 0, start_offset = 0, erroffset = 0, res[FIELD_NUM_MAX * 2], 
         nres = 0, n = 0, count = 0, x = 0, urlid = 0, nodeid = 0, id = 0,
-        start = 0, over = 0, length = 0;
+        parentid = 0, start = 0, over = 0, length = 0;
     const char *error = NULL;
     pcre *reg = NULL;
     PRES *pres = NULL;
@@ -1661,13 +1663,14 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URL
                             pp = newurl;
                             epp = newurl + HTTP_URL_MAX;
                             MATCHEURL(count, p, pp, epp, s, es, x, pres, content);
-
                             if(pp>newurl && *pp == '\0'&& (nodeid=templates[i].linkmap.nodeid>0) 
                                     && (urlid = ltask->add_url(ltask,  urlnode->urlid, 0, newurl,  
                                             (templates[i].linkmap.flag & REG_IS_POST))) >= 0)
                             {
-                                hibase->add_urlnode(hibase, templates[i].linkmap.nodeid, 
-                                        urlnode->id, urlid, urlnode->level);
+                                nodeid = templates[i].linkmap.nodeid;
+                                parentid = urlnode->id;
+                                if(nodeid == urlnode->nodeid) parentid = urlnode->parentid;
+                                hibase->add_urlnode(hibase,nodeid,parentid,urlid,urlnode->level);
                             }
                             else
                             {
@@ -1703,8 +1706,11 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URL
                                     if(pp > newurl && *pp == '\0' && (urlid = ltask->add_url(
                                                     ltask, urlnode->urlid, 0, newurl,  0)) >= 0)
                                     {   
-                                        id = hibase->add_urlnode(hibase, templates[i].map[x].nodeid, 
-                                                urlnode->id, urlid, urlnode->level);
+                                        nodeid = templates[i].map[x].nodeid;
+                                        parentid = urlnode->id;
+                                        if(nodeid == urlnode->nodeid) parentid = urlnode->parentid;
+                                        id = hibase->add_urlnode(hibase, nodeid, 
+                                                parentid, urlid, urlnode->level);
                                         //fprintf(stdout, "%s::%d newurl:%s id:%d x:%d "
                                         //        "nodeid:%d parent:%d urlid:%d level:%d\n", 
                                         //        __FILE__, __LINE__, newurl, id, x, 
@@ -1719,8 +1725,8 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URL
                                 }
                                 else
                                 {
-                                    fprintf(stdout, "%s::%d [%d][%d] %d-%d length:%d\n",
-                                            __FILE__, __LINE__, i, j, start, over, length);
+                                    //fprintf(stdout, "%s::%d [%d][%d] %d-%d length:%d\n",
+                                    //        __FILE__, __LINE__, i, j, start, over, length);
                                 }
                             }
                         }
@@ -1767,7 +1773,7 @@ void histore_task_handler(void *arg)
         && (len = ltask->get_content(ltask, urlnode.urlid, &block)) > 0) 
     {
 
-        fprintf(stdout, "%s::%d ready for deal task:%d arg:%p\n", __FILE__, __LINE__, id, arg);
+        //fprintf(stdout, "%s::%d ready for deal task:%d arg:%p\n", __FILE__, __LINE__, id, arg);
         if(len > sizeof(LDOCHEADER) && (docheader = (LDOCHEADER *)block)
             && (count = hibase->get_pnode_templates(hibase, urlnode.nodeid, &templates)) > 0) 
         {
@@ -1808,7 +1814,7 @@ void histore_task_handler(void *arg)
     {
         argx = (void *)((long) id);
         histore->newtask(histore, &histore_task_handler, argx);
-        fprintf(stdout, "%s::%d id:%d\n", __FILE__, __LINE__, id);
+        //fprintf(stdout, "%s::%d id:%d\n", __FILE__, __LINE__, id);
     }
     else
     {
@@ -1839,7 +1845,7 @@ void histore_heartbeat_handler(void *arg)
         {
             if((urlnodeid = hibase->pop_task_urlnodeid(hibase)) > 0)
             {
-                fprintf(stdout, "%s::%d new task:%d\n", __FILE__, __LINE__, urlnodeid);
+                //fprintf(stdout, "%s::%d new task:%d\n", __FILE__, __LINE__, urlnodeid);
                 argx = (void *)((long) urlnodeid);
                 histore->newtask(histore, &histore_task_handler, argx);
                 histore_task_running++;
