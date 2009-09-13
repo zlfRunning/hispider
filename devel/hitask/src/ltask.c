@@ -23,6 +23,23 @@
 #endif
 #define HTTP_PREF  "http://"
 #define ISALPHA(p) ((*p >= '0' && *p <= '9') ||(*p >= 'A' && *p <= 'Z')||(*p >= 'a' && *p <= 'z'))
+#define UPDATE_SPEED(task, interval)                                                        \
+do                                                                                          \
+{                                                                                           \
+    if(task && task->state)                                                                 \
+    {                                                                                       \
+        if((interval = (int)((PT_L_USEC(task->timer) - task->state->last_usec))) > 0)       \
+        {                                                                                   \
+            task->state->speed = (double)1000000 * (((double)(task->state->doc_total_size   \
+                            - task->state->last_doc_size)/(double)1024)/(double)interval);  \
+        }                                                                                   \
+        if(interval  > L_SPEED_INTERVAL)                                                    \
+        {                                                                                   \
+            task->state->last_usec = PT_L_USEC(task->timer);                                \
+            task->state->last_doc_size = task->state->doc_total_size;                       \
+        }                                                                                   \
+    }                                                                                       \
+}while(0)
 static const char *running_ops[] = {"running", "stop"};
 /* mkdir */
 int ltask_mkdir(char *path, int mode)
@@ -57,7 +74,6 @@ int ltask_mkdir(char *path, int mode)
     }
     return -1;
 }
-
 /* set basedir*/
 int ltask_set_basedir(LTASK *task, char *dir)
 {
@@ -1104,15 +1120,19 @@ int ltask_get_task(LTASK *task, int url_id, int referid, int uuid,
 {
     char url[HTTP_URL_MAX], date[64], refer[HTTP_URL_MAX], cookie[HTTP_COOKIE_MAX], 
          ch = 0, *p = NULL, *ps = NULL, *path = NULL;
+    int urlid = -1, ip = 0, port = 0, itime = 0, interval = 0;
     unsigned char *sip = NULL, *pip = NULL;
-    int urlid = -1, ip = 0, port = 0, itime = 0;
     LPROXY proxy = {0};
 
     if(task && buf && task->state && task->state->running)
     {
         //limit
         if(task->state->speed_limit > 0.0f && task->state->speed > task->state->speed_limit)
+        {
+            UPDATE_SPEED(task, interval);
+            fprintf(stdout, "%f:%f\n", task->state->speed, task->state->speed_limit);
             return urlid;
+        }
         if((urlid = ltask_pop_url(task, url_id, url, &itime, referid, refer, cookie)) >= 0)
         {
             p = ps = url + strlen(HTTP_PREF);
@@ -1509,23 +1529,6 @@ int ltask_list_users(LTASK *task, char *block, int *nblock)
     }
     return 0;
 }
-#define UPDATE_SPEED(task, interval)                                                        \
-do                                                                                          \
-{                                                                                           \
-    if(task && task->state)                                                                 \
-    {                                                                                       \
-        if((interval = (int)((PT_L_USEC(task->timer) - task->state->last_usec))) > 0)       \
-        {                                                                                   \
-            task->state->speed = (double)1000000 * (((double)(task->state->doc_total_size   \
-                            - task->state->last_doc_size)/(double)1024)/(double)interval);  \
-        }                                                                                   \
-        if(interval  > L_SPEED_INTERVAL)                                                    \
-        {                                                                                   \
-            task->state->last_usec = PT_L_USEC(task->timer);                                \
-            task->state->last_doc_size = task->state->doc_total_size;                       \
-        }                                                                                   \
-    }                                                                                       \
-}while(0)
 /* get state infomation */
 int ltask_get_stateinfo(LTASK *task, char *block)
 {

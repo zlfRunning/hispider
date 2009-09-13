@@ -652,13 +652,54 @@ int hitaskd_auth(CONN *conn, HTTP_REQ *http_req)
     return -1;
 }
 
+/* new task */
+int hitaskd_newtask(CONN *conn)
+{
+    int n = 0, urlnodeid = -1, urlid = -1, referid = -1;
+    URLNODE urlnode = {0}, parent = {0};
+    char buf[HTTP_BUF_SIZE];
+
+    if(conn)
+    {   
+        if((urlnodeid = hibase->pop_urlnode(hibase, &urlnode)) > 0 
+                && (urlid = urlnode.urlid) >= 0)
+        {
+            fprintf(stdout, "urlid:%d parent:%d node:%d\n", urlnode.urlid, urlnode.parentid, urlnode.nodeid);
+            //fprintf(stdout, "urlid:%d\n", urlnode.urlid);
+            //fprintf(stdout, "%d::usernodeid:%d userid:%d\n", __LINE__, urlnodeid, urlid);
+            if(urlnode.parentid> 0 && hibase->get_urlnode(hibase,urlnode.parentid,&parent) > 0)
+            {
+                referid = parent.urlid;
+            }
+            if((ltask->get_task(ltask,urlnode.urlid,referid,urlnodeid,-1,buf,&n))>= 0 && n > 0)
+            {
+                //fprintf(stdout, "%d::usernodeid:%d userid:%d %s\n", 
+                //    __LINE__, urlnodeid, urlid, buf);
+                conn->over_evstate(conn);
+                return conn->push_chunk(conn, buf, n);
+            }
+            goto time_out;
+        }
+        else if(ltask->get_task(ltask, -1, -1, -1, -1, buf, &n) >= 0 && n > 0) 
+        {
+            conn->over_evstate(conn);
+            return conn->push_chunk(conn, buf, n);
+        }
+time_out:
+        if(conn->timeout >= TASK_WAIT_MAX) conn->timeout = 0;
+        conn->wait_evstate(conn);
+        return conn->set_timeout(conn, conn->timeout + TASK_WAIT_TIMEOUT);
+        return 0;
+    }
+    return -1;
+}
+
 /* packet handler */
 int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
 {
     char buf[HTTP_BUF_SIZE], file[HTTP_PATH_MAX], *host = NULL, 
         *ip = NULL, *p = NULL, *end = NULL;
-    int urlid = 0, referid = -1, urlnodeid = -1, n = 0, ips = 0, err = 0;
-    URLNODE urlnode = {0}, parent = {0};
+    int urlid = 0, n = 0, ips = 0, err = 0;
     struct stat st = {0};
     HTTP_REQ http_req = {0};
 
@@ -762,36 +803,7 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
                 ltask->set_url_status(ltask, urlid, NULL, URL_STATUS_ERR, err);
             }
             /* get new task */
-            if((urlnodeid = hibase->pop_urlnode(hibase, &urlnode)) > 0 
-                    && (urlid = urlnode.urlid) >= 0)
-            {
-                fprintf(stdout, "urlid:%d parent:%d node:%d\n", urlnode.urlid, urlnode.parentid, urlnode.nodeid);
-                //fprintf(stdout, "%d::usernodeid:%d userid:%d\n", __LINE__, urlnodeid, urlid);
-                if(urlnode.parentid> 0 && hibase->get_urlnode(hibase,urlnode.parentid,&parent) > 0)
-                {
-                    referid = parent.urlid;
-                }
-                if((ltask->get_task(ltask, urlnode.urlid, referid, 
-                        urlnodeid, -1, buf, &n)) >= 0 && n > 0)
-                {
-                    //fprintf(stdout,"%d::usernodeid:%d userid:%d %s\n",__LINE__,urlnodeid,urlid,buf);
-                    return conn->push_chunk(conn, buf, n);
-                }
-                else goto err_end;
-            }
-            else if(ltask->get_task(ltask, -1, -1, -1, -1, buf, &n) >= 0 && n > 0) 
-            {
-                fprintf(stdout, "request:%s\n", buf);
-                return conn->push_chunk(conn, buf, n);
-            }
-            else
-            {
-                if(conn->timeout >= TASK_WAIT_MAX) conn->timeout = 0;
-                DEBUG_LOGGER(hitaskd_logger, "set_timeout(%d) on %s:%d", 
-                        conn->timeout + TASK_WAIT_TIMEOUT, conn->remote_ip, conn->remote_port);
-                conn->wait_evstate(conn);
-                return conn->set_timeout(conn, conn->timeout + TASK_WAIT_TIMEOUT);
-            }
+            return hitaskd_newtask(conn);
         }
         else goto err_end;
         return 0;
@@ -1320,58 +1332,25 @@ err_end:
     return -1;
 }
 
+
+
 /* hitaskd timeout handler */
 int hitaskd_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
-    int n = 0, urlnodeid = -1, urlid = -1, referid = -1;
-    URLNODE urlnode = {0}, parent = {0};
-    char buf[HTTP_BUF_SIZE];
-
     if(conn)
-    {   if(conn->evstate == EVSTATE_WAIT)
+    {
+        if(conn->evstate == EVSTATE_WAIT)
         {
-            if((urlnodeid = hibase->pop_urlnode(hibase, &urlnode)) > 0 
-                    && (urlid = urlnode.urlid) >= 0)
-            {
-                fprintf(stdout, "urlid:%d parent:%d node:%d\n", urlnode.urlid, urlnode.parentid, urlnode.nodeid);
-                //fprintf(stdout, "urlid:%d\n", urlnode.urlid);
-                //fprintf(stdout, "%d::usernodeid:%d userid:%d\n", __LINE__, urlnodeid, urlid);
-                if(urlnode.parentid> 0 && hibase->get_urlnode(hibase,urlnode.parentid,&parent) > 0)
-                {
-                    referid = parent.urlid;
-                }
-                if((ltask->get_task(ltask, urlnode.urlid, referid, 
-                        urlnodeid, -1, buf, &n)) >= 0 && n > 0)
-                {
-                    //fprintf(stdout, "%d::usernodeid:%d userid:%d %s\n", 
-                    //    __LINE__, urlnodeid, urlid, buf);
-                    conn->over_evstate(conn);
-                    return conn->push_chunk(conn, buf, n);
-                }
-                return -1;
-            }
-            else if(ltask->get_task(ltask, -1, -1, -1, -1, buf, &n) >= 0 && n > 0) 
-            {
-                conn->over_evstate(conn);
-                return conn->push_chunk(conn, buf, n);
-            }
-            else
-            {
-                if(conn->timeout >= TASK_WAIT_MAX) conn->timeout = 0;
-                //DEBUG_LOGGER(hitaskd_logger, "set_timeout(%d) on %s:%d", 
-                //        conn->timeout + TASK_WAIT_TIMEOUT, conn->remote_ip, conn->remote_port);
-                conn->wait_evstate(conn);
-                return conn->set_timeout(conn, conn->timeout + TASK_WAIT_TIMEOUT);
-            }
+            return hitaskd_newtask(conn);
         }
         else
         {
-            conn->over(conn);
+            return conn->over(conn);
         }
-        return 0;
     }
     return -1;
 }
+
 /* error handler */
 int hitaskd_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {

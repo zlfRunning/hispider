@@ -37,8 +37,8 @@
 #define USER_STATUS_OK          1
 #define USER_STATUS_ERR         -1
 #define USER_STATUS_READY       2
-#define TASK_WAIT_TIMEOUT       10000000
-#define TASK_WAIT_MAX           30000000
+#define TASK_WAIT_TIMEOUT       1000000
+#define TASK_WAIT_MAX           10000000
 #define DNS_TIMEOUT_MAX         4
 #define DNS_PATH_MAX            256
 #define DNS_BUF_SIZE            65536
@@ -50,7 +50,7 @@
 #define TASK_STATE_INIT         0x00
 #define TASK_STATE_OK           0x02
 #define TASK_STATE_ERROR        0x046
-#define L_SPEED_INTERVAL        60000000
+#define L_SPEED_INTERVAL        1000000
 #define L_COOKIE_MAX            1024
 #define L_USER_MAX              32
 #define L_PASSWD_MAX            16
