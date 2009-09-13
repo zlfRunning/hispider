@@ -57,14 +57,19 @@ do                                                                              
         io.map = NULL;                                                                  \
     }                                                                                   \
 }while(0)
-#define HIO_INIT(io, file, st, type)                                                    \
+#define HIO_INIT(io, file, st, type, use_mmap, incre_num)                               \
 do                                                                                      \
 {                                                                                       \
     if(file && (io.fd = open(file, O_CREAT|O_RDWR, 0644)) > 0                           \
             && fstat(io.fd, &st) == 0)                                                  \
     {                                                                                   \
-        io.size = st.st_size;                                                           \
-        io.total = (st.st_size/(off_t)sizeof(type));                                    \
+        if(io.size == 0){HIO_INCRE(io, type, incre_num);}                               \
+        if(use_mmap && io.size > 0 && (io.map = mmap(NULL, io.size,                     \
+                        PROT_READ|PROT_WRITE, MAP_SHARED, io.fd, 0)) == (void *)-1)     \
+        {                                                                               \
+            _EXIT_("mmap %d size:%lld failed, %s\n", io.fd,                             \
+                    (long long int)io.size, strerror(errno));                           \
+        }                                                                               \
     }                                                                                   \
     else                                                                                \
     {                                                                                   \

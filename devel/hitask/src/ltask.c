@@ -125,8 +125,7 @@ int ltask_set_basedir(LTASK *task, char *dir)
         /* proxy/task */
         sprintf(path, "%s/%s", dir, L_PROXY_NAME);
         p = path;
-        HIO_INIT(task->proxyio, p, st, LPROXY);
-        HIO_MMAP(task->proxyio, LPROXY, PROXY_INCRE_NUM);
+        HIO_INIT(task->proxyio, p, st, LPROXY, 1, PROXY_INCRE_NUM);
         if(task->proxyio.fd > 0 && (proxy = HIO_MAP(task->proxyio, LPROXY)))
         {
             task->proxyio.left = 0;
@@ -186,23 +185,15 @@ int ltask_set_basedir(LTASK *task, char *dir)
         }
         sprintf(path, "%s/%s", dir, L_HOST_NAME);
         p = path;
-        HIO_INIT(task->hostio, p, st, LHOST);
-        if(task->hostio.fd  > 0)
-        {
-            HIO_MMAP(task->hostio, LHOST, HOST_INCRE_NUM);
-        }
-        else
+        HIO_INIT(task->hostio, p, st, LHOST, 1, HOST_INCRE_NUM);
+        if(task->hostio.fd  < 0 || HIO_MAP(task->hostio, LHOST) == NULL)
         {
             _EXIT_("open %s failed, %s\n", path, strerror(errno));
         }
         sprintf(path, "%s/%s", dir, L_IP_NAME);
         p = path;
-        HIO_INIT(task->ipio, p, st, int);
-        if(task->ipio.fd  > 0)
-        {
-            HIO_MMAP(task->ipio, int, IP_INCRE_NUM);
-        }
-        else
+        HIO_INIT(task->ipio, p, st, int, 1, IP_INCRE_NUM);
+        if(task->ipio.fd  < 0 || HIO_MAP(task->ipio, int) == NULL)
         {
             _EXIT_("open %s failed, %s\n", path, strerror(errno));
         }
@@ -247,12 +238,8 @@ int ltask_set_basedir(LTASK *task, char *dir)
         /* dns */
         sprintf(path, "%s/%s", dir, L_DNS_NAME);
         p = path;
-        HIO_INIT(task->dnsio, p, st, LDNS);
-        if(task->dnsio.fd > 0)
-        {
-            HIO_MMAP(task->dnsio, LDNS, DNS_INCRE_NUM);
-        }
-        else
+        HIO_INIT(task->dnsio, p, st, LDNS, 1, DNS_INCRE_NUM);
+        if(task->dnsio.fd < 0 || HIO_MAP(task->dnsio, LDNS) == NULL)
         {
             _EXIT_("open %s failed, %s\n", path, strerror(errno));
         }
@@ -276,12 +263,8 @@ int ltask_set_basedir(LTASK *task, char *dir)
         /* user */
         sprintf(path, "%s/%s", dir, L_USER_NAME);
         p = path;
-        HIO_INIT(task->userio, p, st, LUSER);
-        if(task->userio.fd > 0)
-        {
-           HIO_MMAP(task->userio, LUSER, USER_INCRE_NUM);
-        }
-        else
+        HIO_INIT(task->userio, p, st, LUSER, 1, USER_INCRE_NUM);
+        if(task->userio.fd < 0 || HIO_MAP(task->userio, LUSER) == NULL)
         {
             _EXIT_("open %s failed, %s\n", path, strerror(errno));
         }

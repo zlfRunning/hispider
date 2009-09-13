@@ -661,6 +661,7 @@ int hitaskd_newtask(CONN *conn)
 
     if(conn)
     {   
+        //fprintf(stdout, "%s::%d OK\n", __FILE__,__LINE__);
         if((urlnodeid = hibase->pop_urlnode(hibase, &urlnode)) > 0 
                 && (urlid = urlnode.urlid) >= 0)
         {
@@ -685,11 +686,11 @@ int hitaskd_newtask(CONN *conn)
             conn->over_evstate(conn);
             return conn->push_chunk(conn, buf, n);
         }
+        fprintf(stdout, "%s::%d URLNODEID:%d OK\n", __FILE__,__LINE__, urlnodeid);
 time_out:
         if(conn->timeout >= TASK_WAIT_MAX) conn->timeout = 0;
         conn->wait_evstate(conn);
         return conn->set_timeout(conn, conn->timeout + TASK_WAIT_TIMEOUT);
-        return 0;
     }
     return -1;
 }
@@ -1339,14 +1340,18 @@ int hitaskd_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA
 {
     if(conn)
     {
+        fprintf(stdout, "%s::%d OK\n", __FILE__,__LINE__);
         if(conn->evstate == EVSTATE_WAIT)
         {
+        fprintf(stdout, "%s::%d OK\n", __FILE__,__LINE__);
             return hitaskd_newtask(conn);
         }
         else
         {
+        fprintf(stdout, "%s::%d OK\n", __FILE__,__LINE__);
             return conn->over(conn);
         }
+        fprintf(stdout, "%s::%d OK\n", __FILE__,__LINE__);
     }
     return -1;
 }

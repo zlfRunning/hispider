@@ -125,8 +125,7 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
         //resume table
         p = path;
         sprintf(path, "%s%s", hibase->basedir, HIBASE_TABLE_NAME);  
-        HIO_INIT(hibase->tableio, p, st, ITABLE);
-        HIO_MMAP(hibase->tableio, ITABLE, TABLE_INCRE_NUM); 
+        HIO_INIT(hibase->tableio, p, st, ITABLE, 1, TABLE_INCRE_NUM);
         if(hibase->tableio.fd > 0 && (table = HIO_MAP(hibase->tableio, ITABLE)))
         {
             hibase->tableio.left = 0;
@@ -158,7 +157,7 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
         p = path;
         FQUEUE_INIT(hibase->qtemplate, p, int);
         sprintf(path, "%s%s", hibase->basedir, HIBASE_TEMPLATE_NAME);   
-        HIO_INIT(hibase->templateio, p, st, ITEMPLATE);
+        HIO_INIT(hibase->templateio, p, st, ITEMPLATE, 0, TEMPLATE_INCRE_NUM);
         RESUME_STATE(hibase, templateio);
         /*
         HIO_MMAP(hibase->templateio, ITEMPLATE, TEMPLATE_INCRE_NUM); 
@@ -180,8 +179,7 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
         p = path;
         FQUEUE_INIT(hibase->qpnode, p, int);
         sprintf(path, "%s%s", hibase->basedir, HIBASE_PNODE_NAME);  
-        HIO_INIT(hibase->pnodeio, p, st, PNODE);
-        HIO_MMAP(hibase->pnodeio, PNODE, PNODE_INCRE_NUM); 
+        HIO_INIT(hibase->pnodeio, p, st, PNODE, 1, PNODE_INCRE_NUM);
         if(hibase->pnodeio.fd  > 0 && (pnode = HIO_MAP(hibase->pnodeio, PNODE)))
         {
             hibase->pnodeio.left = 0;
@@ -204,7 +202,7 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
         p = path;
         FQUEUE_INIT(hibase->qurlnode, p, int);
         sprintf(path, "%s%s", hibase->basedir, HIBASE_URLNODE_NAME);
-        HIO_INIT(hibase->urlnodeio, p, st, URLNODE);
+        HIO_INIT(hibase->urlnodeio, p, st, URLNODE, 1, URLNODE_INCRE_NUM);
         //RESUME_STATE(hibase, urlnodeio);
         HIO_MMAP(hibase->urlnodeio, URLNODE, URLNODE_INCRE_NUM);
         if(hibase->urlnodeio.fd  > 0 && (urlnode = HIO_MAP(hibase->urlnodeio, URLNODE)))
@@ -1486,9 +1484,11 @@ int hibase_pop_urlnode(HIBASE *hibase, URLNODE *urlnode)
         if(hibase->urlnodeio.total > 0 && hibase->urlnodeio.current > 0 
             && (purlnode = HIO_MAP(hibase->urlnodeio, URLNODE)))
         {
-            //fprintf(stdout, "%d::qtotal:%d urlnodeid:%d current:%d\n", __LINE__, 
-            //        FQTOTAL(hibase->qtask), hibase->istate->urlnode_task_current, 
-            //        hibase->urlnodeio.current);
+            fprintf(stdout, "%s::%d qtotal:%d urlnodeid:%d current:%d total:%d task_current:%d\n",
+                    __FILE__, __LINE__,  FQTOTAL(hibase->qtask), 
+                    hibase->istate->urlnode_task_current, 
+                    hibase->urlnodeio.current, hibase->urlnodeio.total,
+                     hibase->istate->urlnode_task_current);
             while(FQTOTAL(hibase->qtask)>0||(hibase->urlnodeio.current < hibase->urlnodeio.total
                 && hibase->istate->urlnode_task_current <= hibase->urlnodeio.current))
             {
@@ -1502,14 +1502,16 @@ int hibase_pop_urlnode(HIBASE *hibase, URLNODE *urlnode)
                     urlnodeid = hibase->istate->urlnode_task_current++;
                     if(purlnode[urlnodeid].level > 0) continue;
                 }
+            fprintf(stdout, "%s::%d::urlnodeid:%d current:%d\n", __FILE__, __LINE__, urlnodeid, hibase->urlnodeio.current);
                 if(urlnodeid > 0 &&  purlnode[urlnodeid].status > 0)
                 {
                     memcpy(urlnode, &(purlnode[urlnodeid]), sizeof(URLNODE));
                     break;
                 }
                 else urlnodeid = -1;
+            fprintf(stdout, "%s::%d::urlnodeid:%d\n", __FILE__, __LINE__, urlnodeid);
             }
-            //fprintf(stdout, "%d::urlnodeid:%d\n", __LINE__, urlnodeid);
+            fprintf(stdout, "%s::%d::urlnodeid:%d\n", __FILE__, __LINE__, urlnodeid);
         }
         MUTEX_UNLOCK(hibase->mutex);
     }
