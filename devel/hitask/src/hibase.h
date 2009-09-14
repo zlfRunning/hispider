@@ -21,6 +21,8 @@ extern "C" {
 #define TABLE_INCRE_NUM         256
 #define TEMPLATE_INCRE_NUM      1000
 #define PNODE_INCRE_NUM         10000
+#define URI_INCRE_NUM         10000
+#define URLMAP_INCRE_NUM        10000
 #define URLNODE_INCRE_NUM       10000
 #define PNODE_CHILDS_MAX        10000
 #define TAB_STATUS_ERR          -1
@@ -36,6 +38,9 @@ extern "C" {
 #define URLNODE_STATUS_OK       1
 #ifndef HI_URL_MAX
 #define HI_URL_MAX              4096
+#endif
+#ifndef HI_URLMAP_SIZE
+#define HI_URLMAP_SIZE          4
 #endif
 #ifndef HI_BUF_SIZE
 #define HI_BUF_SIZE             262144
@@ -97,6 +102,17 @@ typedef struct _URLNODE
     int prev;
     int next;
 }URLNODE;
+typedef struct _URI
+{
+    short pnode_map_size;
+    short urlnode_map_size;
+    int pnode_map_from;
+    int urlnode_map_from;
+}URI;
+typedef struct _URLMAP
+{
+    int map[HI_URLMAP_SIZE];
+}URLMAP;
 #define REG_IS_URL               0x01
 #define REG_IS_FILE              0x02
 #define REG_IS_NEED_CLEARHTML    0x04
@@ -145,6 +161,12 @@ typedef struct _ISTATE
     int urlnodeio_current;
     int urlnodeio_left;
     int urlnodeio_total;
+    int uriio_current;
+    int uriio_left;
+    int uriio_total;
+    int urlmapio_current;
+    int urlmapio_left;
+    int urlmapio_total;
     int urlnode_task_current;
     int update_current;
 }ISTATE;
@@ -172,6 +194,8 @@ typedef struct _HIBASE
     int     uid_max;
     HIO     templateio;
     void    *qtemplate;
+    HIO     uriio;
+    HIO     urlmapio;
     HIO     urlnodeio;
     void    *qurlnode;
     void    *qtask;

@@ -15,11 +15,14 @@
 #define  HIBASE_TEMPLATE_NAME       "hibase.template"
 #define  HIBASE_PNODE_NAME          "hibase.pnode"
 #define  HIBASE_URLNODE_NAME        "hibase.urlnode"
+#define  HIBASE_URI_NAME            "hibase.uri"
+#define  HIBASE_URLMAP_NAME         "hibase.urlmap"
 #define  HIBASE_QPNODE_NAME         "hibase.qpnode"
 #define  HIBASE_QTEMPLATE_NAME      "hibase.qtemplate"
 #define  HIBASE_QURLNODE_NAME       "hibase.qurlnode"
 #define  HIBASE_QTASK_NAME          "hibase.qtask"
 #define  HIBASE_QWAIT_NAME          "hibase.qwait"
+#define  HIBASE_ISTATE_NAME         "hibase.istate"
 #define  HIBASE_ISTATE_NAME         "hibase.istate"
 #define INCRE_STATE(hibase, io, name) (hibase->istate->io##_##name = ++(hibase->io.name))
 #define DECRE_STATE(hibase, io, name) (hibase->istate->io##_##name = --(hibase->io.name))
@@ -221,6 +224,21 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
             }
             //HIO_MUNMAP(hibase->urlnodeio);
         }
+        //urlid
+        sprintf(path, "%s%s", hibase->basedir, HIBASE_URI_NAME);
+        HIO_INIT(hibase->uriio, p, st, URI, 0, URI_INCRE_NUM);
+        if(hibase->uriio.fd < 0)
+        {
+            _EXIT_("open %s failed, %s\n", path, strerror(errno));
+        }
+        RESUME_STATE(hibase, uriio);
+        sprintf(path, "%s%s", hibase->basedir, HIBASE_URLMAP_NAME);
+        HIO_INIT(hibase->urlmapio, p, st, URLMAP, 0, URLMAP_INCRE_NUM);
+        if(hibase->urlmapio.fd < 0)
+        {
+            _EXIT_("open %s failed, %s\n", path, strerror(errno));
+        }
+        RESUME_STATE(hibase, urlmapio);
     }
     return -1;
 }
@@ -1178,6 +1196,112 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
     }
     return n;
 }
+/* hibase urlid => urlnode/node map check */
+int hibase_urlmap_exists(HIBASE *hibase, int urlid, int nodeid, int parentid)
+{
+    int n = 0, i = 0, *id = NULL, ret = -1;
+    URLMAP urlmap = {0};
+    URI uri = {0};
+    
+
+    if(hibase && urlid >= 0 && nodeid > 0 && parentid >= 0)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if(hibase->urlmapio.left == 0)
+        {
+        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
+            HIO_INCRE(hibase->urlmapio, URLMAP, URLMAP_INCRE_NUM);
+            UPDATE_STATE(hibase, urlmapio);
+        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
+        }
+        if(hibase->uriio.left == 0 || (urlid >= hibase->uriio.total))
+        {
+        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
+            n = urlid/URI_INCRE_NUM;
+            if((urlid/URI_INCRE_NUM)) ++n;
+            hibase->uriio.left = (n * URI_INCRE_NUM) - hibase->uriio.total;
+            hibase->uriio.size = (off_t)n * (off_t)URI_INCRE_NUM * (off_t)sizeof(URI);
+            hibase->uriio.total = n * URI_INCRE_NUM;
+            ftruncate(hibase->uriio.fd, hibase->uriio.size);
+            UPDATE_STATE(hibase, uriio);
+            uri.pnode_map_size++;
+            uri.urlnode_map_size++;
+            uri.pnode_map_from = ++(hibase->urlmapio.current);
+            urlmap.map[0] = nodeid;
+            pwrite(hibase->urlmapio.fd, &urlmap, sizeof(URLMAP), 
+                    (off_t)uri.pnode_map_from * (off_t)sizeof(URLMAP));
+            uri.urlnode_map_from = ++(hibase->urlmapio.current);
+            pwrite(hibase->urlmapio.fd, &urlmap, sizeof(URLMAP), 
+                    (off_t)uri.urlnode_map_from * (off_t)sizeof(URLMAP));
+            pwrite(hibase->uriio.fd, &uri, sizeof(URI), (off_t)urlid * (off_t)sizeof(URI));
+            UPDATE_STATE(hibase, urlmapio);
+        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
+            ret = 0;
+        }
+        else
+        {
+        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
+            if(pread(hibase->uriio.fd, &uri, sizeof(URI), (off_t)urlid * (off_t)sizeof(URI)) > 0)
+            {
+        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
+                if(pread(hibase->urlmapio.fd, &urlmap, sizeof(URLMAP),
+                            (off_t)uri.urlnode_map_from * (off_t)sizeof(URLMAP)))
+                {
+                    id = (int *)&(urlmap);
+                    for(i = 0; i < uri.urlnode_map_size; i++)
+                    {
+                        if(parentid == id[i])
+                        {
+                    fprintf(stdout, "%s::%d hits urlid:%d urlnode:%d\n", __FILE__, __LINE__, urlid, parentid);
+                            goto end;
+                        }
+                    }
+                }
+                if(uri.urlnode_map_size < HI_URLMAP_SIZE)
+                {
+                    urlmap.map[uri.urlnode_map_size++] = parentid;
+                    pwrite(hibase->urlmapio.fd, &urlmap, sizeof(URLMAP), 
+                            (off_t)uri.urlnode_map_from * (off_t)sizeof(URLMAP));
+                }
+                else
+                {
+                    fprintf(stdout, "%s::%d need new urlmap for urlnode\n", __FILE__, __LINE__);
+                }
+                if(pread(hibase->urlmapio.fd, &urlmap, sizeof(URLMAP),
+                            (off_t)uri.pnode_map_from * (off_t)sizeof(URLMAP)))
+                {
+                    id = (int *)&(urlmap);
+                    for(i = 0; i < uri.pnode_map_size; i++)
+                    {
+                        if(nodeid == id[i])
+                        {
+                    fprintf(stdout, "%s::%d hits urlid:%d pnode:%d\n", __FILE__, __LINE__, urlid, nodeid);
+                            goto end;
+                        }
+                    }
+                }
+        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
+                if(uri.pnode_map_size < HI_URLMAP_SIZE)
+                {
+                    urlmap.map[uri.pnode_map_size++] = nodeid;
+                    pwrite(hibase->urlmapio.fd, &urlmap, sizeof(URLMAP), 
+                            (off_t)uri.pnode_map_from * (off_t)sizeof(URLMAP));
+                }
+                else
+                {
+                    fprintf(stdout, "%s::%d need new urlmap for pnode\n", __FILE__, __LINE__);
+                }
+                pwrite(hibase->uriio.fd, &uri, sizeof(URI), (off_t)urlid * (off_t)sizeof(URI));
+                ret = 0;
+            }
+        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
+        }
+        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
+end:
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return ret;
+}
 
 /* hibase check urlid exist */
 int hibase_exists_urlnode(HIBASE *hibase, int nodeid, int parentid, int urlid)
@@ -1236,7 +1360,7 @@ int hibase_add_urlnode(HIBASE *hibase, int nodeid, int parentid, int urlid, int 
     PNODE *pnode = NULL;
 
     if(hibase && nodeid > 0 && parentid >= 0 && urlid >= 0 
-            && hibase_exists_urlnode(hibase, nodeid, parentid, urlid) < 0)
+            && hibase_urlmap_exists(hibase, urlid, nodeid, parentid) == 0)
     {
         MUTEX_LOCK(hibase->mutex);
         if(hibase->urlnodeio.left == 0)
