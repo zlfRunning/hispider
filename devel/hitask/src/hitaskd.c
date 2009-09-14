@@ -686,7 +686,7 @@ int hitaskd_newtask(CONN *conn)
             conn->over_evstate(conn);
             return conn->push_chunk(conn, buf, n);
         }
-        fprintf(stdout, "%s::%d URLNODEID:%d OK\n", __FILE__,__LINE__, urlnodeid);
+        //fprintf(stdout, "%s::%d URLNODEID:%d OK\n", __FILE__,__LINE__, urlnodeid);
 time_out:
         if(conn->timeout >= TASK_WAIT_MAX) conn->timeout = 0;
         conn->wait_evstate(conn);
@@ -1340,18 +1340,14 @@ int hitaskd_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA
 {
     if(conn)
     {
-        fprintf(stdout, "%s::%d OK\n", __FILE__,__LINE__);
         if(conn->evstate == EVSTATE_WAIT)
         {
-        fprintf(stdout, "%s::%d OK\n", __FILE__,__LINE__);
             return hitaskd_newtask(conn);
         }
         else
         {
-        fprintf(stdout, "%s::%d OK\n", __FILE__,__LINE__);
             return conn->over(conn);
         }
-        fprintf(stdout, "%s::%d OK\n", __FILE__,__LINE__);
     }
     return -1;
 }
@@ -1614,7 +1610,7 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URL
          *host = NULL, *path = NULL, *last = NULL, newurl[HTTP_URL_MAX];
     int i = -1, j = 0, flag = 0, start_offset = 0, erroffset = 0, res[FIELD_NUM_MAX * 2], 
         nres = 0, n = 0, count = 0, x = 0, urlid = 0, nodeid = 0, id = 0,
-        parentid = 0, start = 0, over = 0, length = 0;
+        parentid = 0, start = 0, over = 0, length = 0, level = 0;
     const char *error = NULL;
     pcre *reg = NULL;
     PRES *pres = NULL;
@@ -1647,6 +1643,8 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URL
                             pp = newurl;
                             epp = newurl + HTTP_URL_MAX;
                             MATCHEURL(count, p, pp, epp, s, es, x, pres, content);
+                            fprintf(stdout, "%s::%d count:%d nfields:%d flag:%d\n",  __FILE__, 
+                                __LINE__,count, templates[i].nfields, templates[i].linkmap.flag);
                             if(pp>newurl && *pp == '\0'&& (nodeid=templates[i].linkmap.nodeid>0) 
                                     && (urlid = ltask->add_url(ltask,  urlnode->urlid, 0, newurl,  
                                             (templates[i].linkmap.flag & REG_IS_POST))) >= 0)
@@ -1654,7 +1652,9 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URL
                                 nodeid = templates[i].linkmap.nodeid;
                                 parentid = urlnode->id;
                                 if(nodeid == urlnode->nodeid) parentid = urlnode->parentid;
-                                hibase->add_urlnode(hibase,nodeid,parentid,urlid,urlnode->level);
+                                level = 0;
+                                if(templates[i].linkmap.flag & REG_IS_LIST) level = 1;
+                                hibase->add_urlnode(hibase,nodeid,parentid,urlid,level);
                             }
                             else
                             {
@@ -1673,11 +1673,12 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URL
                                 //fprintf(stdout, "%s::%d %.*s\n", __FILE__,__LINE__,
                                 //length, content+start);
                                 //handling data
-                                //fprintf(stdout, "%s::%d count:%d nfields:%d flag:%d\n",  __FILE__, 
-                                //__LINE__,count, templates[i].nfields, templates[i].map[x].flag);
+                                fprintf(stdout, "%s::%d count:%d nfields:%d flag:%d\n",  __FILE__, 
+                                __LINE__,count, templates[i].nfields, templates[i].map[x].flag);
                                 if((templates[i].map[x].flag & REG_IS_URL) && length > 0 
                                         && length < HTTP_URL_MAX && x < templates[i].nfields)
                                 {
+                                    fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
                                     //add to urlnode
                                     p = content + start;
                                     e = content + over;
@@ -1687,14 +1688,19 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URL
                                     es = url + docheader->nurl;
                                     CPURL(s, es, p, e, pp, epp, end, host, path, last);
                                     n = (pp - newurl);
+                                    fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
                                     if(pp > newurl && *pp == '\0' && (urlid = ltask->add_url(
                                                     ltask, urlnode->urlid, 0, newurl,  0)) >= 0)
                                     {   
+                                    fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
                                         nodeid = templates[i].map[x].nodeid;
                                         parentid = urlnode->id;
                                         if(nodeid == urlnode->nodeid) parentid = urlnode->parentid;
-                                        id = hibase->add_urlnode(hibase, nodeid, 
-                                                parentid, urlid, urlnode->level);
+                                        level = 0;
+                                    fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
+                                        if(templates[i].map[x].flag & REG_IS_LIST) level = 1;
+                                    fprintf(stdout, "%s::%d level:%d\n", __FILE__, __LINE__, level);
+                                        id=hibase->add_urlnode(hibase,nodeid,parentid,urlid,level);
                                         //fprintf(stdout, "%s::%d newurl:%s id:%d x:%d "
                                         //        "nodeid:%d parent:%d urlid:%d level:%d\n", 
                                         //        __FILE__, __LINE__, newurl, id, x, 

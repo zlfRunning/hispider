@@ -1235,6 +1235,7 @@
                 form['linkmap'].value = '';
                 form['map'].value = '';
                 form['link_method'][0].checked = true;
+                form['link_list'].checked = false;
                 form['link_table'].options[0].selected = true;
                 form['link_field'].options[0].selected = true;
                 form['link_node'].options[0].selected = true;
@@ -1260,6 +1261,7 @@
                 form['map'].value = '';
                 form['method'].value = 0;
                 form['link_method'][0].checked = true;
+                form['link_list'].checked = false;
                 form['link_table'].options.length = 1;
                 form['link_field'].options.length = 1;
                 form['link_node'].options.length = 1;
@@ -1308,9 +1310,16 @@
                 }
                 var strlinkmap = form['linkmap'].value;
                 var linkmap = null;
-                if(strlinkmap && (linkmap = eval(strlinkmap)) && (linkmap['flag'] & 16))
+                if(strlinkmap && (linkmap = eval(strlinkmap)))
                 {
-                    xform['link_method'][1].checked = true;
+                    if(linkmap['flag'] & 16)
+                    {
+                        xform['link_method'][1].checked = true;
+                    }
+                    if(linkmap['flag'] & 64)
+                    {
+                        xform['link_list'].checked = true;
+                    }
                 }
                 var ediv = null;
                 if((ediv = document.getElementById('xtemplateform'))) 
@@ -1408,12 +1417,14 @@
                     if(box.checked == true)
                     {
                         form['is_uniqe_'+id].disabled = false;
+                        form['is_list_'+id].disabled = false;
                         form['is_file_'+id].disabled = false;
                         form['nodeid_'+id].disabled = false;
                     }
                     else
                     {
                         form['is_uniqe_'+id].disabled = true;
+                        form['is_list_'+id].disabled = true;
                         form['is_file_'+id].disabled = true;
                         form['nodeid_'+id].disabled = true;
                     }
@@ -1546,6 +1557,17 @@
                             else 
                                 block += " disabled=true ";
                             block += ">标识性链接</span>";
+                            block += "&nbsp;&nbsp;";
+                            block += "<span title='列表页将会优先下载并且会定期更新'>";
+                            block += "<input type=checkbox name='is_list_"+i+"'";
+                            if(map && map[i-1]['flag'] & 1) 
+                            {
+                                if(map[i-1]['flag'] & 64)
+                                    block += " checked ";
+                            }
+                            else 
+                                block += " disabled=true ";
+                            block += ">列表页</span>";
                             block += "&nbsp;&nbsp;";
                             block += "<span title='下载存储为文件比如:图片,mp3等'>";
                             block += "<input type=checkbox name='is_file_"+i+"'";
@@ -1910,6 +1932,7 @@
                     if(form['method'].value == 1) flag |= 16;
                     var link_flag = 0;
                     if(form['link_method'][1].checked == true) link_flag |= 16;
+                    if(form['link_list'].checked == true) link_flag |= 64;
                     var linkmap = "[" + form['link_field'].value + ','
                         + form['link_node'].value + ','
                         + link_flag + ']';
@@ -1989,6 +2012,8 @@
                             node_flag |= 32;
                         if(form['is_file_'+i].checked == true) 
                             node_flag |= 2;
+                        if(form['is_list_'+i].checked == true)
+                            node_flag |= 64;
                         node_id = form['nodeid_'+i].value;
                     }
                     if(form['is_need_clearhtml_'+i].checked == true) 
@@ -2944,6 +2969,8 @@
                 <input type=radio name='link_method' value='0' checked>GET
                 &nbsp;
                 <input type=radio name='link_method' value='1'>POST
+                &nbsp;
+                <span title='列表页会定期更新'><input type=checkbox name='link_list' >列表页</span>
                 &nbsp;
                 <select name='link_field' >
                     <option value='-1' selected>字段</option>

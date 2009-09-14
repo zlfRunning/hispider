@@ -103,6 +103,7 @@ typedef struct _URLNODE
 #define REG_IS_NEED_ANTISPAM     0x08
 #define REG_IS_POST              0x10
 #define REG_IS_UNIQE             0x20
+#define REG_IS_LIST              0x40
 typedef struct _IREGX
 {
     short flag;
@@ -145,6 +146,7 @@ typedef struct _ISTATE
     int urlnodeio_left;
     int urlnodeio_total;
     int urlnode_task_current;
+    int update_current;
 }ISTATE;
 /* hibase io/map */
 typedef struct _HIO
