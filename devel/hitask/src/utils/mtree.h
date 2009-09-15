@@ -28,8 +28,8 @@ typedef struct _MTREE
     int fd;
     void *mutex;
 }MTREE;
-MTREE *mtree_init(char *file);
-int mtree_insert(MTREE *mtree, int parentid, int key);
-int mtree_remove(MTREE *mtree, int parentid, int key);
-int mtree_close(MTREE *mtree);
+void *mtree_init(char *file);
+int mtree_insert(void *mtree, int parentid, int key, int *old);
+int mtree_remove(void *mtree, int parentid, int key);
+void mtree_close(void *mtree);
 #endif
