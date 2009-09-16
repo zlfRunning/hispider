@@ -20,11 +20,11 @@ extern "C" {
 #define PATTERN_LEN_MAX		    4096
 #define TABLE_INCRE_NUM         256
 #define TEMPLATE_INCRE_NUM      1000
-#define PNODE_INCRE_NUM         10000
+#define TNODE_INCRE_NUM         10000
 #define URI_INCRE_NUM         10000
 #define URLMAP_INCRE_NUM        10000
 #define URLNODE_INCRE_NUM       10000
-#define PNODE_CHILDS_MAX        10000
+#define TNODE_CHILDS_MAX        10000
 #define TAB_STATUS_ERR          -1
 #define TAB_STATUS_INIT         0
 #define TAB_STATUS_OK           1
@@ -64,9 +64,9 @@ typedef struct _ITABLE
     IFIELD  fields[FIELD_NUM_MAX];
 }ITABLE;
 /* page node */
-#define PNODE_NUM_MAX   256
-#define PNODE_NAME_MAX  256
-typedef struct _PNODE
+#define TNODE_NUM_MAX   256
+#define TNODE_NAME_MAX  256
+typedef struct _TNODE
 {
     short status;
     short level;
@@ -84,8 +84,8 @@ typedef struct _PNODE
     int nurlnodes;
     int urlnode_first;
     int urlnode_last;
-    char name[PNODE_NAME_MAX];
-}PNODE;
+    char name[TNODE_NAME_MAX];
+}TNODE;
 typedef struct _URLNODE
 {
     short status;
@@ -104,10 +104,8 @@ typedef struct _URLNODE
 }URLNODE;
 typedef struct _URI
 {
-    short pnode_map_size;
-    short urlnode_map_size;
-    int pnode_map_from;
-    int urlnode_map_from;
+    int urlnode_treeid;
+    int tnode_treeid;
 }URI;
 typedef struct _URLMAP
 {
@@ -164,9 +162,6 @@ typedef struct _ISTATE
     int uriio_current;
     int uriio_left;
     int uriio_total;
-    int urlmapio_current;
-    int urlmapio_left;
-    int urlmapio_total;
     int urlnode_task_current;
     int update_current;
 }ISTATE;
@@ -186,16 +181,16 @@ typedef struct _HIBASE
 {
     void    *mdb;
     int     db_uid_max;
-    void    *mpnode;
+    void    *mtnode;
     HIO     tableio;
-    HIO     pnodeio;
-    void    *qpnode;
-    int     pnode_childs_max;
+    HIO     tnodeio;
+    void    *qtnode;
+    int     tnode_childs_max;
     int     uid_max;
     HIO     templateio;
     void    *qtemplate;
     HIO     uriio;
-    HIO     urlmapio;
+    void    *mmtree;
     HIO     urlnodeio;
     void    *qurlnode;
     void    *qtask;
@@ -219,11 +214,11 @@ typedef struct _HIBASE
     int     (*update_field)(struct _HIBASE *, int table_id, int field_id, 
             char *name, int type, int is_index);
     int     (*delete_field)(struct _HIBASE *, int table_id, int field_id);
-    int     (*add_template)(struct _HIBASE *, int pnodeid, ITEMPLATE *ptemplate);
+    int     (*add_template)(struct _HIBASE *, int tnodeid, ITEMPLATE *ptemplate);
     int     (*get_template)(struct _HIBASE *, int templateid, ITEMPLATE *ptemplate);
     int     (*update_template)(struct _HIBASE *, int templateid, ITEMPLATE *ptemplate);
-    int     (*delete_template)(struct _HIBASE *, int pnodeid, int templateid);
-    int     (*view_templates)(struct _HIBASE *, int pnodeid, char *block);
+    int     (*delete_template)(struct _HIBASE *, int tnodeid, int templateid);
+    int     (*view_templates)(struct _HIBASE *, int tnodeid, char *block);
     /*
     int     (*template_exists)(struct _HIBASE *, char *name, int len);
     int 	(*add_template)(struct _HIBASE *, ITEMPLATE *);
@@ -231,21 +226,21 @@ typedef struct _HIBASE
     int 	(*update_template)(struct _HIBASE *, int template_id, ITEMPLATE *);
     int 	(*delete_template)(struct _HIBASE *, int template_id, char *template_name);
     */
-    int     (*pnode_exists)(struct _HIBASE *, int parent, char *name, int name_len);
-    int     (*add_pnode)(struct _HIBASE *, int parent, char *name);
-    int     (*get_pnode)(struct _HIBASE *, int id, PNODE *pnode);
-    int     (*get_pnode_templates)(struct _HIBASE *, int id, ITEMPLATE **templates);
+    int     (*tnode_exists)(struct _HIBASE *, int parent, char *name, int name_len);
+    int     (*add_tnode)(struct _HIBASE *, int parent, char *name);
+    int     (*get_tnode)(struct _HIBASE *, int id, TNODE *tnode);
+    int     (*get_tnode_templates)(struct _HIBASE *, int id, ITEMPLATE **templates);
     void    (*free_templates)(ITEMPLATE *templates);
-    int     (*get_pnode_childs)(struct _HIBASE *, int id, PNODE *pnodes);
-    int     (*view_pnode_childs)(struct _HIBASE *, int id, char *block);
-    int     (*update_pnode)(struct _HIBASE *, int id, char *name);
-    int     (*delete_pnode)(struct _HIBASE *, int id);
+    int     (*get_tnode_childs)(struct _HIBASE *, int id, TNODE *tnodes);
+    int     (*view_tnode_childs)(struct _HIBASE *, int id, char *block);
+    int     (*update_tnode)(struct _HIBASE *, int id, char *name);
+    int     (*delete_tnode)(struct _HIBASE *, int id);
     int     (*add_urlnode)(struct _HIBASE *, int nodeid, int parentid, int urlid, int level);
     int     (*update_urlnode)(struct _HIBASE *, int urlnodeid, int level);
     int     (*delete_urlnode)(struct _HIBASE *, int urlnodeid);
     int     (*get_urlnode)(struct _HIBASE *, int urlnodeid, URLNODE *urlnode);
     int     (*get_urlnode_childs)(struct _HIBASE *, int urlnodeid, URLNODE **childs);
-    int     (*get_pnode_urlnodes)(struct _HIBASE *, int nodeid, URLNODE **urlnodes);
+    int     (*get_tnode_urlnodes)(struct _HIBASE *, int nodeid, URLNODE **urlnodes);
     void    (*free_urlnodes)(URLNODE *urlnodes);
     int     (*pop_urlnode)(struct _HIBASE *, URLNODE *urlnode);
     int     (*push_task_urlnodeid)(struct _HIBASE *, int urlnodeid);

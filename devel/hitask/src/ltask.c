@@ -713,7 +713,7 @@ int ltask_set_host_level(LTASK *task, int hostid, char *host, short level)
 {
     int id = 0, n = 0, ret = -1;
     LHOST *host_node = NULL;
-    LNODE node = {0}, *pnode = NULL;
+    LNODE node = {0}, *tnode = NULL;
     void *dp = NULL;
 
     if(task)
@@ -732,8 +732,8 @@ int ltask_set_host_level(LTASK *task, int hostid, char *host, short level)
             {
                 node.type = Q_TYPE_HOST;
                 node.id = id;
-                pnode = &node;
-                FQUEUE_PUSH(task->qtask, LNODE, pnode);
+                tnode = &node;
+                FQUEUE_PUSH(task->qtask, LNODE, tnode);
             }
             host_node->level = level;
             ret = 0;
@@ -900,7 +900,7 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
 {
     int urlid = -1, n = -1, x = 0;
     LHOST *host_node = NULL;
-    LNODE node = {0}, *pnode = NULL;
+    LNODE node = {0}, *tnode = NULL;
     LMETA meta = {0};
 
     if(task && url)
@@ -917,8 +917,8 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
                     urlid = host_node->url_current_id;
                     if(host_node->url_left > 1)
                     {
-                        pnode = &node;
-                        FQUEUE_PUSH(task->qtask, LNODE, pnode);
+                        tnode = &node;
+                        FQUEUE_PUSH(task->qtask, LNODE, tnode);
                     }
                 }
                 else if(node.type == Q_TYPE_URL && node.id >= 0)
@@ -1059,7 +1059,7 @@ int ltask_set_url_level(LTASK *task, int urlid, char *url, short level)
     char newurl[HTTP_URL_MAX], *p = NULL, *pp = NULL;
     unsigned char key[MD5_LEN];
     int n = 0, id = -1, ret = -1;
-    LNODE node = {0}, *pnode = NULL;
+    LNODE node = {0}, *tnode = NULL;
     void *dp = NULL;
 
     if(task)
@@ -1088,8 +1088,8 @@ int ltask_set_url_level(LTASK *task, int urlid, char *url, short level)
             pwrite(task->meta_fd, &level, sizeof(short), id * sizeof(LMETA) + sizeof(short)*2); 
             node.type = Q_TYPE_URL;
             node.id = id;
-            pnode = &node;
-            FQUEUE_PUSH(task->qtask, LNODE, pnode);
+            tnode = &node;
+            FQUEUE_PUSH(task->qtask, LNODE, tnode);
             ret = 0;
         }
         MUTEX_UNLOCK(task->mutex);

@@ -1007,8 +1007,8 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                     case E_OP_NODE_ADD :
                         if(parentid >= 0 && name)
                         {
-                            if((id = hibase->add_pnode(hibase, parentid, name)) > 0
-                                    && (n = hibase->view_pnode_childs(hibase, parentid, block)) > 0)
+                            if((id = hibase->add_tnode(hibase, parentid, name)) > 0
+                                    && (n = hibase->view_tnode_childs(hibase, parentid, block)) > 0)
                             {
                                 conn->push_chunk(conn, block, n);
                                 goto end;
@@ -1020,7 +1020,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         if(nodeid > 0 && name)
                         {
                             DEBUG_LOGGER(hitaskd_logger, "op:%d id:%d name:%s", op, nodeid, name);
-                            id = hibase->update_pnode(hibase, nodeid, name);
+                            id = hibase->update_tnode(hibase, nodeid, name);
                             n = sprintf(buf, "%d\r\n", id);
                             n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html;charset=%s\r\n"
                                     "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", 
@@ -1033,7 +1033,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         if(nodeid > 0 || name)
                         {
                             DEBUG_LOGGER(hitaskd_logger, "op:%d id:%d", op, nodeid);
-                            id = hibase->delete_pnode(hibase, nodeid);
+                            id = hibase->delete_tnode(hibase, nodeid);
                             n = sprintf(buf, "%d\r\n", id);
                             n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html;charset=%s\r\n"
                                     "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", 
@@ -1046,7 +1046,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         if(nodeid >= 0)
                         {
                             //DEBUG_LOGGER(hitaskd_logger, "op:%d id:%d name:%s", op, nodeid, name);
-                            if((n = hibase->view_pnode_childs(hibase, nodeid, block)) > 0)
+                            if((n = hibase->view_tnode_childs(hibase, nodeid, block)) > 0)
                             {
                                 conn->push_chunk(conn, block, n);
                                 goto end;
@@ -1214,7 +1214,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                     case E_OP_URLNODE_ADD:
                         if(nodeid >= 0 && url && (urlid=ltask->add_url(ltask,-1,0,url, flag))>= 0
                             && (urlnodeid = hibase->add_urlnode(hibase, nodeid, 0, urlid,level))> 0
-                            && (n = hibase->get_pnode_urlnodes(hibase, nodeid, &urlnodes)) > 0)
+                            && (n = hibase->get_tnode_urlnodes(hibase, nodeid, &urlnodes)) > 0)
                         {
                             VIEW_URLNODES(conn, pp, p, buf, nodeid, urlnodes, i, n);
                             hibase->free_urlnodes(urlnodes);
@@ -1230,7 +1230,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                     case E_OP_URLNODE_UPDATE:
                         if(nodeid >= 0 && urlnodeid > 0 && level >= 0 
                             && hibase->update_urlnode(hibase, urlnodeid, level)> 0
-                            && (n = hibase->get_pnode_urlnodes(hibase, nodeid, &urlnodes)) > 0)
+                            && (n = hibase->get_tnode_urlnodes(hibase, nodeid, &urlnodes)) > 0)
                         {
                             VIEW_URLNODES(conn, pp, p, buf, nodeid, urlnodes, i, n);
                             hibase->free_urlnodes(urlnodes);
@@ -1240,7 +1240,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                     case E_OP_URLNODE_DELETE:
                         if(nodeid >= 0 && urlnodeid > 0 
                             && hibase->delete_urlnode(hibase, urlnodeid) > 0
-                            && (n = hibase->get_pnode_urlnodes(hibase, nodeid, &urlnodes)) > 0)
+                            && (n = hibase->get_tnode_urlnodes(hibase, nodeid, &urlnodes)) > 0)
                         {
                             VIEW_URLNODES(conn, pp, p, buf, nodeid, urlnodes, i, n);
                             hibase->free_urlnodes(urlnodes);
@@ -1258,7 +1258,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         }else goto err_end;
                         break;
                     case E_OP_URLNODE_LIST:
-                        if(nodeid >= 0 && (n = hibase->get_pnode_urlnodes(hibase, 
+                        if(nodeid >= 0 && (n = hibase->get_tnode_urlnodes(hibase, 
                                         nodeid, &urlnodes)) > 0)
                         {
                             VIEW_URLNODES(conn, pp, p, buf, nodeid, urlnodes, i, n);
@@ -1603,7 +1603,7 @@ do                                                                              
 }while(0)
 
 /* histore pcre match */
-void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URLNODE *urlnode,
+void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URLNODE *urlnode,
         LDOCHEADER *docheader, char *content, int ncontent, char *url, char *type)
 {
     char *p = NULL, *e = NULL, *pp = NULL, *epp = NULL, *s = NULL, *es = NULL, *end = NULL, 
@@ -1616,7 +1616,7 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, PNODE *pnode, URL
     PRES *pres = NULL;
 
 
-    if(templates && ntemplates > 0 && pnode && urlnode && docheader && content 
+    if(templates && ntemplates > 0 && tnode && urlnode && docheader && content 
             && ncontent > 0 && url && type)
     {
         for(i = 0; i < ntemplates; i++)
@@ -1754,18 +1754,18 @@ void histore_task_handler(void *arg)
     ITEMPLATE *templates = NULL;
     URLNODE urlnode = {0};
     void *argx = NULL;
-    PNODE pnode = {0};
+    TNODE tnode = {0};
     size_t ndata = 0;
 
     if(arg && (id  = (int)((long)arg)) > 0
         && hibase->get_urlnode(hibase, id, &urlnode) > 0 && urlnode.nodeid > 0 
-        && hibase->get_pnode(hibase, urlnode.nodeid, &pnode) > 0 
+        && hibase->get_tnode(hibase, urlnode.nodeid, &tnode) > 0 
         && (len = ltask->get_content(ltask, urlnode.urlid, &block)) > 0) 
     {
 
         //fprintf(stdout, "%s::%d ready for deal task:%d arg:%p\n", __FILE__, __LINE__, id, arg);
         if(len > sizeof(LDOCHEADER) && (docheader = (LDOCHEADER *)block)
-            && (count = hibase->get_pnode_templates(hibase, urlnode.nodeid, &templates)) > 0) 
+            && (count = hibase->get_tnode_templates(hibase, urlnode.nodeid, &templates)) > 0) 
         {
             //fprintf(stdout, "%s::%d ready for deal url:%d nodeid:%d "
             //    "content_len:%d nurl:%d ntype:%d ncentent:%d\n", 
@@ -1786,7 +1786,7 @@ void histore_task_handler(void *arg)
                             (Bytef *)content, (uLong *)&ndata) == 0)
                 {
                     //fprintf(stdout, "%s::%d ndata:%d\n", __FILE__, __LINE__, ndata);
-                    histore_data_matche(templates, count, &pnode, &urlnode,
+                    histore_data_matche(templates, count, &tnode, &urlnode,
                             docheader, content, ndata, url, type);
                 }
                 else
