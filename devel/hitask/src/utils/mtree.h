@@ -1,6 +1,6 @@
 #ifndef _MTREE_H
 #define _MTREE_H
-#define MT_INCRE_NUM   10000
+#define MTREE_INCRE_NUM   10000
 typedef struct _MTNODE
 {
     int key;
@@ -20,12 +20,11 @@ typedef struct _MTSTATE
 typedef struct _MTREE
 {
     off_t size;
+    void *start;
     MTSTATE *state;
     MTNODE *map;
-    MTNODE *node;
     int fd;
     void *mutex;
-    void *start;
 }MTREE;
 void *mtree_init(char *file);
 int mtree_new_tree(void *mtree, int key);

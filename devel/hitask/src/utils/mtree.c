@@ -43,18 +43,24 @@ do                                                                          \
 {                                                                           \
     if(x)                                                                   \
     {                                                                       \
-        if(MT(x)->size == 0)                                                \
+        if(MT(x)->start && MT(x)->size > 0)                                 \
         {                                                                   \
-            MT(x)->size = sizeof(MTSTATE);                                  \
+            msync(MT(x)->start, MT(x)->size, MS_SYNC);                      \
+            munmap(MT(x)->start, MT(x)->size);                              \
+            MT(x)->start = NULL;                                            \
+            MT(x)->state = NULL;                                            \
+            MT(x)->map = NULL;                                              \
         }                                                                   \
-        MT(x)->size += MT_INCRE_NUM * sizeof(MTNODE);                       \
+        MT(x)->size += (off_t)MTREE_INCRE_NUM * (off_t)sizeof(MTNODE);      \
         ftruncate(MT(x)->fd, MT(x)->size);                                  \
-        MT_MMAP(x);                                                         \
-        if(MT(x)->state)                                                    \
+        if((MT(x)->start = mmap(NULL, MT(x)->size, PROT_READ|PROT_WRITE,    \
+                        MAP_SHARED, MT(x)->fd, 0)) != (void *)-1)           \
         {                                                                   \
-            MT(x)->state->left += MT_INCRE_NUM;                             \
-            MT(x)->state->total += MT_INCRE_NUM;                            \
-            if(MT(x)->state->total == MT_INCRE_NUM) MT(x)->state->left--;   \
+            MT(x)->state = (MTSTATE *)(MT(x)->start);                       \
+            MT(x)->map = (MTNODE *)((char*)(MT(x)->start)+sizeof(MTSTATE)); \
+            MT(x)->state->left += MTREE_INCRE_NUM;                          \
+            if(MT(x)->state->total == 0) MT(x)->state->left--;              \
+            MT(x)->state->total += MTREE_INCRE_NUM;                         \
         }                                                                   \
     }                                                                       \
 }while(0)
@@ -76,6 +82,7 @@ void *mtree_init(char *file)
             //init truncate
             if(st.st_size == 0)
             {
+                MT(x)->size += (off_t)sizeof(MTSTATE);
                 MT_INCRE(x);
             }
             else
@@ -83,7 +90,6 @@ void *mtree_init(char *file)
                 //mmap
                 MT_MMAP(x);
             }
-            fprintf(stdout, "%s::%d start:%p state:%p map:%p current:%d left:%d total:%d qleft:%d qfirst:%d qlast:%d\n", __FILE__, __LINE__, MT(x)->start, MT(x)->state, MT(x)->map, MT(x)->state->current, MT(x)->state->left, MT(x)->state->total, MT(x)->state->qleft, MT(x)->state->qfirst, MT(x)->state->qlast);
         }
         else 
         {
@@ -105,6 +111,27 @@ int mtree_new_tree(void *x, int key)
         {
             if(MT(x)->state->left == 0)
             {
+                /*
+                if(MT(x)->start && MT(x)->size > 0)
+                {
+                    msync(MT(x)->start, MT(x)->size, MS_SYNC);
+                    munmap(MT(x)->start, MT(x)->size);
+                    MT(x)->start = NULL;
+                    MT(x)->state = NULL;
+                    MT(x)->map = NULL;
+                }
+                MT(x)->size += MTREE_INCRE_NUM * sizeof(MTNODE);
+                ftruncate(MT(x)->fd, MT(x)->size);
+                if((MT(x)->start = mmap(NULL, MT(x)->size, PROT_READ|PROT_WRITE,
+                                MAP_SHARED, MT(x)->fd, 0)) != (void *)-1)
+                {                                                                   
+                    MT(x)->state = (MTSTATE *)MT(x)->start;                         
+                    MT(x)->map = (MTNODE *)(MT(x)->start + sizeof(MTSTATE));        
+                    MT(x)->state->left += MTREE_INCRE_NUM;
+                    if(MT(x)->state->total == 0) MT(x)->state->left--;
+                    MT(x)->state->total += MTREE_INCRE_NUM;
+                }
+                */
                 MT_INCRE(x);
             }
             if(MT(x)->state->qleft > 0)
@@ -118,8 +145,12 @@ int mtree_new_tree(void *x, int key)
                 id = ++(MT(x)->state->current);
             }
             memset(&(MT(x)->map[id]), 0, sizeof(MTNODE));
-            MT(x)->map[id].key = key;
-            MT(x)->state->left--;
+            if(MT(x)->map && MT(x)->state)
+            {
+                //fprintf(stdout, "%s::%d id:%d current:%d total:%d\n", __FILE__, __LINE__, id, MT(x)->state->current, MT(x)->state->total);
+                MT(x)->map[id].key = key;
+                MT(x)->state->left--;
+            }
         }
         MUTEX_UNLOCK(MT(x)->mutex);
     }
@@ -132,7 +163,7 @@ int mtree_insert(void *x, int rootid, int key, int *old)
     int id = 0, nodeid = 0;
     MTNODE *node = NULL;
 
-    if(x && rootid >= 0)
+    if(x && rootid > 0)
     {
         MUTEX_LOCK(MT(x)->mutex);
         if(MT(x)->state && MT(x)->map && rootid < MT(x)->state->total)
@@ -368,7 +399,7 @@ void mtree_close(void *x)
 {
     if(x)
     {
-        fprintf(stdout, "%s::%d start:%p state:%p map:%p current:%d left:%d total:%d qleft:%d qfirst:%d qlast:%d\n", __FILE__, __LINE__, MT(x)->start, MT(x)->state, MT(x)->map, MT(x)->state->current, MT(x)->state->left, MT(x)->state->total, MT(x)->state->qleft, MT(x)->state->qfirst, MT(x)->state->qlast);
+        //fprintf(stdout, "%s::%d start:%p state:%p map:%p current:%d left:%d total:%d qleft:%d qfirst:%d qlast:%d sizeof(MTSTATE):%d\n", __FILE__, __LINE__, MT(x)->start, MT(x)->state, MT(x)->map, MT(x)->state->current, MT(x)->state->left, MT(x)->state->total, MT(x)->state->qleft, MT(x)->state->qfirst, MT(x)->state->qlast, sizeof(MTSTATE));
         MT_MUNMAP(x);
         MUTEX_DESTROY(MT(x)->mutex);
         if(MT(x)->fd) close(MT(x)->fd);
@@ -383,23 +414,23 @@ int main(int argc, char **argv)
     void *mtree = NULL;
     int i = 0, id = 0, j = 0, old = 0;
 
-    if((mtree = mtree_init("/hello/tmp/test.mtree")))
+    if((mtree = mtree_init("/tmp/test.mtree")))
     {
-        for(i = 1; i < 100; i++)
+        for(i = 1; i < 200; i++)
         {
             id = mtree_new_tree(mtree, i);
-            for(j = 10000; j > 0; j--)
+            for(j = 1000; j > 0; j--)
             {
                 old = 0;
                 mtree_insert(mtree, id, j, &old);
             }
         }
-        //old = 0;
-        //mtree_remove(mtree, 8, &old);
-        //fprintf(stdout, "old:%d\n", old);
-        //mtree_view_tree(mtree, 1, stdout);
-        //mtree_remove_tree(mtree, 1);
-        //mtree_view_tree(mtree, 1, stdout);
+        old = 0;
+        mtree_remove(mtree, 8, &old);
+        fprintf(stdout, "old:%d\n", old);
+        mtree_view_tree(mtree, 1, stdout);
+        mtree_remove_tree(mtree, 1);
+        mtree_view_tree(mtree, 1, stdout);
         mtree_close(mtree);
     }
 }
