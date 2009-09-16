@@ -1,0 +1,438 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include "mmtree.h"
+#include "mutex.h"
+#define MMT(px) ((MMTREE *)px)
+#define MMT_MUNMAP(x)                                                        \
+do                                                                          \
+{                                                                           \
+    if(x && MMT(x)->size > 0)                                                \
+    {                                                                       \
+        if(MMT(x)->start && MMT(x)->start != (void *)-1)                      \
+        {                                                                   \
+            msync(MMT(x)->start, MMT(x)->size, MS_SYNC);                      \
+            munmap(MMT(x)->start, MMT(x)->size);                              \
+            MMT(x)->start = NULL;                                            \
+            MMT(x)->state = NULL;                                            \
+            MMT(x)->map = NULL;                                              \
+        }                                                                   \
+    }                                                                       \
+}while(0)
+
+#define MMT_MMAP(x)                                                          \
+do                                                                          \
+{                                                                           \
+    if(x)                                                                   \
+    {                                                                       \
+        MMT_MUNMAP(x);                                                       \
+        if((MMT(x)->start = mmap(NULL, MMT(x)->size, PROT_READ|PROT_WRITE,    \
+                        MAP_SHARED, MMT(x)->fd, 0)) != (void *)-1)           \
+        {                                                                   \
+            MMT(x)->state = (MTSTATE *)MMT(x)->start;                         \
+            MMT(x)->map = (MTNODE *)(MMT(x)->start + sizeof(MTSTATE));        \
+        }                                                                   \
+    }                                                                       \
+}while(0)
+
+#define MMT_INCRE(x)                                                         \
+do                                                                          \
+{                                                                           \
+    if(x)                                                                   \
+    {                                                                       \
+        if(MMT(x)->start && MMT(x)->size > 0)                                 \
+        {                                                                   \
+            msync(MMT(x)->start, MMT(x)->size, MS_SYNC);                      \
+            munmap(MMT(x)->start, MMT(x)->size);                              \
+            MMT(x)->start = NULL;                                            \
+            MMT(x)->state = NULL;                                            \
+            MMT(x)->map = NULL;                                              \
+        }                                                                   \
+        MMT(x)->size += (off_t)MMTREE_INCRE_NUM * (off_t)sizeof(MTNODE);      \
+        ftruncate(MMT(x)->fd, MMT(x)->size);                                  \
+        if((MMT(x)->start = mmap(NULL, MMT(x)->size, PROT_READ|PROT_WRITE,    \
+                        MAP_SHARED, MMT(x)->fd, 0)) != (void *)-1)           \
+        {                                                                   \
+            MMT(x)->state = (MTSTATE *)(MMT(x)->start);                       \
+            MMT(x)->map = (MTNODE *)((char*)(MMT(x)->start)+sizeof(MTSTATE)); \
+            MMT(x)->state->left += MMTREE_INCRE_NUM;                          \
+            if(MMT(x)->state->total == 0) MMT(x)->state->left--;              \
+            MMT(x)->state->total += MMTREE_INCRE_NUM;                         \
+        }                                                                   \
+    }                                                                       \
+}while(0)
+
+/* init mmtree */
+void *mmtree_init(char *file)
+{
+    void *x = NULL;
+    struct stat  st = {0};
+    int size = 0;
+
+    if((x = (MMTREE *)calloc(1, sizeof(MMTREE))))
+    {
+        if((MMT(x)->fd = open(file, O_CREAT|O_RDWR, 0644)) > 0 
+                && fstat(MMT(x)->fd, &st) == 0)
+        {
+            MUTEX_INIT(MMT(x)->mutex);
+            MMT(x)->size = st.st_size;
+            //init truncate
+            if(st.st_size == 0)
+            {
+                MMT(x)->size += (off_t)sizeof(MTSTATE);
+                MMT_INCRE(x);
+            }
+            else
+            {
+                //mmap
+                MMT_MMAP(x);
+            }
+        }
+        else 
+        {
+            if(MMT(x)->fd > 0) close(MMT(x)->fd);
+            free(x);
+            x = NULL;
+        }
+    }
+    return x;
+}
+/* insert new root */
+int mmtree_new_tree(void *x, int key)
+{
+    int id = -1;
+    if(x)
+    {
+        MUTEX_LOCK(MMT(x)->mutex);
+        if(MMT(x)->state && MMT(x)->map)
+        {
+            if(MMT(x)->state->left == 0)
+            {
+                /*
+                if(MMT(x)->start && MMT(x)->size > 0)
+                {
+                    msync(MMT(x)->start, MMT(x)->size, MS_SYNC);
+                    munmap(MMT(x)->start, MMT(x)->size);
+                    MMT(x)->start = NULL;
+                    MMT(x)->state = NULL;
+                    MMT(x)->map = NULL;
+                }
+                MMT(x)->size += MMTREE_INCRE_NUM * sizeof(MTNODE);
+                ftruncate(MMT(x)->fd, MMT(x)->size);
+                if((MMT(x)->start = mmap(NULL, MMT(x)->size, PROT_READ|PROT_WRITE,
+                                MAP_SHARED, MMT(x)->fd, 0)) != (void *)-1)
+                {                                                                   
+                    MMT(x)->state = (MTSTATE *)MMT(x)->start;                         
+                    MMT(x)->map = (MTNODE *)(MMT(x)->start + sizeof(MTSTATE));        
+                    MMT(x)->state->left += MMTREE_INCRE_NUM;
+                    if(MMT(x)->state->total == 0) MMT(x)->state->left--;
+                    MMT(x)->state->total += MMTREE_INCRE_NUM;
+                }
+                */
+                MMT_INCRE(x);
+            }
+            if(MMT(x)->state->qleft > 0)
+            {
+                id = MMT(x)->state->qfirst;
+                MMT(x)->state->qfirst = MMT(x)->map[id].parent;
+                MMT(x)->state->qleft--;
+            }
+            else
+            {
+                id = ++(MMT(x)->state->current);
+            }
+            memset(&(MMT(x)->map[id]), 0, sizeof(MTNODE));
+            if(MMT(x)->map && MMT(x)->state)
+            {
+                //fprintf(stdout, "%s::%d id:%d current:%d total:%d\n", __FILE__, __LINE__, id, MMT(x)->state->current, MMT(x)->state->total);
+                MMT(x)->map[id].key = key;
+                MMT(x)->state->left--;
+            }
+        }
+        MUTEX_UNLOCK(MMT(x)->mutex);
+    }
+    return id;
+}
+
+/* insert new node */
+int mmtree_insert(void *x, int rootid, int key, int *old)
+{
+    int id = 0, nodeid = 0;
+    MTNODE *node = NULL;
+
+    if(x && rootid > 0)
+    {
+        MUTEX_LOCK(MMT(x)->mutex);
+        if(MMT(x)->state && MMT(x)->map && rootid < MMT(x)->state->total)
+        {
+            nodeid = rootid;
+            while(nodeid > 0 && nodeid < MMT(x)->state->total)
+            {
+                node = &(MMT(x)->map[nodeid]);
+                if(key == node->key)
+                {
+                    *old = id = nodeid;
+                    break;
+                }
+                else if(key > node->key)
+                {
+                    if(node->right == 0) break;
+                    nodeid = node->right;
+                }
+                else 
+                {
+                    if(node->left == 0) break;
+                    nodeid = node->left;
+                }
+            }
+            //new node
+            if(id == 0)
+            {
+                //fprintf(stdout, "%s::%d %d start:%p state:%p map:%p current:%d left:%d total:%d qleft:%d qfirst:%d qlast:%d\n", __FILE__, __LINE__, id, MMT(x)->start, MMT(x)->state, MMT(x)->map, MMT(x)->state->current, MMT(x)->state->left, MMT(x)->state->total, MMT(x)->state->qleft, MMT(x)->state->qfirst, MMT(x)->state->qlast);
+                if(MMT(x)->state->left == 0)
+                {
+                    MMT_INCRE(x);
+                }
+                if(MMT(x)->state->qleft > 0)
+                {
+                    id = MMT(x)->state->qfirst;
+                    MMT(x)->state->qfirst = MMT(x)->map[id].parent;
+                    MMT(x)->state->qleft--;
+                }
+                else
+                {
+                    id = ++(MMT(x)->state->current);
+                }
+                //fprintf(stdout, "%s::%d %d start:%p state:%p map:%p current:%d left:%d total:%d qleft:%d qfirst:%d qlast:%d\n", __FILE__, __LINE__, id, MMT(x)->start, MMT(x)->state, MMT(x)->map, MMT(x)->state->current, MMT(x)->state->left, MMT(x)->state->total, MMT(x)->state->qleft, MMT(x)->state->qfirst, MMT(x)->state->qlast);
+                MMT(x)->state->left--;
+                //memset(&(MMT(x)->map[id]), 0, sizeof(MTNODE));
+                MMT(x)->map[id].parent = nodeid;
+                MMT(x)->map[id].key = key;
+                if(key > MMT(x)->map[nodeid].key) 
+                    MMT(x)->map[nodeid].right = id;
+                else
+                    MMT(x)->map[nodeid].left = id;
+            }
+            else
+            {
+                //fprintf(stdout, "%s::%d old id:%d pid:%d key:%d\n", __FILE__, __LINE__, id, parentid, key);
+            }
+        }
+        MUTEX_UNLOCK(MMT(x)->mutex);
+    }
+    return id;
+}
+
+/* view node */
+void mmtree_view_tnode(void *x, int tnodeid, FILE *fp)
+{
+    int id = 0;
+
+    if(x)
+    {
+        if(MMT(x)->map[tnodeid].left > 0 && MMT(x)->map[tnodeid].left < MMT(x)->state->total)
+        {
+            mmtree_view_tnode(x, MMT(x)->map[tnodeid].left, fp);
+        }
+        fprintf(fp, "[%d:%d]\n", tnodeid, MMT(x)->map[tnodeid].key);
+        if(MMT(x)->map[tnodeid].right > 0 && MMT(x)->map[tnodeid].right < MMT(x)->state->total)
+        {
+            mmtree_view_tnode(x, MMT(x)->map[tnodeid].right, fp);
+        }
+    }
+    return ;
+}
+
+void mmtree_view_tree(void *x, int rootid, FILE *fp)
+{
+    int id = 0;
+
+    if(x && rootid > 0)
+    {
+        MUTEX_LOCK(MMT(x)->mutex);
+        if(MMT(x)->map && MMT(x)->state && rootid < MMT(x)->state->total)
+        {
+             mmtree_view_tnode(x, rootid, fp);
+        }
+        MUTEX_UNLOCK(MMT(x)->mutex);
+    }
+    return ;
+}
+
+/* remove node */
+void mmtree_remove(void *x, int tnodeid, int *key)
+{
+    int id = 0, pid = 0, z = 0;
+
+    if(x && tnodeid > 0)
+    {
+        MUTEX_LOCK(MMT(x)->mutex);
+        if(MMT(x)->map && MMT(x)->state && tnodeid < MMT(x)->state->total)
+        {
+            *key = MMT(x)->map[tnodeid].key;
+            if((id = MMT(x)->map[tnodeid].left) > 0)
+            {
+                //find max on left->right 
+                while(id > 0 && id < MMT(x)->state->total)
+                {
+                    if(MMT(x)->map[id].right > 0)
+                    {
+                        id = MMT(x)->map[id].right;
+                    }
+                    else break;
+                }
+                //reset node[id]->parent->right
+                pid = MMT(x)->map[id].parent;
+                if(id != MMT(x)->map[tnodeid].left && pid > 0 && pid < MMT(x)->state->total)
+                {
+                    z = MMT(x)->map[id].left;
+                    MMT(x)->map[pid].right = z;
+                    MMT(x)->map[z].parent = pid;
+                }
+            }
+            else if((id = MMT(x)->map[tnodeid].right) > 0)
+            {
+                while(id > 0 && id < MMT(x)->state->total)
+                {
+                    if(MMT(x)->map[id].left != 0)
+                    {
+                        id = MMT(x)->map[id].left;
+                    }
+                    else break;
+                }
+                pid = MMT(x)->map[id].parent;
+                if(id != MMT(x)->map[tnodeid].right && pid > 0 && pid < MMT(x)->state->total)
+                {
+                    z = MMT(x)->map[id].right;
+                    MMT(x)->map[pid].left = z;
+                    MMT(x)->map[z].parent = pid;
+                }
+            }
+            if(id  > 0 && MMT(x)->state->total)
+            {
+                if(id != MMT(x)->map[tnodeid].left) 
+                    MMT(x)->map[id].left  = MMT(x)->map[tnodeid].left;
+                if(id != MMT(x)->map[tnodeid].right) 
+                    MMT(x)->map[id].right = MMT(x)->map[tnodeid].right;
+                pid = MMT(x)->map[tnodeid].parent;
+                MMT(x)->map[id].parent = pid;
+                if(pid > 0 && pid < MMT(x)->state->total)
+                {
+                    if(MMT(x)->map[id].key < MMT(x)->map[pid].key)
+                        MMT(x)->map[pid].left = id;
+                    else
+                        MMT(x)->map[pid].right = id;
+                }
+            }
+            //add to qleft
+            memset(&(MMT(x)->map[tnodeid]), 0, sizeof(MTNODE));
+            if(MMT(x)->state->qleft == 0)
+            {
+                MMT(x)->state->qfirst = MMT(x)->state->qlast = tnodeid;
+            }
+            else
+            {
+                z = MMT(x)->state->qlast;
+                MMT(x)->map[z].parent = tnodeid;
+                MMT(x)->state->qlast = tnodeid;
+            }
+            MMT(x)->state->qleft++;
+            MMT(x)->state->left++;
+            //fprintf(stdout, "%s::%d %d start:%p state:%p map:%p current:%d left:%d total:%d qleft:%d qfirst:%d qlast:%d\n", __FILE__, __LINE__, id, MMT(x)->start, MMT(x)->state, MMT(x)->map, MMT(x)->state->current, MMT(x)->state->left, MMT(x)->state->total, MMT(x)->state->qleft, MMT(x)->state->qfirst, MMT(x)->state->qlast);
+  
+        }
+        MUTEX_UNLOCK(MMT(x)->mutex);
+    }
+    return ;
+}
+/* remove node */
+void mmtree_remove_tnode(void *x, int tnodeid)
+{
+    int id = 0;
+
+    if(x)
+    {
+        if(MMT(x)->map[tnodeid].left > 0 && MMT(x)->map[tnodeid].left < MMT(x)->state->total)
+        {
+            mmtree_remove_tnode(x, MMT(x)->map[tnodeid].left);
+        }
+        if(MMT(x)->map[tnodeid].right > 0 && MMT(x)->map[tnodeid].right < MMT(x)->state->total)
+        {
+            mmtree_remove_tnode(x, MMT(x)->map[tnodeid].right);
+        }
+        memset(&(MMT(x)->map[tnodeid]), 0, sizeof(MTNODE));
+        if(MMT(x)->state->qleft == 0)
+        {
+            MMT(x)->state->qfirst = MMT(x)->state->qlast = tnodeid;
+        }
+        else
+        {
+            id = MMT(x)->state->qlast;
+            MMT(x)->map[id].parent = tnodeid;
+            MMT(x)->state->qlast = tnodeid;
+        }
+        MMT(x)->state->qleft++;
+        MMT(x)->state->left++;
+    }
+    return ;
+}
+
+/* remove tree */
+void mmtree_remove_tree(void *x, int rootid)
+{
+    if(x && rootid > 0)
+    {
+        MUTEX_LOCK(MMT(x)->mutex);
+        mmtree_remove_tnode(x, rootid);
+        fprintf(stdout, "%s::%d rootid:%d start:%p state:%p map:%p current:%d left:%d total:%d qleft:%d qfirst:%d qlast:%d\n", __FILE__, __LINE__, rootid, MMT(x)->start, MMT(x)->state, MMT(x)->map, MMT(x)->state->current, MMT(x)->state->left, MMT(x)->state->total, MMT(x)->state->qleft, MMT(x)->state->qfirst, MMT(x)->state->qlast);
+ 
+        MUTEX_UNLOCK(MMT(x)->mutex);
+    }
+    return ;
+}
+
+//close mmtree
+void mmtree_close(void *x)
+{
+    if(x)
+    {
+        //fprintf(stdout, "%s::%d start:%p state:%p map:%p current:%d left:%d total:%d qleft:%d qfirst:%d qlast:%d sizeof(MTSTATE):%d\n", __FILE__, __LINE__, MMT(x)->start, MMT(x)->state, MMT(x)->map, MMT(x)->state->current, MMT(x)->state->left, MMT(x)->state->total, MMT(x)->state->qleft, MMT(x)->state->qfirst, MMT(x)->state->qlast, sizeof(MTSTATE));
+        MMT_MUNMAP(x);
+        MUTEX_DESTROY(MMT(x)->mutex);
+        if(MMT(x)->fd) close(MMT(x)->fd);
+        free(x);
+    }
+}
+
+
+#ifdef _DEBUG_MMTREE
+int main(int argc, char **argv) 
+{
+    void *mmtree = NULL;
+    int i = 0, id = 0, j = 0, old = 0;
+
+    if((mmtree = mmtree_init("/tmp/test.mmtree")))
+    {
+        for(i = 1; i < 200; i++)
+        {
+            id = mmtree_new_tree(mmtree, i);
+            for(j = 1000; j > 0; j--)
+            {
+                old = 0;
+                mmtree_insert(mmtree, id, j, &old);
+            }
+        }
+        old = 0;
+        mmtree_remove(mmtree, 8, &old);
+        //fprintf(stdout, "old:%d\n", old);
+        //mmtree_view_tree(mmtree, 1, stdout);
+        mmtree_remove_tree(mmtree, 1);
+        //mmtree_view_tree(mmtree, 1, stdout);
+        mmtree_close(mmtree);
+    }
+}
+//gcc -o mmtree mmtree.c -D_DEBUG_MMTREE -g && ./mmtree
+#endif

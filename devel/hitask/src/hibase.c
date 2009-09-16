@@ -580,7 +580,7 @@ int hibase_view_table(HIBASE *hibase, int tableid, char *block)
             if(p != pp) --p;
             p += sprintf(p, "%s", "]})");
             ret = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
-                "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (p - buf), buf);
+                "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (long)(p - buf), buf);
         }
         MUTEX_UNLOCK(hibase->mutex);
     }
@@ -614,7 +614,7 @@ int hibase_list_table(HIBASE *hibase, char *block)
                 --p;
                 p += sprintf(p, "%s", "]})");
                 ret = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
-                "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (p - buf), buf);
+                "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (long)(p - buf), buf);
             }
         }
         MUTEX_UNLOCK(hibase->mutex);
@@ -661,7 +661,7 @@ int hibase_view_database(HIBASE *hibase, char *block)
             if(p != pp)--p;
             p += sprintf(p, "%s", "}})");
             ret = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
-                "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (p - buf), buf);
+                "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (long)(p - buf), buf);
         }
         MUTEX_UNLOCK(hibase->mutex);
     }
@@ -867,7 +867,7 @@ int hibase_view_pnode_childs(HIBASE *hibase, int pnodeid, char *block)
             }
             p += sprintf(p, "%s", "]})\r\n");
             n = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
-                "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (p - buf), buf);
+                "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (long)(p - buf), buf);
         }
         MUTEX_UNLOCK(hibase->mutex);
     }
@@ -1190,7 +1190,7 @@ int hibase_view_templates(HIBASE *hibase, int pnodeid, char *block)
             }
             p += sprintf(p, "%s", "]})");
             n = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
-                "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (p - buf), buf);
+                "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (long)(p - buf), buf);
         }
         MUTEX_UNLOCK(hibase->mutex);
     }
