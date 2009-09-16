@@ -14,8 +14,8 @@ typedef struct _MTSTATE
     int current;
     int total;
     int qleft;
-    int qleft_first;
-    int qleft_last;
+    int qfirst;
+    int qlast;
 }MTSTATE;
 typedef struct _MTREE
 {

@@ -127,22 +127,21 @@ int mtree_insert(void *x, int parentid, int key, int *old)
                 }
                 if(MT(x)->state->qleft > 0)
                 {
-                    id = MT(x)->state->qleft_first;
-                    MT(x)->state->qleft_first = MT(x)->map[id].parent;
+                    id = MT(x)->state->qfirst;
+                    MT(x)->state->qfirst = MT(x)->map[id].parent;
                     MT(x)->state->qleft--;
                 }
                 else
                 {
                     id = ++(MT(x)->state->current);
-                    MT(x)->state->left--;
                 }
+                MT(x)->state->left--;
                 MT(x)->map[id].parent = nodeid;
                 MT(x)->map[id].key = key;
                 if(key > MT(x)->map[nodeid].key) 
                     MT(x)->map[nodeid].right = id;
                 else
                     MT(x)->map[nodeid].left = id;
-                fprintf(stdout, "%s::%d OK id:%d pid:%d key:%d\n", __FILE__, __LINE__, id, parentid, key);
             }
             else
             {
@@ -183,6 +182,88 @@ void mtree_view(void *x, int parentid, FILE *fp)
         if(MT(x)->map && MT(x)->state && parentid < MT(x)->state->total)
         {
              mtree_view_tnode(x, parentid, fp);
+        }
+        MUTEX_UNLOCK(MT(x)->mutex);
+    }
+    return ;
+}
+
+/* remove node */
+void mtree_remove_node(void *x, int tnodeid, int *key)
+{
+    int id = 0, pid = 0;
+
+    if(x && tnodeid > 0)
+    {
+        MUTEX_LOCK(MT(x)->mutex);
+        if(MT(x)->map && MT(x)->state && tnodeid < MT(x)->state->total)
+        {
+            *key = MT(x)->map[tnodeid].key;
+            if((id = MT(x)->map[tnodeid].left) > 0)
+            {
+                //find max on left->right 
+                while(id > 0 && id < MT(x)->state->total)
+                {
+                    if(MT(x)->map[id].right > 0)
+                    {
+                        id = MT(x)->map[id].right;
+                    }
+                    else break;
+                }
+                //reset node[id]->parent->right
+                pid = MT(x)->map[id].parent;
+                if(id != tnodeid && pid > 0 && pid < MT(x)->state->total)
+                {
+                    MT(x)->map[pid].right = 0;
+                }
+            }
+            else if((id = MT(x)->map[tnodeid].right) > 0)
+            {
+                while(id > 0 && id < MT(x)->state->total)
+                {
+                    if(MT(x)->map[id].left != 0)
+                    {
+                        id = MT(x)->map[id].left;
+                    }
+                    else break;
+                }
+                pid = MT(x)->map[id].parent;
+                if(id != tnodeid && pid > 0 && pid < MT(x)->state->total)
+                {
+                    MT(x)->map[pid].left = 0;
+                }
+            }
+            if(id  > 0 && MT(x)->state->total)
+            {
+                MT(x)->map[id].left = 0;
+                if(id != MT(x)->map[tnodeid].left) 
+                    MT(x)->map[id].left  = MT(x)->map[tnodeid].left;
+                MT(x)->map[id].right = 0;
+                if(id != MT(x)->map[tnodeid].right) 
+                    MT(x)->map[id].right = MT(x)->map[tnodeid].right;
+                pid = MT(x)->map[id].parent = MT(x)->map[tnodeid].parent;
+                if(pid > 0 && pid < MT(x)->state->total)
+                {
+                    if(MT(x)->map[id].key > MT(x)->map[pid].key)
+                        MT(x)->map[pid].left = id;
+                    else
+                        MT(x)->map[pid].right = id;
+                }
+            }
+            //add to qleft
+            memset(&(MT(x)->map[tnodeid]), 0, sizeof(MTNODE));
+            if(MT(x)->state->qleft == 0)
+            {
+                MT(x)->state->qfirst = MT(x)->state->qlast = tnodeid;
+            }
+            else
+            {
+                id = MT(x)->state->qlast;
+                MT(x)->map[id].parent = tnodeid;
+                MT(x)->state->qlast = tnodeid;
+            }
+            MT(x)->state->qleft++;
+            MT(x)->state->left--;
         }
         MUTEX_UNLOCK(MT(x)->mutex);
     }
