@@ -39,11 +39,15 @@ do                                                                          \
 {                                                                           \
     if(MT(x))                                                               \
     {                                                                       \
-        if(MT(x)->size == 0) MT(x)->size = sizeof(MTSTATE);                 \
+        if(MT(x)->size == 0)                                                \
+        {                                                                   \
+            MT(x)->size = sizeof(MTSTATE);                                  \
+        }                                                                   \
         MT(x)->size += MT_INCRE_NUM * sizeof(MTNODE);                       \
         ftruncate(MT(x)->fd, MT(x)->size);                                  \
         MT_MMAP(x, MT(x)->size);                                            \
         MT(x)->state->left += MT_INCRE_NUM;                                 \
+        if(MT(x)->state->left == MT_INCRE_NUM) MT(x)->state->left--;        \
         MT(x)->state->total += MT_INCRE_NUM;                                \
     }                                                                       \
 }while(0)
@@ -89,18 +93,14 @@ int mtree_insert(void *x, int parentid, int key, int *old)
     int id = 0, nodeid = 0;
     MTNODE *node = NULL;
 
-    if(x && MT(x)->state)
+    if(x && parentid >= 0)
     {
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
         MUTEX_LOCK(MT(x)->mutex);
-        if(parentid > 0 && parentid < MT(x)->state->total)
+        if(MT(x)->state && MT(x)->map && parentid < MT(x)->state->total)
         {
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
             nodeid = parentid;
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
-            while(nodeid != 0)
+            while(nodeid >= 0)
             {
-        fprintf(stdout, "%s::%d nodeid:%d\n", __FILE__, __LINE__, nodeid);
                 node = &(MT(x)->map[nodeid]);
                 if(key == node->key)
                 {
@@ -118,44 +118,75 @@ int mtree_insert(void *x, int parentid, int key, int *old)
                     nodeid = node->left;
                 }
             }
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
-        }
-        //new node
-        if(id == 0)
-        {
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
-            if(MT(x)->state->left == 0)
+            //new node
+            if(id == 0)
             {
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
-                MT_INCRE(x);
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
-            }
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
-            if(MT(x)->state->qleft > 0)
-            {
-                id = MT(x)->state->qleft_first;
-                MT(x)->state->qleft_first = MT(x)->map[id].parent;
-                MT(x)->state->qleft--;
+                if(MT(x)->state->left == 0)
+                {
+                    MT_INCRE(x);
+                }
+                if(MT(x)->state->qleft > 0)
+                {
+                    id = MT(x)->state->qleft_first;
+                    MT(x)->state->qleft_first = MT(x)->map[id].parent;
+                    MT(x)->state->qleft--;
+                }
+                else
+                {
+                    id = ++(MT(x)->state->current);
+                    MT(x)->state->left--;
+                }
+                MT(x)->map[id].parent = nodeid;
+                MT(x)->map[id].key = key;
+                if(key > MT(x)->map[nodeid].key) 
+                    MT(x)->map[nodeid].right = id;
+                else
+                    MT(x)->map[nodeid].left = id;
+                fprintf(stdout, "%s::%d OK id:%d pid:%d key:%d\n", __FILE__, __LINE__, id, parentid, key);
             }
             else
             {
-                id = ++(MT(x)->state->current);
-                MT(x)->state->left--;
+                fprintf(stdout, "%s::%d old id:%d pid:%d key:%d\n", __FILE__, __LINE__, id, parentid, key);
             }
-        fprintf(stdout, "%s::%d OK id:%d\n", __FILE__, __LINE__, id);
-            MT(x)->map[id].parent = nodeid;
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
-            MT(x)->map[id].key = key;
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
-            if(key > MT(x)->map[nodeid].key) 
-                MT(x)->map[nodeid].right = id;
-            else
-                MT(x)->map[nodeid].left = id;
-        fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
         }
         MUTEX_UNLOCK(MT(x)->mutex);
     }
     return id;
+}
+
+void mtree_view_tnode(void *x, int tnodeid, FILE *fp)
+{
+    int id = 0;
+
+    if(x)
+    {
+        if(MT(x)->map[tnodeid].left > 0 && MT(x)->map[tnodeid].left < MT(x)->state->total)
+        {
+            mtree_view_tnode(x, MT(x)->map[tnodeid].left, fp);
+        }
+        fprintf(fp, "[%d]\n", MT(x)->map[tnodeid].key);
+        if(MT(x)->map[tnodeid].right > 0 && MT(x)->map[tnodeid].right < MT(x)->state->total)
+        {
+            mtree_view_tnode(x, MT(x)->map[tnodeid].right, fp);
+        }
+    }
+    return ;
+}
+
+void mtree_view(void *x, int parentid, FILE *fp)
+{
+    int id = 0;
+
+    if(x && parentid >= 0)
+    {
+        MUTEX_LOCK(MT(x)->mutex);
+        if(MT(x)->map && MT(x)->state && parentid < MT(x)->state->total)
+        {
+             mtree_view_tnode(x, parentid, fp);
+        }
+        MUTEX_UNLOCK(MT(x)->mutex);
+    }
+    return ;
 }
 
 //close mtree
@@ -175,18 +206,21 @@ void mtree_close(void *x)
 int main(int argc, char **argv) 
 {
     void *mtree = NULL;
-    int i = 0, j = 0, old = 0;
+    int i = 0, id = 0, j = 0, old = 0;
 
     if((mtree = mtree_init("/tmp/test.mtree")))
     {
-        for(i = 1; i < 1000; i++)
+        for(i = 1; i < 100; i++)
         {
-            for(j = 1; j < 10000; j++)
+            old = 0;
+            id = mtree_insert(mtree, 0, i, &old);
+            for(j = 100; j < 200; j++)
             {
                 old = 0;
-                mtree_insert(mtree, i, j, &old);
+                mtree_insert(mtree, id, j, &old);
             }
         }
+        mtree_view(mtree, 1, stdout);
         mtree_close(mtree);
     }
 }

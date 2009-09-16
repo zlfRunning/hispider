@@ -3,7 +3,6 @@
 #define MT_INCRE_NUM   1000
 typedef struct _MTNODE
 {
-    void *data;
     int key;
     int left;
     int right;
