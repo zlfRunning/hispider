@@ -101,7 +101,7 @@ void *mmtree_init(char *file)
     return x;
 }
 /* insert new root */
-int mmtree_new_tree(void *x, int key)
+int mmtree_new_tree(void *x, int key, int data)
 {
     int id = -1;
     if(x)
@@ -149,6 +149,7 @@ int mmtree_new_tree(void *x, int key)
             {
                 //fprintf(stdout, "%s::%d id:%d current:%d total:%d\n", __FILE__, __LINE__, id, MMT(x)->state->current, MMT(x)->state->total);
                 MMT(x)->map[id].key = key;
+                MMT(x)->map[id].data = data;
                 MMT(x)->state->left--;
             }
         }
@@ -158,7 +159,7 @@ int mmtree_new_tree(void *x, int key)
 }
 
 /* insert new node */
-int mmtree_insert(void *x, int rootid, int key, int *old)
+int mmtree_insert(void *x, int rootid, int key, int data, int *old)
 {
     int id = 0, nodeid = 0;
     MTNODE *node = NULL;
@@ -174,8 +175,9 @@ int mmtree_insert(void *x, int rootid, int key, int *old)
                 node = &(MMT(x)->map[nodeid]);
                 if(key == node->key)
                 {
-                    *old = id = nodeid;
-                    break;
+                    id = nodeid;
+                    *old = node->data;
+                    goto end;
                 }
                 else if(key > node->key)
                 {
@@ -211,6 +213,7 @@ int mmtree_insert(void *x, int rootid, int key, int *old)
                 //memset(&(MMT(x)->map[id]), 0, sizeof(MTNODE));
                 MMT(x)->map[id].parent = nodeid;
                 MMT(x)->map[id].key = key;
+                MMT(x)->map[id].data = data;
                 if(key > MMT(x)->map[nodeid].key) 
                     MMT(x)->map[nodeid].right = id;
                 else
@@ -219,6 +222,138 @@ int mmtree_insert(void *x, int rootid, int key, int *old)
             else
             {
                 //fprintf(stdout, "%s::%d old id:%d pid:%d key:%d\n", __FILE__, __LINE__, id, parentid, key);
+            }
+        }
+end:
+        MUTEX_UNLOCK(MMT(x)->mutex);
+    }
+    return id;
+}
+
+/* get node key/data */
+int mmtree_get(void *x, int tnodeid, int *key, int *data)
+{
+    int id = -1;
+
+    if(x && tnodeid > 0)
+    {
+        MUTEX_LOCK(MMT(x)->mutex);
+        if(MMT(x)->map && MMT(x)->state && tnodeid <  MMT(x)->state->total)
+        {
+            *key = MMT(x)->map[tnodeid].key;
+            *data = MMT(x)->map[tnodeid].data;
+            id = tnodeid;
+        }
+        MUTEX_UNLOCK(MMT(x)->mutex);
+    }
+    return id;
+}
+
+/* get tree->min key/data */
+int mmtree_min(void *x, int rootid, int *key, int *data)
+{
+    int id = -1;
+
+    if(x && rootid > 0)
+    {
+        MUTEX_LOCK(MMT(x)->mutex);
+        if(MMT(x)->map && MMT(x)->state && rootid <  MMT(x)->state->total)
+        {
+            id = rootid;
+            while(id != 0)
+            {
+                if(MMT(x)->map[id].left > 0)
+                {
+                    id = MMT(x)->map[id].left;
+                }
+                else break;
+            }
+            if(id > 0 && MMT(x)->state->total)
+            {
+                *key = MMT(x)->map[id].key;
+                *data = MMT(x)->map[id].data;
+            }
+        }
+        MUTEX_UNLOCK(MMT(x)->mutex);
+    }
+    return id;
+}
+
+/* get tree->max key/data */
+int mmtree_max(void *x, int rootid, int *key, int *data)
+{
+    int id = -1;
+
+    if(x && rootid > 0)
+    {
+        MUTEX_LOCK(MMT(x)->mutex);
+        if(MMT(x)->map && MMT(x)->state && rootid <  MMT(x)->state->total)
+        {
+            id = rootid;
+            while(id != 0)
+            {
+                if(MMT(x)->map[id].right > 0)
+                {
+                    id = MMT(x)->map[id].right;
+                }
+                else break;
+            }
+            if(id > 0 && MMT(x)->state->total)
+            {
+                *key = MMT(x)->map[id].key;
+                *data = MMT(x)->map[id].data;
+            }
+        }
+        MUTEX_UNLOCK(MMT(x)->mutex);
+    }
+    return id;
+}
+
+/* get next node key/data */
+int mmtree_next(void *x, int tnodeid, int *key, int *data)
+{
+    int id = -1, self = 0, parentid = 0;
+
+    if(x && tnodeid > 0)
+    {
+        MUTEX_LOCK(MMT(x)->mutex);
+        if(MMT(x)->map && MMT(x)->state && tnodeid <  MMT(x)->state->total)
+        {
+            id = tnodeid;
+            self = MMT(x)->map[tnodeid].key;
+            parentid = MMT(x)->map[id].parent;
+            if(MMT(x)->map[id].right > 0)
+            {
+                id = MMT(x)->map[id].right;
+                while(id != 0)
+                {
+                    if(MMT(x)->map[id].right > 0)
+                    {
+                        id = MMT(x)->map[id].right;
+                    }
+                    else break;
+                }
+            }
+            else
+            {
+                if(ID_IS_VALID(hibase, tnodeio, parentid))
+                {
+                    if(MMT(x)->map[tnodeid].key > self)
+                        id = MMT(x)->map[tnodeid].parent;
+                    else 
+                    {
+                        id = MMT(x)->map[tnodeid].parent;
+                    }
+                }
+                else 
+                {
+                    id = -1;
+                }
+            }
+            if(ID_IS_VALID(hibase, tnodeio, id))
+            {
+                *key = MMT(x)->map[id].key;
+                *data = MMT(x)->map[id].data;
             }
         }
         MUTEX_UNLOCK(MMT(x)->mutex);
@@ -237,7 +372,7 @@ void mmtree_view_tnode(void *x, int tnodeid, FILE *fp)
         {
             mmtree_view_tnode(x, MMT(x)->map[tnodeid].left, fp);
         }
-        fprintf(fp, "[%d:%d]\n", tnodeid, MMT(x)->map[tnodeid].key);
+        fprintf(fp, "[%d:%d:%d]\n", tnodeid, MMT(x)->map[tnodeid].key, MMT(x)->map[tnodeid].data);
         if(MMT(x)->map[tnodeid].right > 0 && MMT(x)->map[tnodeid].right < MMT(x)->state->total)
         {
             mmtree_view_tnode(x, MMT(x)->map[tnodeid].right, fp);
@@ -262,8 +397,26 @@ void mmtree_view_tree(void *x, int rootid, FILE *fp)
     return ;
 }
 
+/* set data */
+int mmtree_set_data(void *x, int tnodeid, int data)
+{
+    int old = -1;
+
+    if(x && tnodeid > 0)
+    {
+        MUTEX_LOCK(MMT(x)->mutex);
+        if(MMT(x)->map && MMT(x)->state && tnodeid < MMT(x)->state->total)
+        {
+            old = MMT(x)->map[tnodeid].data;
+            MMT(x)->map[tnodeid].data = data;
+        }
+        MUTEX_UNLOCK(MMT(x)->mutex);
+    }
+    return old;
+}
+
 /* remove node */
-void mmtree_remove(void *x, int tnodeid, int *key)
+void mmtree_remove(void *x, int tnodeid, int *key, int *data)
 {
     int id = 0, pid = 0, z = 0;
 
@@ -273,6 +426,7 @@ void mmtree_remove(void *x, int tnodeid, int *key)
         if(MMT(x)->map && MMT(x)->state && tnodeid < MMT(x)->state->total)
         {
             *key = MMT(x)->map[tnodeid].key;
+            *data = MMT(x)->map[tnodeid].data;
             if((id = MMT(x)->map[tnodeid].left) > 0)
             {
                 //find max on left->right 
@@ -412,22 +566,25 @@ void mmtree_close(void *x)
 int main(int argc, char **argv) 
 {
     void *mmtree = NULL;
-    int i = 0, id = 0, j = 0, old = 0;
+    int i = 0, id = 0, j = 0, old = 0, key = 0, data = 0;
 
     if((mmtree = mmtree_init("/tmp/test.mmtree")))
     {
         for(i = 1; i < 200; i++)
         {
-            id = mmtree_new_tree(mmtree, i);
+            data = i - 1;
+            id = mmtree_new_tree(mmtree, i, data);
             for(j = 1000; j > 0; j--)
             {
                 old = 0;
-                mmtree_insert(mmtree, id, j, &old);
+                data = i * j;
+                id = mmtree_insert(mmtree, id, j, data, &old);
+                if(id == 100) fprintf(stdout, "key:%d data:%d\n", j, data);
             }
         }
-        old = 0;
-        mmtree_remove(mmtree, 8, &old);
-        //fprintf(stdout, "old:%d\n", old);
+        key = data = 0;
+        mmtree_remove(mmtree, 100, &key, &data);
+        fprintf(stdout, "key:%d data:%d\n", key, data);
         //mmtree_view_tree(mmtree, 1, stdout);
         mmtree_remove_tree(mmtree, 1);
         //mmtree_view_tree(mmtree, 1, stdout);

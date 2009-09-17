@@ -21,7 +21,7 @@ extern "C" {
 #define TABLE_INCRE_NUM         256
 #define TEMPLATE_INCRE_NUM      1000
 #define TNODE_INCRE_NUM         10000
-#define URI_INCRE_NUM         10000
+#define URI_INCRE_NUM           10000
 #define URLMAP_INCRE_NUM        10000
 #define URLNODE_INCRE_NUM       10000
 #define TNODE_CHILDS_MAX        10000
@@ -30,6 +30,9 @@ extern "C" {
 #define TAB_STATUS_OK           1
 #define FIELD_STATUS_INIT       0
 #define FIELD_STATUS_OK         1
+#define TNODE_STATUS_ERR      -1
+#define TNODE_STATUS_INIT     0
+#define TNODE_STATUS_OK       1
 #define TEMPLATE_STATUS_ERR     -1
 #define TEMPLATE_STATUS_INIT    0
 #define TEMPLATE_STATUS_OK      1
@@ -71,19 +74,13 @@ typedef struct _TNODE
     short status;
     short level;
     int id;
-    int uid;
-    int nchilds;
     int parent;
-    int first;
-    int last;
-    int prev;
-    int next;
+    int nchilds;
+    int childs_rootid;
     int ntemplates;
-    int template_first;
-    int template_last;
+    int templates_rootid;
     int nurlnodes;
-    int urlnode_first;
-    int urlnode_last;
+    int urlnodes_rootid;
     char name[TNODE_NAME_MAX];
 }TNODE;
 typedef struct _URLNODE
