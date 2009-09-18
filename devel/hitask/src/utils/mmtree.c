@@ -100,6 +100,7 @@ void *mmtree_init(char *file)
     }
     return x;
 }
+
 /* insert new root */
 int mmtree_new_tree(void *x, int key, int data)
 {
@@ -109,29 +110,8 @@ int mmtree_new_tree(void *x, int key, int data)
         MUTEX_LOCK(MMT(x)->mutex);
         if(MMT(x)->state && MMT(x)->map)
         {
-            if(MMT(x)->state->left == 0)
+            if(MMT(x)->state->left < 2)
             {
-                /*
-                if(MMT(x)->start && MMT(x)->size > 0)
-                {
-                    msync(MMT(x)->start, MMT(x)->size, MS_SYNC);
-                    munmap(MMT(x)->start, MMT(x)->size);
-                    MMT(x)->start = NULL;
-                    MMT(x)->state = NULL;
-                    MMT(x)->map = NULL;
-                }
-                MMT(x)->size += MMTREE_INCRE_NUM * sizeof(MTNODE);
-                ftruncate(MMT(x)->fd, MMT(x)->size);
-                if((MMT(x)->start = mmap(NULL, MMT(x)->size, PROT_READ|PROT_WRITE,
-                                MAP_SHARED, MMT(x)->fd, 0)) != (void *)-1)
-                {                                                                   
-                    MMT(x)->state = (MTSTATE *)MMT(x)->start;                         
-                    MMT(x)->map = (MTNODE *)(MMT(x)->start + sizeof(MTSTATE));        
-                    MMT(x)->state->left += MMTREE_INCRE_NUM;
-                    if(MMT(x)->state->total == 0) MMT(x)->state->left--;
-                    MMT(x)->state->total += MMTREE_INCRE_NUM;
-                }
-                */
                 MMT_INCRE(x);
             }
             if(MMT(x)->state->qleft > 0)

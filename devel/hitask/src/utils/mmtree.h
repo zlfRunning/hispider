@@ -8,6 +8,7 @@ typedef struct _MTNODE
     int left;
     int right;
     int parent;
+    int color;
 }MTNODE;
 typedef struct _MTSTATE
 {
