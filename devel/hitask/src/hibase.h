@@ -89,25 +89,12 @@ typedef struct _URLNODE
     short level;
     int id;
     int parentid;
-    int nchilds;
+    int tnodeid;
     int urlid;
-    int nodeid;
-    int node_prev;
-    int node_next;
-    int first;
-    int last;
-    int prev;
-    int next;
+    int nchilds;
+    int childs_rootid;
+    int tnode_mid;
 }URLNODE;
-typedef struct _URI
-{
-    int urlnode_treeid;
-    int tnode_treeid;
-}URI;
-typedef struct _URLMAP
-{
-    int map[HI_URLMAP_SIZE];
-}URLMAP;
 #define REG_IS_URL               0x01
 #define REG_IS_FILE              0x02
 #define REG_IS_NEED_CLEARHTML    0x04
@@ -144,8 +131,8 @@ typedef struct _ITEMPLATE
     int   tableid;
     IREGX linkmap;
     int   flags;
-    int prev;
-    int next;
+    int   tnodeid;
+    int   mmid;
 }ITEMPLATE;
 /* state info */
 typedef struct _ISTATE
@@ -228,10 +215,10 @@ typedef struct _HIBASE
     int     (*get_tnode)(struct _HIBASE *, int id, TNODE *tnode);
     int     (*get_tnode_templates)(struct _HIBASE *, int id, ITEMPLATE **templates);
     void    (*free_templates)(ITEMPLATE *templates);
-    int     (*get_tnode_childs)(struct _HIBASE *, int id, TNODE *tnodes);
+    int     (*get_tnode_childs)(struct _HIBASE *, int id, TNODE **tnodes);
     int     (*view_tnode_childs)(struct _HIBASE *, int id, char *block);
-    int     (*update_tnode)(struct _HIBASE *, int id, char *name);
-    int     (*delete_tnode)(struct _HIBASE *, int id);
+    int     (*update_tnode)(struct _HIBASE *, int parentid, int id, char *name);
+    int     (*delete_tnode)(struct _HIBASE *, int parentid, int id);
     int     (*add_urlnode)(struct _HIBASE *, int nodeid, int parentid, int urlid, int level);
     int     (*update_urlnode)(struct _HIBASE *, int urlnodeid, int level);
     int     (*delete_urlnode)(struct _HIBASE *, int urlnodeid);

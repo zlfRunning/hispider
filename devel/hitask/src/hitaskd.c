@@ -1017,10 +1017,10 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         else goto err_end;
                         break;
                     case E_OP_NODE_UPDATE :
-                        if(nodeid > 0 && name)
+                        if(parentid >= 0 && nodeid > 0 && name)
                         {
                             DEBUG_LOGGER(hitaskd_logger, "op:%d id:%d name:%s", op, nodeid, name);
-                            id = hibase->update_tnode(hibase, nodeid, name);
+                            id = hibase->update_tnode(hibase, parentid, nodeid, name);
                             n = sprintf(buf, "%d\r\n", id);
                             n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html;charset=%s\r\n"
                                     "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", 
@@ -1030,10 +1030,10 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         }else goto err_end;
                         break;
                     case E_OP_NODE_DELETE :
-                        if(nodeid > 0 || name)
+                        if(parentid >= 0 && nodeid > 0 || name)
                         {
                             DEBUG_LOGGER(hitaskd_logger, "op:%d id:%d", op, nodeid);
-                            id = hibase->delete_tnode(hibase, nodeid);
+                            id = hibase->delete_tnode(hibase, parentid, nodeid);
                             n = sprintf(buf, "%d\r\n", id);
                             n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html;charset=%s\r\n"
                                     "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", 
