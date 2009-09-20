@@ -93,7 +93,8 @@ typedef struct _URLNODE
     int urlid;
     int nchilds;
     int childs_rootid;
-    int tnode_mid;
+    int tnode_mmid;
+    int mmid;
 }URLNODE;
 #define REG_IS_URL               0x01
 #define REG_IS_FILE              0x02

@@ -32,6 +32,7 @@ void *mmtree_init(char *file);
 int mmtree_new_tree(void *mmtree, int key, int data);
 int mmtree_insert(void *mmtree, int rootid, int key, int data, int *old);
 int mmtree_get(void *mmtree, int nodeid, int *key, int *data);
+int mmtree_find(void *mmtree, int rootid, int key, int *data);
 int mmtree_min(void *mmtree, int rootid, int *key, int *data);
 int mmtree_max(void *mmtree, int rootid, int *key, int *data);
 int mmtree_next(void *mmtree, int rootid, int nodeid, int *key, int *data);

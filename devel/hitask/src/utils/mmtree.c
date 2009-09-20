@@ -229,6 +229,38 @@ int mmtree_get(void *x, int tnodeid, int *key, int *data)
     return id;
 }
 
+/* find key/data */
+int mmtree_find(void *x, int rootid, int key, int *data)
+{
+    int id = -1;
+
+    if(x && rootid > 0)
+    {
+        MUTEX_LOCK(MMT(x)->mutex);
+        if(MMT(x)->map && MMT(x)->state && rootid <  MMT(x)->state->total)
+        {
+            while(id != 0 && id < MMT(x)->state->total)
+            {
+                if(key == MMT(x)->map[id].key)
+                {
+                    if(data) *data = MMT(x)->map[id].data;
+                    nodeid = id;
+                    break;
+                }
+                else if(key > MMT(x)->map[id].key)
+                {
+                    id = MMT(x)->map[id].right;
+                }
+                else
+                {
+                    id = MMT(x)->map[id].left;
+                }
+            }
+        }
+        MUTEX_UNLOCK(MMT(x)->mutex);
+    }
+    return tnodeid;
+}
 /* get tree->min key/data */
 int mmtree_min(void *x, int rootid, int *key, int *data)
 {
