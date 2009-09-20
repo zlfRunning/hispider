@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -70,7 +71,6 @@ void *mmtree_init(char *file)
 {
     void *x = NULL;
     struct stat  st = {0};
-    int size = 0;
 
     if((x = (MMTREE *)calloc(1, sizeof(MMTREE))))
     {
@@ -244,7 +244,6 @@ int mmtree_find(void *x, int rootid, int key, int *data)
                 if(key == MMT(x)->map[id].key)
                 {
                     if(data) *data = MMT(x)->map[id].data;
-                    nodeid = id;
                     break;
                 }
                 else if(key > MMT(x)->map[id].key)
@@ -259,7 +258,7 @@ int mmtree_find(void *x, int rootid, int key, int *data)
         }
         MUTEX_UNLOCK(MMT(x)->mutex);
     }
-    return tnodeid;
+    return id;
 }
 /* get tree->min key/data */
 int mmtree_min(void *x, int rootid, int *key, int *data)
@@ -420,8 +419,6 @@ end:
 /* view node */
 void mmtree_view_tnode(void *x, int tnodeid, FILE *fp)
 {
-    int id = 0;
-
     if(x)
     {
         if(MMT(x)->map[tnodeid].left > 0 && MMT(x)->map[tnodeid].left < MMT(x)->state->total)
@@ -439,8 +436,6 @@ void mmtree_view_tnode(void *x, int tnodeid, FILE *fp)
 
 void mmtree_view_tree(void *x, int rootid, FILE *fp)
 {
-    int id = 0;
-
     if(x && rootid > 0)
     {
         MUTEX_LOCK(MMT(x)->mutex);
@@ -472,7 +467,7 @@ int mmtree_set_data(void *x, int tnodeid, int data)
 }
 
 /* remove node */
-void mmtree_remove(void *x, int tnodeid, int *key, int *data)
+void mmtree_remove(void *x, int rootid, int tnodeid, int *key, int *data)
 {
     int id = 0, pid = 0, z = 0;
 
@@ -641,7 +636,7 @@ int main(int argc, char **argv)
             }
         }
         key = data = 0;
-        mmtree_remove(mmtree, 100, &key, &data);
+        mmtree_remove(mmtree, rootid, 100, &key, &data);
         fprintf(stdout, "key:%d data:%d\n", key, data);
         mmtree_view_tree(mmtree, 1, stdout);
         mmtree_remove_tree(mmtree, 1);

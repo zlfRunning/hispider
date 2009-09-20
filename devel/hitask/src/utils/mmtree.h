@@ -39,7 +39,7 @@ int mmtree_next(void *mmtree, int rootid, int nodeid, int *key, int *data);
 int mmtree_prev(void *mmtree, int rootid, int nodeid, int *key, int *data);
 int mmtree_set_data(void *mmtree, int nodeid, int data);
 void mmtree_view_tree(void *mmtree, int rootid, FILE *fp);
-void mmtree_remove(void *mmtree, int nodeid, int *key, int *data);
+void mmtree_remove(void *mmtree, int rootid, int nodeid, int *key, int *data);
 void mmtree_remove_tree(void *mmtree, int rootid);
 void mmtree_close(void *mmtree);
 #endif

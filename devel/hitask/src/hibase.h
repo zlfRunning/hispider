@@ -74,6 +74,8 @@ typedef struct _TNODE
     short status;
     short level;
     int id;
+    int uid;
+    int mmid;
     int parent;
     int nchilds;
     int childs_rootid;
@@ -138,15 +140,15 @@ typedef struct _ITEMPLATE
 /* state info */
 typedef struct _ISTATE
 {
+    int tnodeio_current;
+    int tnodeio_left;
+    int tnodeio_total;
     int templateio_current;
     int templateio_left;
     int templateio_total;
     int urlnodeio_current;
     int urlnodeio_left;
     int urlnodeio_total;
-    int uriio_current;
-    int uriio_left;
-    int uriio_total;
     int urlnode_task_current;
     int update_current;
 }ISTATE;

@@ -665,7 +665,7 @@ int hitaskd_newtask(CONN *conn)
         if((urlnodeid = hibase->pop_urlnode(hibase, &urlnode)) > 0 
                 && (urlid = urlnode.urlid) >= 0)
         {
-            fprintf(stdout, "urlid:%d parent:%d node:%d\n", urlnode.urlid, urlnode.parentid, urlnode.nodeid);
+            fprintf(stdout, "urlid:%d parent:%d node:%d\n", urlnode.urlid, urlnode.parentid, urlnode.tnodeid);
             //fprintf(stdout, "urlid:%d\n", urlnode.urlid);
             //fprintf(stdout, "%d::usernodeid:%d userid:%d\n", __LINE__, urlnodeid, urlid);
             if(urlnode.parentid> 0 && hibase->get_urlnode(hibase,urlnode.parentid,&parent) > 0)
@@ -826,7 +826,7 @@ do                                                                              
             ltask->get_url(ltask, urlnodes[i].urlid, buf);                                      \
             p += sprintf(p, "'%d':{'id':'%d', 'nodeid':'%d', 'level':'%d', "                    \
                     "'nchilds':'%d', 'url':'%s'},", urlnodes[i].id, urlnodes[i].id,             \
-                    urlnodes[i].nodeid, urlnodes[i].level, urlnodes[i].nchilds, buf);           \
+                    urlnodes[i].tnodeid, urlnodes[i].level, urlnodes[i].nchilds, buf);          \
         }                                                                                       \
         if(count > 0)--p;                                                                       \
         p += sprintf(p, "%s", "}})");                                                           \
@@ -1030,7 +1030,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         }else goto err_end;
                         break;
                     case E_OP_NODE_DELETE :
-                        if(parentid >= 0 && nodeid > 0 || name)
+                        if(parentid >= 0 && nodeid > 0)
                         {
                             DEBUG_LOGGER(hitaskd_logger, "op:%d id:%d", op, nodeid);
                             id = hibase->delete_tnode(hibase, parentid, nodeid);
@@ -1251,7 +1251,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         if(urlnodeid > 0 && hibase->get_urlnode_childs(hibase, 
                                     urlnodeid, &urlnodes)> 0)
                         {
-                            nodeid = urlnodes[0].nodeid;
+                            nodeid = urlnodes[0].tnodeid;
                             VIEW_URLNODES(conn, pp, p, buf, nodeid, urlnodes, i, n);
                             hibase->free_urlnodes(urlnodes);
                             goto end;
@@ -1651,7 +1651,7 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                             {
                                 nodeid = templates[i].linkmap.nodeid;
                                 parentid = urlnode->id;
-                                if(nodeid == urlnode->nodeid) parentid = urlnode->parentid;
+                                if(nodeid == urlnode->tnodeid) parentid = urlnode->parentid;
                                 level = 0;
                                 if(templates[i].linkmap.flag & REG_IS_LIST) level = 1;
                                 hibase->add_urlnode(hibase,nodeid,parentid,urlid,level);
@@ -1695,7 +1695,7 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                                     fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
                                         nodeid = templates[i].map[x].nodeid;
                                         parentid = urlnode->id;
-                                        if(nodeid == urlnode->nodeid) parentid = urlnode->parentid;
+                                        if(nodeid == urlnode->tnodeid) parentid = urlnode->parentid;
                                         level = 0;
                                     fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
                                         if(templates[i].map[x].flag & REG_IS_LIST) level = 1;
@@ -1758,14 +1758,14 @@ void histore_task_handler(void *arg)
     size_t ndata = 0;
 
     if(arg && (id  = (int)((long)arg)) > 0
-        && hibase->get_urlnode(hibase, id, &urlnode) > 0 && urlnode.nodeid > 0 
-        && hibase->get_tnode(hibase, urlnode.nodeid, &tnode) > 0 
+        && hibase->get_urlnode(hibase, id, &urlnode) > 0 && urlnode.tnodeid > 0 
+        && hibase->get_tnode(hibase, urlnode.tnodeid, &tnode) > 0 
         && (len = ltask->get_content(ltask, urlnode.urlid, &block)) > 0) 
     {
 
         //fprintf(stdout, "%s::%d ready for deal task:%d arg:%p\n", __FILE__, __LINE__, id, arg);
         if(len > sizeof(LDOCHEADER) && (docheader = (LDOCHEADER *)block)
-            && (count = hibase->get_tnode_templates(hibase, urlnode.nodeid, &templates)) > 0) 
+            && (count = hibase->get_tnode_templates(hibase, urlnode.tnodeid, &templates)) > 0) 
         {
             //fprintf(stdout, "%s::%d ready for deal url:%d nodeid:%d "
             //    "content_len:%d nurl:%d ntype:%d ncentent:%d\n", 
