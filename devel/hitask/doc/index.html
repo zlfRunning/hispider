@@ -410,7 +410,7 @@
                 htmlstr += "onclick='XEdit(event)'>✎</span>";
                 htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
                 htmlstr += "<span class='edelete' title='Delete' ";
-                htmlstr += "onclick='XDelete("+id+")'>✘</span>";
+                htmlstr += "onclick='XDelete("+id+","+pid+")'>✘</span>";
                 htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
                 htmlstr += "</div>";
                 oNode.innerHTML = htmlstr; 
@@ -499,7 +499,7 @@
                 Xdiv.style.display = 'inline';
                 var form = document.forms["editorform"];
                 form['op'].value = 'node_update';
-                form['pid'].value = '';
+                form['pid'].value = element.parentNode.parentNode.getAttribute('parent');
                 form['nodeid'].value = element.parentNode.parentNode.getAttribute('UID');
                 form['nodename'].focus();
                 form['nodename'].value = element.parentNode.parentNode.getAttribute('UName');
@@ -524,7 +524,8 @@
                 else if(op == 'node_update' && nodename)
                 {
                     if(nodeid > 0)
-                        argv = "op="+op+"&name="+encodeURIComponent(nodename)+"&nodeid="+nodeid;
+                    argv = "op="+op+"&name="+encodeURIComponent(nodename)
+                        +"&nodeid="+nodeid+"&parentid="+pid;
                     else 
                     {
                         UpdateNode(nodeid, nodename);
@@ -574,7 +575,7 @@
             }
 
             //delete node
-            function XDelete(nodeid)
+            function XDelete(nodeid, parentid)
             {
                 var xmlHttp = null;
                 var oNode = document.getElementById("node"+nodeid);
@@ -583,7 +584,7 @@
                     && confirm('Are you sure delete node:'+nodeid+' name:'+name+' ?') 
                     && (xmlHttp = CreateXMLHTTP()) != null)
                 {
-                    var argv = "op=node_delete&nodeid="+nodeid;
+                    var argv = "op=node_delete&nodeid="+nodeid+"&parentid="+parentid;
                     xmlHttp.open('POST', '/', true);
                     xmlHttp.setRequestHeader("Content-Length", argv.length);
                     xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
@@ -1902,9 +1903,9 @@
                         {
                             if(xmlHttp.status == 200)
                             {
+                                //alert(xmlHttp.responseText);
                                 ShowTemplates(xmlHttp.responseText);
                                 XTAdd(nodeid);
-                                //alert(xmlHttp.responseText);
                             }
                         }
                     }

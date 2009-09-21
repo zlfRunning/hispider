@@ -140,9 +140,6 @@ typedef struct _ITEMPLATE
 /* state info */
 typedef struct _ISTATE
 {
-    int tnodeio_current;
-    int tnodeio_left;
-    int tnodeio_total;
     int templateio_current;
     int templateio_left;
     int templateio_total;
