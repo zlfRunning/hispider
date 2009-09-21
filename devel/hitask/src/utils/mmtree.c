@@ -239,7 +239,8 @@ int mmtree_find(void *x, int rootid, int key, int *data)
         MUTEX_LOCK(MMT(x)->mutex);
         if(MMT(x)->map && MMT(x)->state && rootid <  MMT(x)->state->total)
         {
-            while(id != 0 && id < MMT(x)->state->total)
+            id = rootid;
+            while(id > 0 && id < MMT(x)->state->total)
             {
                 if(key == MMT(x)->map[id].key)
                 {
