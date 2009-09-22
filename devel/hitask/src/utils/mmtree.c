@@ -66,6 +66,36 @@ do                                                                          \
     }                                                                       \
 }while(0)
 
+#define MMT_ROTATE_LEFT(x, id, lid, rid)                                    \
+do                                                                          \
+{                                                                           \
+    if(x)                                                                   \
+    {                                                                       \
+        if((rid = MMT(x)->map[id].right) > 0)                               \
+        {                                                                   \
+            lid = MMT(x)->map[id].right = MMT(x)->map[rid].left;            \
+            if(lid > 0) MMT(x)->map[lid].parent = id;                       \
+            MMT(x)->map[rid].left = id;                                     \
+            MMT(x)->map[id].parent = rid;                                   \
+        }                                                                   \
+    }                                                                       \
+}while(0)
+
+#define MMT_ROTATE_RIGHT(x, id, lid, rid)                                   \
+do                                                                          \
+{                                                                           \
+    if(x)                                                                   \
+    {                                                                       \
+        if((lid = MMT(x)->map[id].left) > 0)                                \
+        {                                                                   \
+            rid = MMT(x)->map[id].left = MMT(x)->map[lid].right;            \
+            if(rid > 0)  MMT(x)->map[rid].parent = id;                      \
+            MMT(x)->map[lid].right = id;                                    \
+            MMT(x)->map[id].parent = lid;                                   \
+        }                                                                   \
+    }                                                                       \
+}while(0)
+
 /* init mmtree */
 void *mmtree_init(char *file)
 {
