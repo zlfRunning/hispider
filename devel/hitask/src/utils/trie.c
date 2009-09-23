@@ -158,6 +158,22 @@ int main(int argc, char **argv)
     }
     file = argv[1];
     if(argc > 2) txtfile = argv[2];
+    /*
+
+    void *trietab = NULL, *dp = NULL;
+    char *s = "adfdsfdsf";
+    int len = 0, id = 1000;
+
+    if(trietab = TRIETAB_INIT())
+    {
+        if((len = strlen(s)) > 0)
+        {
+            dp = (void *)((long)(id));
+            TRIETAB_RADD(trietab, s, len, pdata);
+        }
+        TRIETAB_CLEAN(trietab);
+    }
+    */
     if((trietab = TRIETAB_INIT()))
     {
         if((fp = fopen(file, "r")))

@@ -8,94 +8,138 @@
 #include "mmtree.h"
 #include "mutex.h"
 #define MMT(px) ((MMTREE *)px)
-#define MMT_MUNMAP(x)                                                        \
-do                                                                          \
-{                                                                           \
-    if(x && MMT(x)->size > 0)                                                \
-    {                                                                       \
-        if(MMT(x)->start && MMT(x)->start != (void *)-1)                      \
-        {                                                                   \
-            msync(MMT(x)->start, MMT(x)->size, MS_SYNC);                      \
-            munmap(MMT(x)->start, MMT(x)->size);                              \
-            MMT(x)->start = NULL;                                            \
-            MMT(x)->state = NULL;                                            \
-            MMT(x)->map = NULL;                                              \
-        }                                                                   \
-    }                                                                       \
+#define MMT_COLOR_BLACK  0
+#define MMT_COLOR_RED    1
+#define MMT_MUNMAP(x)                                                           \
+do                                                                              \
+{                                                                               \
+    if(x && MMT(x)->size > 0)                                                   \
+    {                                                                           \
+        if(MMT(x)->start && MMT(x)->start != (void *)-1)                        \
+        {                                                                       \
+            msync(MMT(x)->start, MMT(x)->size, MS_SYNC);                        \
+            munmap(MMT(x)->start, MMT(x)->size);                                \
+            MMT(x)->start = NULL;                                               \
+            MMT(x)->state = NULL;                                               \
+            MMT(x)->map = NULL;                                                 \
+        }                                                                       \
+    }                                                                           \
 }while(0)
 
-#define MMT_MMAP(x)                                                          \
-do                                                                          \
-{                                                                           \
-    if(x)                                                                   \
-    {                                                                       \
-        MMT_MUNMAP(x);                                                       \
-        if((MMT(x)->start = mmap(NULL, MMT(x)->size, PROT_READ|PROT_WRITE,    \
-                        MAP_SHARED, MMT(x)->fd, 0)) != (void *)-1)           \
-        {                                                                   \
-            MMT(x)->state = (MTSTATE *)MMT(x)->start;                         \
-            MMT(x)->map = (MTNODE *)(MMT(x)->start + sizeof(MTSTATE));        \
-        }                                                                   \
-    }                                                                       \
+#define MMT_MMAP(x)                                                             \
+do                                                                              \
+{                                                                               \
+    if(x)                                                                       \
+    {                                                                           \
+        MMT_MUNMAP(x);                                                          \
+        if((MMT(x)->start = mmap(NULL, MMT(x)->size, PROT_READ|PROT_WRITE,      \
+                        MAP_SHARED, MMT(x)->fd, 0)) != (void *)-1)              \
+        {                                                                       \
+            MMT(x)->state = (MTSTATE *)MMT(x)->start;                           \
+            MMT(x)->map = (MTNODE *)(MMT(x)->start + sizeof(MTSTATE));          \
+        }                                                                       \
+    }                                                                           \
 }while(0)
 
-#define MMT_INCRE(x)                                                         \
-do                                                                          \
-{                                                                           \
-    if(x)                                                                   \
-    {                                                                       \
-        if(MMT(x)->start && MMT(x)->size > 0)                                 \
-        {                                                                   \
-            msync(MMT(x)->start, MMT(x)->size, MS_SYNC);                      \
-            munmap(MMT(x)->start, MMT(x)->size);                              \
-            MMT(x)->start = NULL;                                            \
-            MMT(x)->state = NULL;                                            \
-            MMT(x)->map = NULL;                                              \
-        }                                                                   \
-        MMT(x)->size += (off_t)MMTREE_INCRE_NUM * (off_t)sizeof(MTNODE);      \
-        ftruncate(MMT(x)->fd, MMT(x)->size);                                  \
-        if((MMT(x)->start = mmap(NULL, MMT(x)->size, PROT_READ|PROT_WRITE,    \
-                        MAP_SHARED, MMT(x)->fd, 0)) != (void *)-1)           \
-        {                                                                   \
-            MMT(x)->state = (MTSTATE *)(MMT(x)->start);                       \
-            MMT(x)->map = (MTNODE *)((char*)(MMT(x)->start)+sizeof(MTSTATE)); \
-            MMT(x)->state->left += MMTREE_INCRE_NUM;                          \
-            if(MMT(x)->state->total == 0) MMT(x)->state->left--;              \
-            MMT(x)->state->total += MMTREE_INCRE_NUM;                         \
-        }                                                                   \
-    }                                                                       \
+#define MMT_INCRE(x)                                                            \
+do                                                                              \
+{                                                                               \
+    if(x)                                                                       \
+    {                                                                           \
+        if(MMT(x)->start && MMT(x)->size > 0)                                   \
+        {                                                                       \
+            msync(MMT(x)->start, MMT(x)->size, MS_SYNC);                        \
+            munmap(MMT(x)->start, MMT(x)->size);                                \
+            MMT(x)->start = NULL;                                               \
+            MMT(x)->state = NULL;                                               \
+            MMT(x)->map = NULL;                                                 \
+        }                                                                       \
+        MMT(x)->size += (off_t)MMTREE_INCRE_NUM * (off_t)sizeof(MTNODE);        \
+        ftruncate(MMT(x)->fd, MMT(x)->size);                                    \
+        if((MMT(x)->start = mmap(NULL, MMT(x)->size, PROT_READ|PROT_WRITE,      \
+                        MAP_SHARED, MMT(x)->fd, 0)) != (void *)-1)              \
+        {                                                                       \
+            MMT(x)->state = (MTSTATE *)(MMT(x)->start);                         \
+            MMT(x)->map = (MTNODE *)((char*)(MMT(x)->start)+sizeof(MTSTATE));   \
+            MMT(x)->state->left += MMTREE_INCRE_NUM;                            \
+            if(MMT(x)->state->total == 0) MMT(x)->state->left--;                \
+            MMT(x)->state->total += MMTREE_INCRE_NUM;                           \
+        }                                                                       \
+    }                                                                           \
 }while(0)
 
-#define MMT_ROTATE_LEFT(x, id, lid, rid)                                    \
-do                                                                          \
-{                                                                           \
-    if(x)                                                                   \
-    {                                                                       \
-        if((rid = MMT(x)->map[id].right) > 0)                               \
-        {                                                                   \
-            lid = MMT(x)->map[id].right = MMT(x)->map[rid].left;            \
-            if(lid > 0) MMT(x)->map[lid].parent = id;                       \
-            MMT(x)->map[rid].left = id;                                     \
-            MMT(x)->map[id].parent = rid;                                   \
-        }                                                                   \
-    }                                                                       \
+#define MMT_ROTATE_LEFT(x, prootid, id, lid, rid)                               \
+do                                                                              \
+{                                                                               \
+    if(x)                                                                       \
+    {                                                                           \
+        if((rid = MMT(x)->map[id].right) > 0)                                   \
+        {                                                                       \
+            lid = MMT(x)->map[id].right = MMT(x)->map[rid].left;                \
+            if(lid > 0) MMT(x)->map[lid].parent = id;                           \
+            MMT(x)->map[rid].left = id;                                         \
+            MMT(x)->map[rid].parent = MMT(x)->map[id].parent;                   \
+            MMT(x)->map[id].parent = rid;                                       \
+            if(*prootid == id) *prootid = rid;                                  \
+        }                                                                       \
+    }                                                                           \
 }while(0)
 
-#define MMT_ROTATE_RIGHT(x, id, lid, rid)                                   \
-do                                                                          \
-{                                                                           \
-    if(x)                                                                   \
-    {                                                                       \
-        if((lid = MMT(x)->map[id].left) > 0)                                \
-        {                                                                   \
-            rid = MMT(x)->map[id].left = MMT(x)->map[lid].right;            \
-            if(rid > 0)  MMT(x)->map[rid].parent = id;                      \
-            MMT(x)->map[lid].right = id;                                    \
-            MMT(x)->map[id].parent = lid;                                   \
-        }                                                                   \
-    }                                                                       \
+#define MMT_ROTATE_RIGHT(x, prootid, id, lid, rid)                              \
+do                                                                              \
+{                                                                               \
+    if(x)                                                                       \
+    {                                                                           \
+        if((lid = MMT(x)->map[id].left) > 0)                                    \
+        {                                                                       \
+            rid = MMT(x)->map[id].left = MMT(x)->map[lid].right;                \
+            if(rid > 0)  MMT(x)->map[rid].parent = id;                          \
+            MMT(x)->map[lid].right = id;                                        \
+            MMT(x)->map[lid].parent =  MMT(x)->map[id].parent;                  \
+            MMT(x)->map[id].parent = lid;                                       \
+            if(*prootid == id) *prootid = lid;                                  \
+        }                                                                       \
+    }                                                                           \
 }while(0)
 
+#define MMT_INSERT_COLOR(x, prootid, id, lid, rid, uid, pid, gpid)              \
+do                                                                              \
+{                                                                               \
+    while(id > 0)                                                               \
+    {                                                                           \
+        pid = MMT(x)->map[id].parent;                                           \
+        if(pid == 0 || MMT(x)->map[pid].color == MMT_COLOR_BLACK) break;        \
+        else                                                                    \
+        {                                                                       \
+            gpid = MMT(x)->map[pid].parent;                                     \
+            lid = MMT(x)->map[gpid].left;                                       \
+            rid = MMT(x)->map[gpid].right;                                      \
+            if(lid == pid) uid = rid;                                           \
+            else uid = lid;                                                     \
+            if(uid > 0 && MMT(x)->map[uid].color == MMT_COLOR_RED)              \
+            {                                                                   \
+                id = gpid;                                                      \
+            }                                                                   \
+            else                                                                \
+            {                                                                   \
+                if(MMT(x)->map[id].key < MMT(x)->map[pid].key)                  \
+                {                                                               \
+                    id = pid;                                                   \
+                    MMT_ROTATE_LEFT(x, prootid, id, rid, lid);                  \
+                }                                                               \
+                else                                                            \
+                {                                                               \
+                    MMT(x)->map[pid].color = MMT_COLOR_BLACK;                   \
+                    MMT(x)->map[gpid].color = MMT_COLOR_RED;                    \
+                    MMT_ROTATE_RIGHT(x, prootid, gpid, rid, lid);               \
+                    break;                                                      \
+                }                                                               \
+            }                                                                   \
+        }                                                                       \
+    }                                                                           \
+}while(0)
+
+#define MMT_REMOVE_COLOR(x, prootid, id, lid, rid, uid, pid, gpid)
 /* init mmtree */
 void *mmtree_init(char *file)
 {
@@ -498,9 +542,10 @@ int mmtree_set_data(void *x, int tnodeid, int data)
 }
 
 /* remove node */
-void mmtree_remove(void *x, int rootid, int tnodeid, int *key, int *data)
+void mmtree_remove(void *x, int root, int tnodeid, int *key, int *data)
 {
-    int id = 0, pid = 0, z = 0;
+    int id = 0, pid = 0, gpid= 0, rid = 0, uid = 0, ppid = 0, lid = 0, 
+        z = 0, color = 0, *rootid = NULL;
 
     if(x && tnodeid > 0)
     {
@@ -509,60 +554,91 @@ void mmtree_remove(void *x, int rootid, int tnodeid, int *key, int *data)
         {
             *key = MMT(x)->map[tnodeid].key;
             *data = MMT(x)->map[tnodeid].data;
-            if((id = MMT(x)->map[tnodeid].left) > 0)
+            if(MMT(x)->map[tnodeid].left == 0 && MMT(x)->map[tnodeid].right == 0)
             {
-                //find max on left->right 
-                while(id > 0 && id < MMT(x)->state->total)
+                id = tnodeid;
+                if((pid = MMT(x)->map[id].parent = MMT(x)->map[tnodeid].parent) > 0)
                 {
-                    if(MMT(x)->map[id].right > 0)
-                    {
-                        id = MMT(x)->map[id].right;
-                    }
-                    else break;
-                }
-                //reset node[id]->parent->right
-                pid = MMT(x)->map[id].parent;
-                if(id != MMT(x)->map[tnodeid].left && pid > 0 && pid < MMT(x)->state->total)
-                {
-                    z = MMT(x)->map[id].left;
-                    MMT(x)->map[pid].right = z;
-                    MMT(x)->map[z].parent = pid;
-                }
-            }
-            else if((id = MMT(x)->map[tnodeid].right) > 0)
-            {
-                while(id > 0 && id < MMT(x)->state->total)
-                {
-                    if(MMT(x)->map[id].left != 0)
-                    {
-                        id = MMT(x)->map[id].left;
-                    }
-                    else break;
-                }
-                pid = MMT(x)->map[id].parent;
-                if(id != MMT(x)->map[tnodeid].right && pid > 0 && pid < MMT(x)->state->total)
-                {
-                    z = MMT(x)->map[id].right;
-                    MMT(x)->map[pid].left = z;
-                    MMT(x)->map[z].parent = pid;
-                }
-            }
-            if(id  > 0 && MMT(x)->state->total)
-            {
-                if(id != MMT(x)->map[tnodeid].left) 
-                    MMT(x)->map[id].left  = MMT(x)->map[tnodeid].left;
-                if(id != MMT(x)->map[tnodeid].right) 
-                    MMT(x)->map[id].right = MMT(x)->map[tnodeid].right;
-                pid = MMT(x)->map[tnodeid].parent;
-                MMT(x)->map[id].parent = pid;
-                if(pid > 0 && pid < MMT(x)->state->total)
-                {
-                    if(MMT(x)->map[id].key < MMT(x)->map[pid].key)
+                    if(tnodeid == MMT(x)->map[pid].left) 
                         MMT(x)->map[pid].left = id;
-                    else
+                    else 
                         MMT(x)->map[pid].right = id;
                 }
+                else *rootid = id;
+                if(MMT(x)->map[id].color == MMT_COLOR_RED) goto end;
+                else
+                {
+                    
+                }
             }
+            else if(MMT(x)->map[tnodeid].left == 0 || MMT(x)->map[tnodeid].right == 0)
+            {
+                if(MMT(x)->map[tnodeid].left > 0) id = MMT(x)->map[tnodeid].left;
+                if(MMT(x)->map[tnodeid].right > 0) id = MMT(x)->map[tnodeid].right;
+                if((pid = MMT(x)->map[id].parent = MMT(x)->map[tnodeid].parent) > 0)
+                {
+                    if(tnodeid == MMT(x)->map[pid].left) 
+                        MMT(x)->map[pid].left = id;
+                    else 
+                        MMT(x)->map[pid].right = id;
+                }
+                else *rootid = id;
+                if(MMT(x)->map[id].color == MMT(x)->map[tnodeid].color) goto end;
+            }
+            else 
+            {
+                id = MMT(x)->map[tnodeid].right;
+                while(MMT(x)->map[id].left > 0)
+                    id = MMT(x)->map[id].left;
+                if((pid = MMT(x)->map[id].parent) > 0)
+                {
+                    if(MMT(x)->map[pid].left == id)
+                        MMT(x)->map[pid].left = MMT(x)->map[id].right;
+                    else
+                        MMT(x)->map[pid].right = MMT(x)->map[id].right;
+                }
+                else
+                {
+                    *rootid = MMT(x)->map[id].right;
+                }
+                if((rid = MMT(x)->map[id].right) > 0)
+                {
+                    MMT(x)->map[rid].parent = MMT(x)->map[id].parent;
+                }
+                color = MMT(x)->map[id].color;
+                ppid = MMT(x)->map[id].parent;
+                MMT(x)->map[id].right = MMT(x)->map[tnodeid].right;
+                MMT(x)->map[id].left = MMT(x)->map[tnodeid].left;
+                MMT(x)->map[id].color = MMT(x)->map[tnodeid].color;
+                if((pid = MMT(x)->map[id].parent = MMT(x)->map[tnodeid].parent) > 0)
+                {
+                    if(tnodeid == MMT(x)->map[pid].left) 
+                        MMT(x)->map[pid].left = id;
+                    else 
+                        MMT(x)->map[pid].right = id;
+                }
+                else *rootid = id;
+                if(color == MMT_COLOR_RED) goto end;
+                else
+                {
+                    if(rid > 0)
+                    {
+                        id = rid;
+                        MMT(x)->map[id].color = MMT_COLOR_BLACK;
+                        goto color_remove;
+                    }
+                    else if(ppid > 0)
+                    {
+                        id = ppid;
+                        MMT(x)->map[id].color = MMT_COLOR_BLACK;
+                        goto color_remove;
+                    }
+                }
+            }
+            //remove color set
+color_remove:
+            MMT_REMOVE_COLOR(x, rootid, id, lid, rid, uid, pid, gpid);
+end:
             //add to qleft
             memset(&(MMT(x)->map[tnodeid]), 0, sizeof(MTNODE));
             if(MMT(x)->state->qleft == 0)
@@ -584,6 +660,7 @@ void mmtree_remove(void *x, int rootid, int tnodeid, int *key, int *data)
     }
     return ;
 }
+
 /* remove node */
 void mmtree_remove_tnode(void *x, int tnodeid)
 {
