@@ -728,7 +728,7 @@ int hibase_add_tnode(HIBASE *hibase, int parentid, char *name)
             else
             {
                 tnode_map[tnodeid].mmid = mmtree_insert(hibase->mmtree, 
-                        tnode_map[parentid].childs_rootid, uid, tnodeid, &old);
+                        &(tnode_map[parentid].childs_rootid), uid, tnodeid, &old);
             }
             memcpy(tnode_map[tnodeid].name, name, n); 
             tnode_map[tnodeid].id = tnodeid;
@@ -904,8 +904,10 @@ int hibase_update_tnode(HIBASE *hibase, int parentid, int tnodeid, char *name)
                 && (tnode_map = HIO_MAP(hibase->tnodeio, TNODE))
                 && (rootid = tnode_map[parentid].childs_rootid) > 0)
         {
-            mmtree_remove(hibase->mmtree, rootid, tnode_map[tnodeid].mmid, &id, &old);
-            tnode_map[tnodeid].mmid = mmtree_insert(hibase->mmtree, rootid, uid, tnodeid, &old);
+            mmtree_remove(hibase->mmtree, &(tnode_map[parentid].childs_rootid), 
+                    tnode_map[tnodeid].mmid, &id, &old);
+            tnode_map[tnodeid].mmid = mmtree_insert(hibase->mmtree, 
+                    &(tnode_map[parentid].childs_rootid), uid, tnodeid, &old);
             memset(tnode_map[tnodeid].name, 0, TNODE_NAME_MAX);
             memcpy(tnode_map[tnodeid].name, name, n); 
             tnode_map[tnodeid].id = tnodeid;
@@ -942,7 +944,7 @@ int hibase_reset_tnode(HIBASE *hibase, int parentid, int tnodeid)
                 }while((x = mmtree_next(hibase->mmtree, rootid, x, &uid, &childid)) > 0);
             }
             tnode_map[parentid].nchilds--;
-            mmtree_remove(hibase->mmtree, tnode_map[parentid].childs_rootid, 
+            mmtree_remove(hibase->mmtree, &(tnode_map[parentid].childs_rootid), 
                     tnode_map[tnodeid].mmid, &uid, &childid);
             memset(&(tnode_map[tnodeid]), 0, sizeof(TNODE));
             id = tnodeid;
@@ -1029,7 +1031,7 @@ int hibase_add_template(HIBASE *hibase, int tnodeid, ITEMPLATE *template)
             }
             else
             {
-                template->mmid = mmtree_insert(hibase->mmtree, tnode[tnodeid].templates_rootid, 
+                template->mmid = mmtree_insert(hibase->mmtree, &(tnode[tnodeid].templates_rootid), 
                         templateid, templateid, &old);
             }
             template->tnodeid = tnodeid;
@@ -1098,7 +1100,7 @@ int hibase_delete_template(HIBASE *hibase, int tnodeid, int templateid)
             && pread(hibase->templateio.fd, &template, sizeof(ITEMPLATE),
                  (off_t)sizeof(ITEMPLATE) * (off_t)templateid)> 0)
         {
-            mmtree_remove(hibase->mmtree, tnode[tnodeid].templates_rootid, 
+            mmtree_remove(hibase->mmtree, &(tnode[tnodeid].templates_rootid), 
                     template.mmid, &id, &data);
             px = &templateid;
             FQUEUE_PUSH(hibase->qtemplate, int, px);
@@ -1220,7 +1222,7 @@ int hibase_add_urlnode(HIBASE *hibase, int tnodeid, int parentid, int urlid, int
                 else
                 {
                     urlnode.tnode_mmid = mmtree_insert(hibase->mmtree, 
-                            tnode[tnodeid].urlnodes_rootid, urlid, urlnodeid, &old);
+                            &(tnode[tnodeid].urlnodes_rootid), urlid, urlnodeid, &old);
                 }
                 if(parent.childs_rootid == 0)
                 {
@@ -1229,7 +1231,7 @@ int hibase_add_urlnode(HIBASE *hibase, int tnodeid, int parentid, int urlid, int
                 }
                 else
                 {
-                    urlnode.mmid = mmtree_insert(hibase->mmtree, parent.childs_rootid, 
+                    urlnode.mmid = mmtree_insert(hibase->mmtree, &(parent.childs_rootid), 
                             urlid, urlnodeid, &old);
                 }
                 fprintf(stdout, "%d::nodeid:%d parentid:%d urlid:%d level:%d id:%d\n", __LINE__, tnodeid, parentid, urlid, level, urlnodeid);
@@ -1308,7 +1310,7 @@ int hibase_reset_urlnode(HIBASE *hibase, int urlnodeid)
             if(pread(hibase->urlnodeio.fd, &parent, sizeof(URLNODE), 
                         (off_t)sizeof(URLNODE) * (off_t)urlnode.parentid) > 0)
             {
-                mmtree_remove(hibase->mmtree, parent.childs_rootid, urlnode.mmid,&urlid, &id);
+                mmtree_remove(hibase->mmtree, &(parent.childs_rootid), urlnode.mmid,&urlid, &id);
                 parent.nchilds--;
                 pwrite(hibase->urlnodeio.fd, &parent, sizeof(URLNODE), 
                         (off_t)sizeof(URLNODE) * (off_t)urlnode.parentid);
@@ -1317,7 +1319,8 @@ int hibase_reset_urlnode(HIBASE *hibase, int urlnodeid)
                     && (tnode = HIO_MAP(hibase->tnodeio, TNODE)))
             {
                 if((rootid = tnode[urlnode.tnodeid].urlnodes_rootid) > 0)
-                    mmtree_remove(hibase->mmtree, rootid,urlnode.tnode_mmid,&urlid,&id);
+                    mmtree_remove(hibase->mmtree, &(tnode[urlnode.tnodeid].urlnodes_rootid), 
+                            urlnode.tnode_mmid, &urlid,&id);
                 tnode[urlnode.tnodeid].nurlnodes--;
             }
             px = &urlnodeid;

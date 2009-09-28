@@ -30,7 +30,7 @@ typedef struct _MMTREE
 }MMTREE;
 void *mmtree_init(char *file);
 int mmtree_new_tree(void *mmtree, int key, int data);
-int mmtree_insert(void *mmtree, int rootid, int key, int data, int *old);
+int mmtree_insert(void *mmtree, int *prootid, int key, int data, int *old);
 int mmtree_get(void *mmtree, int nodeid, int *key, int *data);
 int mmtree_find(void *mmtree, int rootid, int key, int *data);
 int mmtree_min(void *mmtree, int rootid, int *key, int *data);
@@ -39,7 +39,7 @@ int mmtree_next(void *mmtree, int rootid, int nodeid, int *key, int *data);
 int mmtree_prev(void *mmtree, int rootid, int nodeid, int *key, int *data);
 int mmtree_set_data(void *mmtree, int nodeid, int data);
 void mmtree_view_tree(void *mmtree, int rootid, FILE *fp);
-void mmtree_remove(void *mmtree, int rootid, int nodeid, int *key, int *data);
+void mmtree_remove(void *mmtree, int *prootid, int nodeid, int *key, int *data);
 void mmtree_remove_tree(void *mmtree, int rootid);
 void mmtree_close(void *mmtree);
 #endif

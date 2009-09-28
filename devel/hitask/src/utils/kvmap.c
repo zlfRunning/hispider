@@ -189,14 +189,6 @@ KVNODE *kv_remove(KVMAP *map, KVNODE *elm)
         KV_PARENT(KV_LEFT(old)) = elm;
         if (KV_RIGHT(old))
             KV_PARENT(KV_RIGHT(old)) = elm;
-        if (parent)
-        {
-            left = parent;
-            do
-            {
-                KV_AUGMENT(left);
-            } while ((left = KV_PARENT(left)));
-        }
         goto color;
     }
     parent = KV_PARENT(elm);
