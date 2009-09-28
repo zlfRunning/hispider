@@ -68,78 +68,99 @@ do                                                                              
     }                                                                           \
 }while(0)
 
-#define MMT_ROTATE_LEFT(x, prootid, id, lid, rid)                               \
+#define MMT_ROTATE_LEFT(x, prootid, id, lid, rid, ppid)                         \
 do                                                                              \
 {                                                                               \
-    if(x)                                                                       \
+    if(x && (rid = MMT(x)->map[id].right) > 0)                                  \
     {                                                                           \
-        if((rid = MMT(x)->map[id].right) > 0)                                   \
+        if((lid = MMT(x)->map[id].right = MMT(x)->map[rid].left) > 0)           \
         {                                                                       \
-            lid = MMT(x)->map[id].right = MMT(x)->map[rid].left;                \
-            if(lid > 0) MMT(x)->map[lid].parent = id;                           \
-            MMT(x)->map[rid].left = id;                                         \
-            MMT(x)->map[rid].parent = MMT(x)->map[id].parent;                   \
-            MMT(x)->map[id].parent = rid;                                       \
-            if(*prootid == id) *prootid = rid;                                  \
+            MMT(x)->map[lid].parent = id;                                       \
         }                                                                       \
+        if((ppid = MMT(x)->map[rid].parent = MMT(x)->map[id].parent) > 0)       \
+        {                                                                       \
+            if(MMT(x)->map[ppid].left == id)                                    \
+            MMT(x)->map[ppid].left = rid;                                       \
+            else                                                                \
+            MMT(x)->map[ppid].right = rid;                                      \
+        }else *prootid = rid;                                                   \
+        MMT(x)->map[rid].left = id;                                             \
+        MMT(x)->map[id].parent = rid;                                           \
     }                                                                           \
 }while(0)
 
-#define MMT_ROTATE_RIGHT(x, prootid, id, lid, rid)                              \
+#define MMT_ROTATE_RIGHT(x, prootid, id, lid, rid, ppid)                        \
 do                                                                              \
 {                                                                               \
-    if(x)                                                                       \
+    if(x && (lid = MMT(x)->map[id].left) > 0)                                   \
     {                                                                           \
-        if((lid = MMT(x)->map[id].left) > 0)                                    \
+        if((rid = MMT(x)->map[id].left = MMT(x)->map[lid].right) > 0)           \
+            MMT(x)->map[rid].parent = id;                                       \
+        if((ppid = MMT(x)->map[lid].parent = MMT(x)->map[id].parent) > 0)       \
         {                                                                       \
-            rid = MMT(x)->map[id].left = MMT(x)->map[lid].right;                \
-            if(rid > 0)  MMT(x)->map[rid].parent = id;                          \
-            MMT(x)->map[lid].right = id;                                        \
-            MMT(x)->map[lid].parent =  MMT(x)->map[id].parent;                  \
-            MMT(x)->map[id].parent = lid;                                       \
-            if(*prootid == id) *prootid = lid;                                  \
+            if(MMT(x)->map[ppid].left == id)                                    \
+                MMT(x)->map[ppid].left = lid;                                   \
+            else                                                                \
+                MMT(x)->map[ppid].right = lid;                                  \
         }                                                                       \
+        else *prootid = lid;                                                    \
+        MMT(x)->map[lid].right = id;                                            \
+        MMT(x)->map[id].parent = lid;                                           \
     }                                                                           \
 }while(0)
 
-#define MMT_INSERT_COLOR(x, prootid, id, lid, rid, uid, pid, gpid)              \
+#define MMT_INSERT_COLOR(x, prootid, id, lid, rid, uid, pid, gpid, ppid)        \
 do                                                                              \
 {                                                                               \
-    while(id > 0)                                                               \
+    while((pid = MMT(x)->map[id].parent)> 0                                     \
+            && MMT(x)->map[pid].color == MMT_COLOR_RED)                         \
     {                                                                           \
-        pid = MMT(x)->map[id].parent;                                           \
-        if(pid == 0 || MMT(x)->map[pid].color == MMT_COLOR_BLACK) break;        \
-        else                                                                    \
+        gpid = MMT(x)->map[pid].parent;                                         \
+        if(pid == MMT(x)->map[gpid].left)                                       \
         {                                                                       \
-            gpid = MMT(x)->map[pid].parent;                                     \
-            lid = MMT(x)->map[gpid].left;                                       \
-            rid = MMT(x)->map[gpid].right;                                      \
-            if(lid == pid) uid = rid;                                           \
-            else uid = lid;                                                     \
+            uid = MMT(x)->map[gpid].right;                                      \
             if(uid > 0 && MMT(x)->map[uid].color == MMT_COLOR_RED)              \
             {                                                                   \
+                MMT(x)->map[uid].color = MMT_COLOR_BLACK;                       \
+                MMT(x)->map[pid].color = MMT_COLOR_BLACK;                       \
+                MMT(x)->map[gpid].color = MMT_COLOR_RED;                        \
                 id = gpid;                                                      \
+                continue;                                                       \
             }                                                                   \
-            else                                                                \
+            if(MMT(x)->map[pid].right == id)                                    \
             {                                                                   \
-                if(MMT(x)->map[id].key < MMT(x)->map[pid].key)                  \
-                {                                                               \
-                    id = pid;                                                   \
-                    MMT_ROTATE_LEFT(x, prootid, id, rid, lid);                  \
-                }                                                               \
-                else                                                            \
-                {                                                               \
-                    MMT(x)->map[pid].color = MMT_COLOR_BLACK;                   \
-                    MMT(x)->map[gpid].color = MMT_COLOR_RED;                    \
-                    MMT_ROTATE_RIGHT(x, prootid, gpid, rid, lid);               \
-                    break;                                                      \
-                }                                                               \
+                MMT_ROTATE_LEFT(x, prootid, pid, rid, lid, ppid);               \
+                uid = pid; pid = id; id = uid;                                  \
             }                                                                   \
+            MMT(x)->map[pid].color = MMT_COLOR_BLACK;                           \
+            MMT(x)->map[gpid].color = MMT_COLOR_RED;                            \
+            MMT_ROTATE_RIGHT(x, prootid, gpid, lid, rid, ppid);                 \
+        }                                                                       \
+        else                                                                    \
+        {                                                                       \
+            uid = MMT(x)->map[gpid].left;                                       \
+            if(uid > 0 && MMT(x)->map[uid].color == MMT_COLOR_RED)              \
+            {                                                                   \
+                MMT(x)->map[uid].color = MMT_COLOR_BLACK;                       \
+                MMT(x)->map[pid].color = MMT_COLOR_BLACK;                       \
+                MMT(x)->map[gpid].color = MMT_COLOR_RED;                        \
+                id = gpid;                                                      \
+                continue;                                                       \
+            }                                                                   \
+            if(MMT(x)->map[pid].left == id)                                     \
+            {                                                                   \
+                MMT_ROTATE_RIGHT(x, prootid, pid, lid, rid, ppid);              \
+                uid = pid; pid = id; id = uid;                                  \
+            }                                                                   \
+            MMT(x)->map[pid].color = MMT_COLOR_BLACK;                           \
+            MMT(x)->map[gpid].color = MMT_COLOR_RED;                            \
+            MMT_ROTATE_LEFT(x, prootid, gpid, rid, lid, ppid);                  \
         }                                                                       \
     }                                                                           \
+    MMT(x)->map[*prootid].color = MMT_COLOR_BLACK;                              \
 }while(0)
 
-#define MMT_REMOVE_COLOR(x, prootid, id, pid, lid, rid, uid)                    \
+#define MMT_REMOVE_COLOR(x, prootid, id, pid, lid, rid, uid, ppid)              \
 do                                                                              \
 {                                                                               \
     while((id == 0 || MMT(x)->map[id].color == MMT_COLOR_BLACK)                 \
@@ -152,7 +173,7 @@ do                                                                              
             {                                                                   \
                 MMT(x)->map[uid].color = MMT_COLOR_BLACK;                       \
                 MMT(x)->map[pid].color = MMT_COLOR_RED;                         \
-                MMT_ROTATE_LEFT(x, prootid, pid, rid, lid);                     \
+                MMT_ROTATE_LEFT(x, prootid, pid, rid, lid, ppid);               \
                 uid = MMT(x)->map[pid].right;                                   \
             }                                                                   \
             if((MMT(x)->map[uid].left == 0                                      \
@@ -172,14 +193,14 @@ do                                                                              
                 {                                                               \
                     MMT(x)->map[lid].color = MMT_COLOR_BLACK;                   \
                     MMT(x)->map[uid].color = MMT_COLOR_RED;                     \
-                    MMT_ROTATE_RIGHT(x, prootid, uid, lid, rid);                \
+                    MMT_ROTATE_RIGHT(x, prootid, uid, lid, rid, ppid);          \
                     uid = MMT(x)->map[pid].right;                               \
                 }                                                               \
                 MMT(x)->map[uid].color = MMT(x)->map[pid].color;                \
                 MMT(x)->map[pid].color = MMT_COLOR_BLACK;                       \
                 if((rid = MMT(x)->map[uid].right) > 0)                          \
-                MMT(x)->map[rid].color = MMT_COLOR_BLACK;                   \
-                MMT_ROTATE_LEFT(x, prootid, pid, rid, lid);                     \
+                MMT(x)->map[rid].color = MMT_COLOR_BLACK;                       \
+                MMT_ROTATE_LEFT(x, prootid, pid, rid, lid, ppid);               \
                 id = *prootid;                                                  \
                 break;                                                          \
             }                                                                   \
@@ -191,7 +212,7 @@ do                                                                              
             {                                                                   \
                 MMT(x)->map[uid].color = MMT_COLOR_BLACK;                       \
                 MMT(x)->map[pid].color = MMT_COLOR_RED;                         \
-                MMT_ROTATE_RIGHT(x, prootid, pid, lid, rid);                    \
+                MMT_ROTATE_RIGHT(x, prootid, pid, lid, rid, ppid);              \
                 uid = MMT(x)->map[pid].left;                                    \
             }                                                                   \
             if((MMT(x)->map[uid].left == 0                                      \
@@ -211,14 +232,14 @@ do                                                                              
                 {                                                               \
                     MMT(x)->map[rid].color = MMT_COLOR_BLACK;                   \
                     MMT(x)->map[uid].color = MMT_COLOR_RED;                     \
-                    MMT_ROTATE_LEFT(x, prootid, uid, rid, lid);                 \
+                    MMT_ROTATE_LEFT(x, prootid, uid, rid, lid, ppid);           \
                     uid = MMT(x)->map[pid].left;                                \
                 }                                                               \
                 MMT(x)->map[uid].color = MMT(x)->map[pid].color;                \
                 MMT(x)->map[pid].color = MMT_COLOR_BLACK;                       \
                 if((lid = MMT(x)->map[uid].left) > 0)                           \
-                MMT(x)->map[lid].color = MMT_COLOR_BLACK;                   \
-                MMT_ROTATE_RIGHT(x, prootid, pid, lid, rid);                    \
+                MMT(x)->map[lid].color = MMT_COLOR_BLACK;                       \
+                MMT_ROTATE_RIGHT(x, prootid, pid, lid, rid, ppid);              \
                 id = *prootid;                                                  \
                 break;                                                          \
             }                                                                   \
@@ -303,7 +324,7 @@ int mmtree_new_tree(void *x, int key, int data)
 /* insert new node */
 int mmtree_insert(void *x, int *prootid, int key, int data, int *old)
 {
-    int id = 0, nodeid = 0, rid = 0, lid = 0, uid = 0, pid = 0, gpid = 0;
+    int id = 0, nodeid = 0, rid = 0, lid = 0, uid = 0, pid = 0, gpid = 0, ppid = 0;
     MTNODE *node = NULL;
 
     if(x && prootid  && *prootid > 0)
@@ -369,10 +390,7 @@ int mmtree_insert(void *x, int *prootid, int key, int data, int *old)
         if((nodeid = id) > 0)
         {
             MMT(x)->map[nodeid].color = MMT_COLOR_RED;
-            if((pid = MMT(x)->map[nodeid].parent) > 0 && MMT(x)->map[pid].color != MMT_COLOR_BLACK)
-            {
-                MMT_INSERT_COLOR(x, prootid, nodeid, lid, rid, uid, pid, gpid);
-            }
+            MMT_INSERT_COLOR(x, prootid, nodeid, lid, rid, uid, pid, gpid, ppid);
         }
 end:
         MUTEX_UNLOCK(MMT(x)->mutex);
@@ -640,7 +658,7 @@ int mmtree_set_data(void *x, int tnodeid, int data)
 /* remove node */
 void mmtree_remove(void *x, int *prootid, int tnodeid, int *key, int *data)
 {
-    int id = 0, pid = 0, parent = 0, child = 0, rid = 0, uid = 0, 
+    int id = 0, pid = 0, parent = 0, child = 0, rid = 0, uid = 0, ppid = 0, 
         lid = 0, z = 0, color = 0;
 
     if(x && prootid && *prootid > 0 && tnodeid > 0)
@@ -709,7 +727,7 @@ void mmtree_remove(void *x, int *prootid, int tnodeid, int *key, int *data)
 color_remove:
             if(color == MMT_COLOR_BLACK)
             {
-                MMT_REMOVE_COLOR(x, prootid, child, parent, rid, rid, uid);
+                MMT_REMOVE_COLOR(x, prootid, child, parent, rid, rid, uid, ppid);
             }
             //add to qleft
             memset(&(MMT(x)->map[tnodeid]), 0, sizeof(MTNODE));
@@ -822,16 +840,16 @@ int main(int argc, char **argv)
         mmtree_remove_tree(mmtree, 1);
         //mmtree_view_tree(mmtree, 1, stdout);
         */
-        int list[] = {98, 7, 45, 0, 240, 3, 5, 2, 1, 6, 8, 30, 23, 21, 43, 370};
+        int list[] = {123, 234, 345, 567, 98, 7, 45, 0, 240, 3, 5, 2, 1, 6, 8, 30, 23, 21, 43, 370};
         data = -1;
-        rootid = mmtree_new_tree(mmtree, 250, data);
-        for(j = 0; j < 16; j++)
+        rootid = mmtree_new_tree(mmtree, 60, data);
+        for(j = 0; j < 20; j++)
         {
             old = 0;
-            id = mmtree_insert(mmtree, rootid, list[j], data, &old);
-            fprintf(stdout, "tree:%d key:%d id:%d old:%d\n", i, list[j], id, old);
+            id = mmtree_insert(mmtree, &rootid, list[j], data, &old);
+            fprintf(stdout, "tree:%d key:%d id:%d old:%d\n", rootid, list[j], id, old);
         }
-        mmtree_view_tree(mmtree, 1, stdout);
+        mmtree_view_tree(mmtree, rootid, stdout);
         id = mmtree_min(mmtree, rootid, &key, &data);
         fprintf(stdout, "tree:%d min:%d key:%d data:%d\n", rootid, id, key, data);
         while((next = mmtree_next(mmtree, rootid, id, &key, &data)) > 0)
@@ -839,6 +857,9 @@ int main(int argc, char **argv)
             fprintf(stdout, "tree:%d id:%d next:%d key:%d data:%d\n", rootid, id, next, key, data);
             id = next;
         }
+        fprintf(stdout, "Removing rootid:%d key:%d data:%d\n", rootid, key, data);
+        mmtree_remove(mmtree, &rootid, rootid, &key, &data);
+        fprintf(stdout, "Removed rootid:%d key:%d data:%d\n", rootid, key, data);
         id = mmtree_max(mmtree, rootid, &key, &data);
         fprintf(stdout, "tree:%d max:%d key:%d data:%d\n", rootid, id, key, data);
         while((prev = mmtree_prev(mmtree, rootid, id, &key, &data)) > 0)
