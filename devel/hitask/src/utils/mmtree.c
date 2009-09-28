@@ -677,8 +677,10 @@ void mmtree_remove(void *x, int *prootid, int tnodeid, int *key, int *data)
                 id = MMT(x)->map[tnodeid].right;
                 while(MMT(x)->map[id].left > 0)
                     id = MMT(x)->map[id].left;
-                child = MMT(x)->map[id].right;
+                parent = MMT(x)->map[id].parent;
                 color = MMT(x)->map[id].color;
+                if((child = MMT(x)->map[id].right) > 0)
+                    MMT(x)->map[child].parent = parent;
                 if((pid = MMT(x)->map[id].parent) > 0)
                 {
                     if(MMT(x)->map[pid].left == id)
@@ -708,13 +710,13 @@ void mmtree_remove(void *x, int *prootid, int tnodeid, int *key, int *data)
                 }
                 lid = MMT(x)->map[tnodeid].left;
                 MMT(x)->map[lid].parent = id;
-                rid = MMT(x)->map[tnodeid].left;
-                MMT(x)->map[rid].parent = id;
+                if((rid = MMT(x)->map[tnodeid].left) > 0)
+                    MMT(x)->map[rid].parent = id;
                 goto color_remove;
             }
             parent =  MMT(x)->map[tnodeid].parent;
             color = MMT(x)->map[tnodeid].color;
-            child = id;
+            if((child = id) > 0) MMT(x)->map[child].parent = parent;
             if((pid = MMT(x)->map[id].parent = MMT(x)->map[tnodeid].parent) > 0)
             {
                 if(tnodeid == MMT(x)->map[pid].left) 
