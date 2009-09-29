@@ -1445,37 +1445,44 @@ int hibase_pop_urlnode(HIBASE *hibase, URLNODE *urlnode)
             //        hibase->istate->urlnode_task_current, 
             //        hibase->urlnodeio.current, hibase->urlnodeio.total,
             //         hibase->istate->urlnode_task_current);
-            px = &x;
-            if(FQTOTAL(hibase->qtask)>0 && FQUEUE_POP(hibase->qtask, int, px) == 0)
-            {
-                urlnodeid = x;
-                pread(hibase->urlnodeio.fd, urlnode, sizeof(URLNODE), 
-                        (off_t)sizeof(URLNODE) * (off_t)urlnodeid);
-                //memcpy(urlnode, &(purlnode[urlnodeid]), sizeof(URLNODE));
-            }
             /*
-               while(FQTOTAL(hibase->qtask)>0||(hibase->urlnodeio.current < hibase->urlnodeio.total
-               && hibase->istate->urlnode_task_current <= hibase->urlnodeio.current))
-               {
                px = &x;
-               if(FQUEUE_POP(hibase->qtask, int, px) == 0)
+               if(FQTOTAL(hibase->qtask)>0 && FQUEUE_POP(hibase->qtask, int, px) == 0)
                {
                urlnodeid = x;
-               }
-               else if(hibase->istate->urlnodeio_current <= hibase->urlnodeio.current)
-               {
-               urlnodeid = hibase->istate->urlnode_task_current++;
-               if(purlnode[urlnodeid].level > 0) continue;
-               }
-            //fprintf(stdout, "%s::%d::urlnodeid:%d current:%d\n", __FILE__, __LINE__, urlnodeid, hibase->urlnodeio.current);
-            if(urlnodeid > 0 &&  purlnode[urlnodeid].status > 0)
-            {
-            memcpy(urlnode, &(purlnode[urlnodeid]), sizeof(URLNODE));
-            break;
+               pread(hibase->urlnodeio.fd, urlnode, sizeof(urlnode), 
+               (off_t)sizeof(urlnode) * (off_t)urlnodeid);
+            //memcpy(urlnode, &(purlnode[urlnodeid]), sizeof(URLNODE));
             }
-            else urlnodeid = -1;
-            //fprintf(stdout, "%s::%d::urlnodeid:%d\n", __FILE__, __LINE__, urlnodeid);
-            }*/
+            */
+            while(FQTOTAL(hibase->qtask)> 0 || (hibase->urlnodeio.current < hibase->urlnodeio.total
+                        && hibase->istate->urlnode_task_current <= hibase->urlnodeio.current))
+            {
+                x = -1;
+                px = &x;
+                if(FQUEUE_POP(hibase->qtask, int, px) == 0)
+                {
+                    urlnodeid = x;
+                }
+                else if(hibase->istate->urlnodeio_current <= hibase->urlnodeio.current)
+                {
+                    urlnodeid = hibase->istate->urlnode_task_current++;
+                }
+                //fprintf(stdout, "%s::%d::urlnodeid:%d current:%d\n", __FILE__, __LINE__, urlnodeid, hibase->urlnodeio.current);
+                if(urlnodeid > 0 && pread(hibase->urlnodeio.fd, urlnode, sizeof(URLNODE), 
+                    (off_t)sizeof(URLNODE) * (off_t)urlnodeid) > 0)
+                {
+                    if(urlnode->level > 0 && urlnodeid != x) 
+                    {
+                        urlnodeid = -1;
+                        continue;
+                    }
+                    break;
+                }
+                else urlnodeid = -1;
+                //fprintf(stdout, "%s::%d::urlnodeid:%d\n", __FILE__, __LINE__, urlnodeid);
+            }
+            //*/
             //fprintf(stdout, "%s::%d::urlnodeid:%d\n", __FILE__, __LINE__, urlnodeid);
         }
         MUTEX_UNLOCK(hibase->mutex);
