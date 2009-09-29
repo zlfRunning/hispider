@@ -157,7 +157,7 @@ do                                                                              
             MMT_ROTATE_LEFT(x, prootid, gpid, rid, lid, ppid);                  \
         }                                                                       \
     }                                                                           \
-    MMT(x)->map[*prootid].color = MMT_COLOR_BLACK;                              \
+    if(*prootid > 0)MMT(x)->map[*prootid].color = MMT_COLOR_BLACK;              \
 }while(0)
 
 #define MMT_REMOVE_COLOR(x, prootid, id, pid, lid, rid, uid, ppid)              \
@@ -245,8 +245,7 @@ do                                                                              
             }                                                                   \
         }                                                                       \
     }                                                                           \
-    if(id > 0)                                                                  \
-    MMT(x)->map[id].color = MMT_COLOR_BLACK;                                \
+    if(id > 0) MMT(x)->map[id].color = MMT_COLOR_BLACK;                         \
 }while(0)
 /* init mmtree */
 void *mmtree_init(char *file)
@@ -710,21 +709,21 @@ void mmtree_remove(void *x, int *prootid, int tnodeid, int *key, int *data)
                 }
                 lid = MMT(x)->map[tnodeid].left;
                 MMT(x)->map[lid].parent = id;
-                if((rid = MMT(x)->map[tnodeid].left) > 0)
+                if((rid = MMT(x)->map[tnodeid].right) > 0)
                     MMT(x)->map[rid].parent = id;
                 goto color_remove;
             }
             parent =  MMT(x)->map[tnodeid].parent;
             color = MMT(x)->map[tnodeid].color;
-            if((child = id) > 0) MMT(x)->map[child].parent = parent;
-            if((pid = MMT(x)->map[id].parent = MMT(x)->map[tnodeid].parent) > 0)
+            if((id = child) > 0) MMT(x)->map[child].parent = parent;
+            if((pid = MMT(x)->map[tnodeid].parent) > 0)
             {
                 if(tnodeid == MMT(x)->map[pid].left) 
-                    MMT(x)->map[pid].left = id;
+                    MMT(x)->map[pid].left = child;
                 else 
-                    MMT(x)->map[pid].right = id;
+                    MMT(x)->map[pid].right = child;
             }
-            else *prootid = id;
+            else *prootid = child;
             //remove color set
 color_remove:
             if(color == MMT_COLOR_BLACK)
