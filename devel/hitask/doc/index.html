@@ -327,6 +327,48 @@
                 }
                 return xmlhttp;
             }
+            function rebuildChild(oParent, pid, id, name)
+            {
+                if(oParent && parseInt(id) > 0 && name)
+                {
+                    var strchilds = oParent.getAttribute('childs');
+                    var pName = oParent.getAttribute('UName');
+                    var childs = null;
+                    if(strchilds) childs = eval(strchilds);
+                    else childs = new Array();
+                    childs[id] = name;
+                    strchilds = "({";
+                        for(x in childs)
+                        {
+                            if(x != pid)
+                            strchilds += x+":'"+childs[x]+"',";
+                        }
+                        strchilds += pid+":'"+pName+"'})";
+                    oParent.setAttribute('childs', strchilds);
+                }
+            }
+            function removeChild(oParent, pid, id)
+            {
+                if(oParent && parseInt(id) > 0)
+                {
+                    var strchilds = oParent.getAttribute('childs');
+                    var pName = oParent.getAttribute('UName');
+                    var childs = null;
+                    if(strchilds)
+                    {
+                        childs = eval(strchilds);
+                        childs[id] = '';
+                        strchilds = "({";
+                            for(x in childs)
+                            {
+                                if(x != pid && childs[x])
+                                    strchilds += x+":'"+childs[x]+"',";
+                            }
+                            strchilds += pid+":'"+pName+"'})";
+                        oParent.setAttribute('childs', strchilds);
+                    }
+                }
+            }
             function AddNode(pid, id, name, count)
             {
                 if(document.getElementById("node"+id) != null) return;
@@ -601,6 +643,7 @@
                                 {
                                     var nchilds = oParent.getAttribute('nchilds') - 1;
                                     oParent.setAttribute('nchilds', nchilds);
+                                    removeChild(oParent, pid, id);
                                     var ochild =  document.getElementById('ch_'+pid);
                                     ochild.innerHTML = nchilds;
                                     oParent.removeChild(oNode); 
