@@ -1440,12 +1440,12 @@ int hibase_pop_urlnode(HIBASE *hibase, URLNODE *urlnode)
         MUTEX_LOCK(hibase->mutex);
         if(hibase->urlnodeio.total > 0 && hibase->urlnodeio.current > 0) 
         {
-            //fprintf(stdout, "%s::%d qtotal:%d urlnodeid:%d current:%d total:%d task_current:%d\n",
-            //        __FILE__, __LINE__,  FQTOTAL(hibase->qtask), 
-            //        hibase->istate->urlnode_task_current, 
-            //        hibase->urlnodeio.current, hibase->urlnodeio.total,
-            //         hibase->istate->urlnode_task_current);
             /*
+            fprintf(stdout, "%s::%d qtotal:%d urlnodeid:%d current:%d total:%d task_current:%d\n",
+                    __FILE__, __LINE__,  FQTOTAL(hibase->qtask), 
+                    hibase->istate->urlnode_task_current, 
+                    hibase->urlnodeio.current, hibase->urlnodeio.total,
+                     hibase->istate->urlnode_task_current);
                px = &x;
                if(FQTOTAL(hibase->qtask)>0 && FQUEUE_POP(hibase->qtask, int, px) == 0)
                {
@@ -1464,11 +1464,11 @@ int hibase_pop_urlnode(HIBASE *hibase, URLNODE *urlnode)
                 {
                     urlnodeid = x;
                 }
-                else if(hibase->istate->urlnodeio_current <= hibase->urlnodeio.current)
+                else if(hibase->istate->urlnode_task_current <= hibase->urlnodeio.current)
                 {
                     urlnodeid = hibase->istate->urlnode_task_current++;
                 }
-                //fprintf(stdout, "%s::%d::urlnodeid:%d current:%d\n", __FILE__, __LINE__, urlnodeid, hibase->urlnodeio.current);
+                fprintf(stdout, "%s::%d::urlnodeid:%d current:%d\n", __FILE__, __LINE__, urlnodeid, hibase->urlnodeio.current);
                 if(urlnodeid > 0 && pread(hibase->urlnodeio.fd, urlnode, sizeof(URLNODE), 
                     (off_t)sizeof(URLNODE) * (off_t)urlnodeid) > 0)
                 {
@@ -1480,9 +1480,8 @@ int hibase_pop_urlnode(HIBASE *hibase, URLNODE *urlnode)
                     break;
                 }
                 else urlnodeid = -1;
-                //fprintf(stdout, "%s::%d::urlnodeid:%d\n", __FILE__, __LINE__, urlnodeid);
+                fprintf(stdout, "%s::%d::urlnodeid:%d\n", __FILE__, __LINE__, urlnodeid);
             }
-            //*/
             //fprintf(stdout, "%s::%d::urlnodeid:%d\n", __FILE__, __LINE__, urlnodeid);
         }
         MUTEX_UNLOCK(hibase->mutex);
