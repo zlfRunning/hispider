@@ -323,11 +323,16 @@ int http_proxy_packet_reader(CONN *conn, CB_DATA *buffer)
     return n;
 }
 
+/* http proxy packet handler */
+int http_proxy_handler(CONN *conn,  HTTP_REQ *http_req);
+
+
 /* packet handler */
 int http_proxy_packet_handler(CONN *conn, CB_DATA *packet)
 {
     char *p = NULL, *end = NULL;
     HTTP_RESPONSE http_resp = {0};
+    HTTP_REQ *http_req = NULL;
     CONN *parent = NULL;
     int n = 0, len = 0;
 
@@ -336,6 +341,24 @@ int http_proxy_packet_handler(CONN *conn, CB_DATA *packet)
     {
         if(http_response_parse(p, end, &http_resp) == -1) goto err_end;
         conn->save_cache(conn, &http_resp, sizeof(HTTP_RESPONSE));
+        if(http_resp.respid == RESP_MOVEDPERMANENTLY 
+                &&  (n = http_resp.headers[HEAD_RESP_LOCATION]) > 0
+                && (p = http_resp.hlines + n))
+        {
+            //fprintf(stdout, "Redirect to %s\n", p);
+            if(conn->session.parent
+                && (parent = hitaskd->findconn(hitaskd, conn->session.parentid))
+                && conn->session.parent == parent
+                && (http_req = (HTTP_REQ *)(PCB(parent->cache)->data))
+                && (n = strlen(p)) > 0 && n < HTTP_URL_PATH_MAX)
+            {
+                fprintf(stdout, "Redirect %s to %s[%d]\n", http_req->path, p, n);
+                memcpy(http_req->path, p, n);
+                http_req->path[n] = '\0';
+                return http_proxy_handler(parent, http_req); 
+            }
+            goto err_end;
+        }
         if((n = http_resp.headers[HEAD_ENT_CONTENT_TYPE])
             && (p = http_resp.hlines + n) && strncasecmp(p, "text", 4) == 0)
         {
@@ -364,7 +387,7 @@ int http_proxy_packet_handler(CONN *conn, CB_DATA *packet)
             }
         }
 err_end: 
-        conn->over(conn);
+        if(conn)conn->over(conn);
     }
     return -1;
 }
@@ -454,6 +477,7 @@ int http_proxy_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DAT
     }
     return -1;
 }
+
 /* timeout handler */
 int http_proxy_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
@@ -463,6 +487,7 @@ int http_proxy_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_D
     }
     return -1;
 }
+
 /* bind proxy  */
 int hitaskd_bind_proxy(CONN *conn, char *host, int port) 
 {
@@ -662,10 +687,12 @@ int hitaskd_newtask(CONN *conn)
     if(conn)
     {   
         //fprintf(stdout, "%s::%d OK\n", __FILE__,__LINE__);
+        DEBUG_LOGGER(hitaskd_logger, "Ready for pop_urlnode -> total:%d on %s:%d via %d", hibase->istate->urlnodeio_current, conn->remote_ip, conn->remote_port, conn->fd);
         if((urlnodeid = hibase->pop_urlnode(hibase, &urlnode)) > 0 
                 && (urlid = urlnode.urlid) >= 0)
         {
-            fprintf(stdout, "urlid:%d parent:%d node:%d\n", urlnode.urlid, urlnode.parentid, urlnode.tnodeid);
+            DEBUG_LOGGER(hitaskd_logger, "pop_urlnode(%d) on %s:%d via %d", urlnodeid, conn->remote_ip, conn->remote_port, conn->fd);
+            //fprintf(stdout, "urlid:%d parent:%d node:%d\n", urlnode.urlid, urlnode.parentid, urlnode.tnodeid);
             //fprintf(stdout, "urlid:%d\n", urlnode.urlid);
             //fprintf(stdout, "%d::usernodeid:%d userid:%d\n", __LINE__, urlnodeid, urlid);
             if(urlnode.parentid> 0 && hibase->get_urlnode(hibase,urlnode.parentid,&parent) > 0)
@@ -728,6 +755,7 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
         if(strncasecmp(http_req.path, "/proxy/", 7) == 0)
         {
             strcpy(http_req.path, http_req.path + 7);
+            conn->save_cache(conn, &http_req, sizeof(HTTP_REQ));
             return http_proxy_handler(conn, &http_req);
         }
         if(http_req.reqid == HTTP_GET)
@@ -1352,6 +1380,8 @@ int hitaskd_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA
         }
         else
         {
+            ERROR_LOGGER(hitaskd_logger, "Closing connection[%s:%d] via %d", 
+                    conn->remote_ip, conn->remote_port, conn->fd);
             return conn->over(conn);
         }
     }
@@ -1656,7 +1686,7 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                                             (templates[i].linkmap.flag & REG_IS_POST))) >= 0)
                             {
                             fprintf(stdout, "%s::%d url:%s\n", __FILE__, __LINE__, newurl);
-                                nodeid = templates[i].linkmap.nodeid;
+                                //nodeid = templates[i].linkmap.nodeid;
                                 parentid = urlnode->id;
                                 if(nodeid == urlnode->tnodeid) parentid = urlnode->parentid;
                                 level = 0;
@@ -1710,7 +1740,7 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                                         //fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
                                         if(templates[i].map[x].flag & REG_IS_LIST) level = 1;
                                         //fprintf(stdout, "%s::%d level:%d\n", __FILE__, __LINE__, level);
-                                        if(level > 0)id=hibase->add_urlnode(hibase,nodeid,parentid,urlid,level);
+                                        id=hibase->add_urlnode(hibase,nodeid,parentid,urlid,level);
                                         fprintf(stdout, "%s::%d newurl:%s id:%d x:%d "
                                                 "nodeid:%d parent:%d urlid:%d level:%d\n", 
                                                 __FILE__, __LINE__, newurl, id, x, 
@@ -1719,8 +1749,9 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                                     }
                                     else
                                     {
-                                        ERROR_LOGGER(hitaskd_logger, "matche %s url:%s failed",
-                                                templates[i].pattern, url);
+                                        ERROR_LOGGER(hitaskd_logger, "matche url:%s failed", url);
+                                        //ERROR_LOGGER(hitaskd_logger, "matche %s url:%s failed",
+                                        //        templates[i].pattern, url);
                                     }
                                 }
                                 else
