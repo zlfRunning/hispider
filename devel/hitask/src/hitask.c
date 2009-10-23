@@ -37,6 +37,7 @@ typedef struct _TASK
     int  uuid;
     int  state;
     char request[HTTP_BUF_SIZE];
+    char location[HTTP_PATH_MAX];
     int  nrequest;
     int  is_new_host;
     char host[DNS_NAME_MAX];

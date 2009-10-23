@@ -20,6 +20,7 @@
 #include "hibase.h"
 #include "trie.h"
 #include "tm.h"
+#include "url.h"
 #include "zstream.h"
 #define PROXY_TIMEOUT 1000000
 static char *http_default_charset = "UTF-8";
@@ -1521,122 +1522,6 @@ int histore_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
     }
     return -1;
 }
-#define MATCHEURL(count, p, pp, epp, s, es, x, pres, content)                               \
-do                                                                                          \
-{                                                                                           \
-    while(*p != '\0' && pp < epp)                                                           \
-    {                                                                                       \
-        if(*p == '<')                                                                       \
-        {                                                                                   \
-            ++p;                                                                            \
-            if(*p == '\0') goto errbreak;                                                   \
-            x = atoi(p);                                                                    \
-            if(x > count && x < 0) goto errbreak;                                           \
-            s = content + pres[x].start;                                                    \
-            es = content + pres[x].end;                                                     \
-            while(s < es && pp < epp)                                                       \
-            {                                                                               \
-                if(*((unsigned char *)s) > 127 || *s == 0x20)                               \
-                {                                                                           \
-                    if(pp > (epp - 3)) goto errbreak;                                       \
-                    pp += sprintf(pp, "%%%02x", *((unsigned char *)s));                     \
-                }else *pp++ = *s++;                                                         \
-            }                                                                               \
-            while(*p != '\0' && *p != '>')++p;                                              \
-            if(*p == '>')++p;                                                               \
-            else goto errbreak;                                                             \
-        }                                                                                   \
-        else *pp++ = *p++;                                                                  \
-    }                                                                                       \
-    *pp = '\0';break;                                                                       \
-errbreak:                                                                                   \
-    --pp;                                                                                   \
-}while(0)
-
-#define CPURL(s, es, p, e, pp, epp, end, host, path, last)                                  \
-do                                                                                          \
-{                                                                                           \
-    if(strncasecmp(p, "http://", 7) == 0)                                                   \
-    {                                                                                       \
-        while(p < e && pp < epp)                                                            \
-        {                                                                                   \
-            if(*((unsigned char *)p) > 127 || *p == 0x20)                                   \
-            {                                                                               \
-                if(pp > (epp - 3)) break;                                                   \
-                pp += sprintf(pp, "%%%02x", *((unsigned char *)p));                         \
-                ++p;                                                                        \
-            }                                                                               \
-            else *pp++ = *p++;                                                              \
-        }                                                                                   \
-        *pp++ = '\0';                                                                       \
-    }                                                                                       \
-    else                                                                                    \
-    {                                                                                       \
-        end = NULL;                                                                         \
-        path = NULL;                                                                        \
-        last = NULL;                                                                        \
-        while(s < es && pp < epp)                                                           \
-        {                                                                                   \
-            if(*s == ':' && *(s+1) == '/' && *(s+2) == '/')                                 \
-            {                                                                               \
-                if(pp > (epp - 3)) break;                                                   \
-                *pp++ = *s++;                                                               \
-                *pp++ = *s++;                                                               \
-                *pp++ = *s++;                                                               \
-                host = pp;                                                                  \
-            }                                                                               \
-            else if(host && path == NULL && *s == '/')                                      \
-            {                                                                               \
-                last = path = pp;                                                           \
-                *pp++ = *s++;                                                               \
-            }                                                                               \
-            else if(path && end == NULL && *s == '?')                                       \
-            {                                                                               \
-                end = pp;                                                                   \
-                *pp++ = *s++;                                                               \
-            }                                                                               \
-            else if(path && end == NULL && *s == '/')                                       \
-            {                                                                               \
-                last = pp;                                                                  \
-                *pp++ = *s++;                                                               \
-            }                                                                               \
-            else *pp++ = *s++;                                                              \
-        }                                                                                   \
-        *pp = '\0';                                                                         \
-        if(*p == '/')                                                                       \
-        {                                                                                   \
-            if(path) pp = path;                                                             \
-        }                                                                                   \
-        else                                                                                \
-        {                                                                                   \
-            if(path == NULL) {path = pp; *path = '/';}                                      \
-            if(last == NULL) {last = path;}                                                 \
-            if(*p == '.')                                                                   \
-            {                                                                               \
-                if(*(p+1) == '/') p += 2;                                                   \
-                while(p < e && *p == '.' && *(p+1) == '.' && *(p+2) == '/')                 \
-                {                                                                           \
-                    p += 2;                                                                 \
-                    while(p < e && *p == '/' && *(p+1) == '/') ++p;                         \
-                    if(*last == '/') last--;                                                \
-                    while(last > path && *last != '/') --last;                              \
-                }                                                                           \
-            }                                                                               \
-            if(*last == '/')last++;                                                         \
-            pp = last;                                                                      \
-        }                                                                                   \
-        while(p < e && pp < epp)                                                            \
-        {                                                                                   \
-            if(*((unsigned char *)p) > 127 || *p == 0x20)                                   \
-            {                                                                               \
-                if(pp > (epp - 3)) break;                                                   \
-                pp += sprintf(pp, "%%%02x", *((unsigned char *)p));                         \
-                ++p;                                                                        \
-            }else *pp++ = *p++;                                                             \
-        }                                                                                   \
-        *pp = '\0';                                                                         \
-    }                                                                                       \
-}while(0)
 
 /* histore pcre match */
 void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URLNODE *urlnode,
@@ -1652,11 +1537,14 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
     PRES *pres = NULL;
 
 
+    fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
     if(templates && ntemplates > 0 && tnode && urlnode && docheader && content 
             && ncontent > 0 && url && type)
     {
+    fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
         for(i = 0; i < ntemplates; i++)
         {
+    fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
             flag = PCRE_DOTALL|PCRE_MULTILINE|PCRE_UTF8;
             if(templates[i].flags & TMP_IS_IGNORECASE) flag |= PCRE_CASELESS;
             if((reg = pcre_compile(templates[i].pattern, flag, &error, &erroffset, NULL))) 
@@ -1678,6 +1566,7 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                             p = templates[i].link;
                             pp = newurl;
                             epp = newurl + HTTP_URL_MAX;
+                            memset(newurl, 0, HTTP_URL_MAX);
                             MATCHEURL(count, p, pp, epp, s, es, x, pres, content);
                             fprintf(stdout, "%s::%d count:%d nfields:%d flag:%d\n",  __FILE__, 
                                 __LINE__,count, templates[i].nfields, templates[i].linkmap.flag);
@@ -1712,8 +1601,8 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                                 //fprintf(stdout, "%s::%d %.*s\n", __FILE__,__LINE__,
                                 //length, content+start);
                                 //handling data
-                                //fprintf(stdout, "%s::%d count:%d nfields:%d flag:%d\n",  __FILE__, 
-                                //__LINE__,count, templates[i].nfields, templates[i].map[x].flag);
+                                fprintf(stdout, "%s::%d count:%d nfields:%d flag:%d\n",  __FILE__, 
+                                __LINE__,count, templates[i].nfields, templates[i].map[x].flag);
                                 nodeid = templates[i].map[x].nodeid;
                                 if((templates[i].map[x].flag & REG_IS_URL) && nodeid > 0 
                                         && length > 0 && length < HTTP_URL_MAX 
@@ -1724,12 +1613,13 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                                     p = content + start;
                                     e = content + over;
                                     pp = newurl;
+                                    memset(newurl, 0, HTTP_URL_MAX);
                                     epp = pp + HTTP_URL_MAX - 1;
                                     s = url; 
                                     es = url + docheader->nurl;
                                     CPURL(s, es, p, e, pp, epp, end, host, path, last);
                                     n = (pp - newurl);
-                                    //fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
+                                    fprintf(stdout, "RES:%s::%d url:%s newurl:%s %.*s\n", __FILE__, __LINE__, url, newurl, (over-start), content+start);
                                     if(pp > newurl && *pp == '\0' && (urlid = ltask->add_url(
                                                     ltask, urlnode->urlid, 0, newurl,  0)) >= 0)
                                     {   
@@ -1783,6 +1673,7 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
             }
         }
     }
+    _exit(0);
     return ;
 }
 

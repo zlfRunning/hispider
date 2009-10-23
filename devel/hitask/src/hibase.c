@@ -1468,7 +1468,7 @@ int hibase_pop_urlnode(HIBASE *hibase, URLNODE *urlnode)
                 {
                     urlnodeid = hibase->istate->urlnode_task_current++;
                 }
-                fprintf(stdout, "%s::%d::urlnodeid:%d current:%d\n", __FILE__, __LINE__, urlnodeid, hibase->urlnodeio.current);
+                //fprintf(stdout, "%s::%d::urlnodeid:%d current:%d\n", __FILE__, __LINE__, urlnodeid, hibase->urlnodeio.current);
                 if(urlnodeid > 0 && pread(hibase->urlnodeio.fd, urlnode, sizeof(URLNODE), 
                     (off_t)sizeof(URLNODE) * (off_t)urlnodeid) > 0)
                 {
@@ -1480,7 +1480,7 @@ int hibase_pop_urlnode(HIBASE *hibase, URLNODE *urlnode)
                     break;
                 }
                 else urlnodeid = -1;
-                fprintf(stdout, "%s::%d::urlnodeid:%d\n", __FILE__, __LINE__, urlnodeid);
+                //fprintf(stdout, "%s::%d::urlnodeid:%d\n", __FILE__, __LINE__, urlnodeid);
             }
             //fprintf(stdout, "%s::%d::urlnodeid:%d\n", __FILE__, __LINE__, urlnodeid);
         }
