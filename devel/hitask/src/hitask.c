@@ -38,6 +38,7 @@ typedef struct _TASK
     int  state;
     char request[HTTP_BUF_SIZE];
     char location[HTTP_PATH_MAX];
+    char url[HTTP_PATH_MAX];
     int  nrequest;
     int  is_new_host;
     char host[DNS_NAME_MAX];
@@ -118,6 +119,8 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
     {
         if(url && strncasecmp(url, "http://", 7) == 0)
         {
+            strcpy(tasklist[c_id].location, p);
+            DEBUG_LOGGER(logger, "Redirect to %s", url);
             p = url  + 7;
             host = p;
             while(*p != '\0' && *p != '/' && *p != ':')++p;
@@ -146,6 +149,13 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
                 ? atoi(http_resp->hlines + n) : 0;
             path = ((n = http_resp->headers[HEAD_RESP_LOCATION]) > 0)
                 ? (http_resp->hlines + n): NULL;
+            if(host && path)
+            {
+                if(sport > 0)
+                    sprintf(tasklist[c_id].url, "http://%s:%d%s", host, sport, path);
+                else
+                    sprintf(tasklist[c_id].url, "http://%s%s", host, path);
+            }
         }
         pip = ((n = http_resp->headers[HEAD_REQ_USER_AGENT]) > 0)
                 ? (http_resp->hlines + n): NULL;
@@ -189,9 +199,13 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
             p = tasklist[c_id].request;
             //GET/POST path
             if(is_use_proxy || sport != 80)
+            {
                 p += sprintf(p, "GET http://%s:%d%s HTTP/1.0\r\n", host, sport, path);
+            }
             else 
+            {
                 p += sprintf(p, "GET %s HTTP/1.0\r\n", path);
+            }
             //general
             p += sprintf(p, "Host: %s\r\nUser-Agent: %s\r\nAccept: %s\r\n"
                     "Accept-Language: %s\r\nAccept-Encoding: %s\r\n"
@@ -261,7 +275,7 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
             {
                 conn->over_cstate(conn);
                 conn->close(conn);
-                ERROR_LOGGER(logger, "Invalid http response number ");
+                ERROR_LOGGER(logger, "Invalid http response number on %s");
                 return http_download_error(c_id, ERR_CONTENT_TYPE);
             }
             else
@@ -691,33 +705,39 @@ void cb_heartbeat_handler(void *arg)
             left = 0;
             if(id >= 0 && id < ntask)
             {
-                if(tasklist[id].s_conn == NULL && (tasklist[id].s_conn = 
-                            service->newconn(service, -1, -1, hitaskd_ip, hitaskd_port, NULL)))
+                if(tasklist[id].s_conn == NULL)
                 {
-                    tasklist[id].s_conn->c_id = id;
-                    tasklist[id].s_conn->start_cstate(tasklist[id].s_conn);
-                    service->newtransaction(service, tasklist[id].s_conn, id);
+                    if((tasklist[id].s_conn = service->newconn(service, -1, -1, 
+                                    hitaskd_ip, hitaskd_port, NULL)))
+                    {
+                        tasklist[id].s_conn->c_id = id;
+                        tasklist[id].s_conn->start_cstate(tasklist[id].s_conn);
+                        service->newtransaction(service, tasklist[id].s_conn, id);
+                    }
+                    else
+                    {
+                        ERROR_LOGGER(logger, "Connect %d to %s:%d failed, %s", 
+                                id, hitaskd_ip, hitaskd_port, strerror(errno));
+                        left = id;
+                        goto err;
+                    }
                 }
-                else
+                if(tasklist[id].d_conn == NULL)
                 {
-                    ERROR_LOGGER(logger, "Connect %d to %s:%d failed, %s", 
-                            id, hitaskd_ip, hitaskd_port, strerror(errno));
-                    left = id;
-                    goto err;
-                }
-                if(tasklist[id].d_conn == NULL && (tasklist[id].d_conn = 
-                            service->newconn(service, -1, -1, histore_ip, histore_port, NULL)))
-                {
-                    tasklist[id].d_conn->c_id = id;
-                    tasklist[id].d_conn->start_cstate(tasklist[id].d_conn);
-                    service->newtransaction(service, tasklist[id].d_conn, id);
-                }
-                else
-                {
-                    ERROR_LOGGER(logger, "Connect %d to %s:%d failed, %s", 
-                            id, histore_ip, histore_port, strerror(errno));
-                    left = id;
-                    goto err;
+                    if((tasklist[id].d_conn = service->newconn(service, -1, -1, 
+                                    histore_ip, histore_port, NULL)))
+                    {   
+                        tasklist[id].d_conn->c_id = id;
+                        tasklist[id].d_conn->start_cstate(tasklist[id].d_conn);
+                        service->newtransaction(service, tasklist[id].d_conn, id);
+                    }
+                    else
+                    {
+                        ERROR_LOGGER(logger, "Connect %d to %s:%d failed, %s", 
+                                id, histore_ip, histore_port, strerror(errno));
+                        left = id;
+                        goto err;
+                    }
                 }
             }
         }
