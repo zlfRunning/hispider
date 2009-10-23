@@ -1619,7 +1619,7 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                                     es = url + docheader->nurl;
                                     CPURL(s, es, p, e, pp, epp, end, host, path, last);
                                     n = (pp - newurl);
-                                    fprintf(stdout, "RES:%s::%d url:%s newurl:%s %.*s\n", __FILE__, __LINE__, url, newurl, (over-start), content+start);
+                                    //fprintf(stdout, "RES:%s::%d url:%s newurl:%s %.*s\n", __FILE__, __LINE__, url, newurl, (over-start), content+start);
                                     if(pp > newurl && *pp == '\0' && (urlid = ltask->add_url(
                                                     ltask, urlnode->urlid, 0, newurl,  0)) >= 0)
                                     {   
@@ -1673,7 +1673,6 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
             }
         }
     }
-    _exit(0);
     return ;
 }
 
