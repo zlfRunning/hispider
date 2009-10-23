@@ -38,8 +38,8 @@ typedef struct _TASK
     int  uuid;
     int  state;
     char request[HTTP_BUF_SIZE];
-    char location[HTTP_PATH_MAX];
-    char url[HTTP_PATH_MAX];
+    char location[HTTP_URL_MAX];
+    char url[HTTP_URL_MAX];
     int  nrequest;
     int  is_new_host;
     char host[DNS_NAME_MAX];
@@ -284,11 +284,13 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
             }
             //location
             if(http_resp.respid == RESP_MOVEDPERMANENTLY
-                &&  (n = http_resp.headers[HEAD_RESP_LOCATION]) > 0
+                && (n = http_resp.headers[HEAD_RESP_LOCATION]) > 0
                 && (p = (http_resp.hlines + n))
+                && (tasklist[c_id].s_conn) && tasklist[c_id].s_conn->cache
                 && (presp = (HTTP_RESPONSE *)(PCB(tasklist[c_id].s_conn->cache)->data)))
             {
-                return http_request(c_id, presp, p);
+                return http_download_error(c_id, ERR_PROGRAM);
+                //return http_request(c_id, presp, p);
             }
             //check content-type
             //if((n = http_resp.headers[HEAD_ENT_CONTENT_TYPE]) > 0 && (p = http_resp.hlines + n))
