@@ -41,8 +41,10 @@ do                                                                              
 {                                                                                           \
     if(strncasecmp(p, "http://", 7) == 0)                                                   \
     {                                                                                       \
+        host = pp + 7;                                                                      \
         while(p < e && pp < epp)                                                            \
         {                                                                                   \
+            if(pp > host && path == NULL && *p == '/') path = pp;                           \
             if(*((unsigned char *)p) > 127 || *p == 0x20)                                   \
             {                                                                               \
                 if(pp > (epp - 3)) break;                                                   \

@@ -17,6 +17,7 @@
 #include "zstream.h"
 #include "logger.h"
 #include "doctype.h"
+#include "url.h"
 #define CHARSET_MAX 256
 #ifndef UI
 #define UI(_xp_) ((unsigned int)_xp_)
@@ -90,7 +91,7 @@ int http_download_error(int c_id, int err)
         p += sprintf(p, "%s", "\r\n");
         n = p - buf;
         tasklist[c_id].is_new_host = 0;
-        DEBUG_LOGGER(logger, "task %d", tasklist[c_id].taskid);
+        DEBUG_LOGGER(logger, "ERROR: ON task %d", tasklist[c_id].taskid);
         if(tasklist[c_id].s_conn)
             return tasklist[c_id].s_conn->push_chunk(tasklist[c_id].s_conn, buf, n);
     }
@@ -109,7 +110,9 @@ int hitask_packet_reader(CONN *conn, CB_DATA *buffer)
 /* http_request */
 int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
 {
-    char *p = NULL, *ip = NULL, *sip = NULL, *pip = NULL, *host = NULL, *path = NULL;
+    char *p = NULL, *e = NULL, *s = NULL, *es = NULL, *pp = NULL, *epp = NULL,
+        *last = NULL, *end = NULL , *ip = NULL, *sip = NULL, *pip = NULL, *host = NULL, 
+         *path = NULL, newurl[HTTP_URL_MAX], newhost[HTTP_HOST_MAX];
     // *cookie = NULL, *refer = NULL;
     int taskid = 0, n = 0, port = 0, pport = 0, userid = -1, uuid = -1, 
         sport = 0, is_use_proxy = 0;
@@ -117,13 +120,28 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
 
     if(c_id >= 0 && c_id < ntask && http_resp)
     {
-        if(url && strncasecmp(url, "http://", 7) == 0)
+        if(url)
         {
-            strcpy(tasklist[c_id].location, p);
-            DEBUG_LOGGER(logger, "Redirect to %s", url);
-            p = url  + 7;
-            host = p;
-            while(*p != '\0' && *p != '/' && *p != ':')++p;
+            s = tasklist[c_id].url;
+            es = s + strlen(s);
+            p = url;
+            e = p + strlen(p);
+            pp = newurl;
+            epp = newurl + HTTP_URL_MAX;
+            memset(newurl, 0, HTTP_URL_MAX);
+            CPURL(s, es, p, e, pp, epp, end, host, path, last);
+            if(host == NULL || path == NULL) 
+            {
+                ERROR_LOGGER(logger, "Invalid url:%s to location:%s", tasklist[c_id].url, url);
+                goto restart_task;
+            }
+            DEBUG_LOGGER(logger, "Redirect %s to %s", tasklist[c_id].url, url);
+            strcpy(tasklist[c_id].location, newurl);
+            p = host;
+            pp = newhost;
+            epp = newhost + HTTP_HOST_MAX;
+            while(*p != '\0' && *p != '/' && *p != ':' && pp < epp) *++pp = *++p;
+            host = newhost;
             sport = port = 80;
             if(*p == ':')
             {
@@ -131,8 +149,6 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
                 port = sport = atoi(p);
                 while(*p >= '0' && *p <= '9') ++p;
             }
-            path = p;
-            if(*p != '/') path = "/";
             if(tasklist[c_id].c_conn) 
             {
                 tasklist[c_id].c_conn->over(tasklist[c_id].c_conn);
@@ -200,11 +216,17 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
             //GET/POST path
             if(is_use_proxy || sport != 80)
             {
-                p += sprintf(p, "GET http://%s:%d%s HTTP/1.0\r\n", host, sport, path);
+                if(*path == '/')
+                    p += sprintf(p, "GET http://%s:%d%s HTTP/1.0\r\n", host, sport, path);
+                else
+                    p += sprintf(p, "GET http://%s:%d/%s HTTP/1.0\r\n", host, sport, path);
             }
             else 
             {
-                p += sprintf(p, "GET %s HTTP/1.0\r\n", path);
+                if(*path == '/')
+                    p += sprintf(p, "GET %s HTTP/1.0\r\n", path);
+                else
+                    p += sprintf(p, "GET /%s HTTP/1.0\r\n", path);
             }
             //general
             p += sprintf(p, "Host: %s\r\nUser-Agent: %s\r\nAccept: %s\r\n"
@@ -263,19 +285,20 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
             //location
             if(http_resp.respid == RESP_MOVEDPERMANENTLY
                 &&  (n = http_resp.headers[HEAD_RESP_LOCATION]) > 0
-                && (p = http_resp.hlines + n)
-                && (presp = (HTTP_RESPONSE *)(PCB(tasklist[c_id].c_conn->cache)->data)))
+                && (p = (http_resp.hlines + n))
+                && (presp = (HTTP_RESPONSE *)(PCB(tasklist[c_id].s_conn->cache)->data)))
             {
                 return http_request(c_id, presp, p);
             }
             //check content-type
-            if((n = http_resp.headers[HEAD_ENT_CONTENT_TYPE]) > 0 && (p = http_resp.hlines + n))
-                doctype = doctype_id(&doctype_map, p, strlen(p));
-            if(http_resp.respid != RESP_OK || (doctype_map.num > 0 && doctype == -1))
+            //if((n = http_resp.headers[HEAD_ENT_CONTENT_TYPE]) > 0 && (p = http_resp.hlines + n))
+            //    doctype = doctype_id(&doctype_map, p, strlen(p));
+            if(http_resp.respid != RESP_OK)
+                //|| (doctype_map.num > 0 && doctype == -1))
             {
                 conn->over_cstate(conn);
                 conn->close(conn);
-                ERROR_LOGGER(logger, "Invalid http response number on %s");
+                ERROR_LOGGER(logger, "Invalid http response number[%d] on %s", http_resp.respid, tasklist[c_id].url);
                 return http_download_error(c_id, ERR_CONTENT_TYPE);
             }
             else
@@ -308,7 +331,12 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
                 return -1;
             }
             if(http_resp.respid == RESP_OK) 
+            {
+                conn->save_cache(conn, &http_resp, sizeof(HTTP_RESPONSE));
+                memset(tasklist[c_id].url, 0, HTTP_URL_MAX);
+                memset(tasklist[c_id].location, 0, HTTP_URL_MAX);
                 return http_request(c_id, &http_resp, NULL);
+            }
         }
         return -1;
     }
