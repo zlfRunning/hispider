@@ -1633,12 +1633,6 @@
                             block += "<input type=checkbox name='is_need_antispam_"+i+"'";
                             if(map && map[i-1]['flag'] & 8) block += " checked ";
                             block += ">去广告</span>";
-                            block += "&nbsp;&nbsp;";
-                            block += "<span title='去掉数据两端的空格，TAB，换行等符号'>";
-                            block += "<input type=checkbox name='is_need_trim_"+i+"'";
-                            if(map && map[i-1]['flag'] & 96) block += " checked ";
-                            block += ">trim(去两端空格换行)</span>";
-
                             block += "<br>";
                             block += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
                             block += "<select name='fieldid_"+i+"'>";
@@ -2047,7 +2041,6 @@
                 var is_file = 0;
                 var is_need_clearhtml = 0;
                 var is_need_antispam = 0;
-                var is_need_trim = 0;
                 var child_nodeid = 0;
                 var child_flag = 0;
                 var map = "{";
@@ -2071,8 +2064,6 @@
                         node_flag |= 4;
                     if(form['is_need_antispam_'+i].checked == true) 
                         node_flag |= 8;
-                    if(form['is_need_trim_'+i].checked == true) 
-                        node_flag |= 96;
                     map += "["+fieldid+","+node_id+","+node_flag+"]";
                     if(i < (nfields - 1)) map += ";";
                 }

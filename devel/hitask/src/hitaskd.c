@@ -1492,8 +1492,8 @@ int histore_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                 if((n = http_req->headers[HEAD_GEN_UUID]) > 0
                     && (uuid = atoi(http_req->hlines + n)) > 0)
                 {
-                    fprintf(stdout, "%d::over download urlnode:%d doc_len:%d\n", 
-                            __LINE__, uuid, chunk->ndata);
+                    //fprintf(stdout, "%d::over download urlnode:%d doc_len:%d\n", 
+                    //        __LINE__, uuid, chunk->ndata);
                     hibase->push_task_urlnodeid(hibase, uuid);
                 }
             }
@@ -1541,14 +1541,11 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
     PRES *pres = NULL;
 
 
-    fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
     if(templates && ntemplates > 0 && tnode && urlnode && docheader && content 
             && ncontent > 0 && url && type)
     {
-    fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
         for(i = 0; i < ntemplates; i++)
         {
-    fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
             flag = PCRE_DOTALL|PCRE_MULTILINE|PCRE_UTF8;
             if(templates[i].flags & TMP_IS_IGNORECASE) flag |= PCRE_CASELESS;
             if((reg = pcre_compile(templates[i].pattern, flag, &error, &erroffset, NULL))) 
@@ -1578,14 +1575,14 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                                     && (urlid = ltask->add_url(ltask,  urlnode->urlid, 0, newurl,  
                                             (templates[i].linkmap.flag & REG_IS_POST))) >= 0)
                             {
-                            fprintf(stdout, "%s::%d url:%s\n", __FILE__, __LINE__, newurl);
+                                fprintf(stdout, "%s::%d url:%s\n", __FILE__, __LINE__, newurl);
                                 //nodeid = templates[i].linkmap.nodeid;
                                 parentid = urlnode->id;
                                 if(nodeid == urlnode->tnodeid) parentid = urlnode->parentid;
                                 level = 0;
                                 if(templates[i].linkmap.flag & REG_IS_LIST) level = 1;
                                 hibase->add_urlnode(hibase,nodeid,parentid,urlid,level);
-                            fprintf(stdout, "%s::%d url:%s\n", __FILE__, __LINE__, newurl);
+                                fprintf(stdout, "%s::%d url:%s\n", __FILE__, __LINE__, newurl);
                             }
                             else
                             {
