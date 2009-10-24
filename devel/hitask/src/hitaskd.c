@@ -38,6 +38,7 @@ static void *argvmap = NULL;
 static int proxy_timeout = 2000000;
 static int histore_ntask = 0;
 static int histore_task_running = 0;
+static int working_mode = 1;
 static char *e_argvs[] = 
 {
     "op", 
@@ -709,10 +710,13 @@ int hitaskd_newtask(CONN *conn)
             }
             goto time_out;
         }
-        else if(ltask->get_task(ltask, -1, -1, -1, -1, buf, &n) >= 0 && n > 0) 
+        else
         {
-            conn->over_evstate(conn);
-            return conn->push_chunk(conn, buf, n);
+            if(working_mode  == 0 && ltask->get_task(ltask, -1, -1, -1, -1, buf, &n) >= 0 && n > 0) 
+            {
+                conn->over_evstate(conn);
+                return conn->push_chunk(conn, buf, n);
+            }
         }
         //fprintf(stdout, "%s::%d URLNODEID:%d OK\n", __FILE__,__LINE__, urlnodeid);
 time_out:
@@ -1488,8 +1492,8 @@ int histore_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                 if((n = http_req->headers[HEAD_GEN_UUID]) > 0
                     && (uuid = atoi(http_req->hlines + n)) > 0)
                 {
-                    //fprintf(stdout, "%d::over download urlnode:%d doc_len:%d\n", 
-                    //        __LINE__, uuid, chunk->ndata);
+                    fprintf(stdout, "%d::over download urlnode:%d doc_len:%d\n", 
+                            __LINE__, uuid, chunk->ndata);
                     hibase->push_task_urlnodeid(hibase, uuid);
                 }
             }
@@ -1592,17 +1596,20 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                         }
                         else
                         {
+                            //fprintf(stdout, "MATCH_RES:");
                             for(j = 1; j < count; j++)
                             {
                                 x = j - 1;
                                 start = res[2*j];
                                 over = res[2*j+1];
                                 length = over - start;
+                                //fprintf(stdout, "[%.*s]", (over-start), content+start);
+                                //continue;
                                 //fprintf(stdout, "%s::%d %.*s\n", __FILE__,__LINE__,
                                 //length, content+start);
                                 //handling data
-                                fprintf(stdout, "%s::%d count:%d nfields:%d flag:%d\n",  __FILE__, 
-                                __LINE__,count, templates[i].nfields, templates[i].map[x].flag);
+                                //fprintf(stdout, "%s::%d count:%d nfields:%d flag:%d\n",  __FILE__, 
+                                //__LINE__,count, templates[i].nfields, templates[i].map[x].flag);
                                 nodeid = templates[i].map[x].nodeid;
                                 if((templates[i].map[x].flag & REG_IS_URL) && nodeid > 0 
                                         && length > 0 && length < HTTP_URL_MAX 
@@ -1631,11 +1638,13 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                                         if(templates[i].map[x].flag & REG_IS_LIST) level = 1;
                                         //fprintf(stdout, "%s::%d level:%d\n", __FILE__, __LINE__, level);
                                         id=hibase->add_urlnode(hibase,nodeid,parentid,urlid,level);
-                                        fprintf(stdout, "%s::%d newurl:%s id:%d x:%d "
+                                        /*
+                                          fprintf(stdout, "%s::%d newurl:%s id:%d x:%d "
                                                 "nodeid:%d parent:%d urlid:%d level:%d\n", 
                                                 __FILE__, __LINE__, newurl, id, x, 
                                                 templates[i].map[x].nodeid, urlnode->id,
                                                 urlid, urlnode->level);
+                                        */
                                     }
                                     else
                                     {
@@ -1650,6 +1659,7 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                                     //        __FILE__, __LINE__, i, j, start, over, length);
                                 }
                             }
+                            //fprintf(stdout, "\n");
                         }
                     }
                     else
@@ -1673,6 +1683,7 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
             }
         }
     }
+    //_exit(-1);
     return ;
 }
 

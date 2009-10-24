@@ -19,7 +19,8 @@ do                                                                              
             es = content + pres[x].end;                                                     \
             while(s < es && pp < epp)                                                       \
             {                                                                               \
-                if(*((unsigned char *)s) > 127 || *s == 0x20)                               \
+                if(*s == '\r' || *s == '\n' || *s == '\t')++s;                              \
+                else if(*((unsigned char *)s) > 127 || *s == 0x20)                          \
                 {                                                                           \
                     if(pp > (epp - 3)) goto errbreak;                                       \
                     pp += sprintf(pp, "%%%02x", *((unsigned char *)s));                     \
@@ -45,7 +46,8 @@ do                                                                              
         while(p < e && pp < epp)                                                            \
         {                                                                                   \
             if(pp > host && path == NULL && *p == '/') path = pp;                           \
-            if(*((unsigned char *)p) > 127 || *p == 0x20)                                   \
+            if(*p == '\r' || *p == '\n' || *p == '\t')++p;                                  \
+            else if(*((unsigned char *)p) > 127 || *p == 0x20)                              \
             {                                                                               \
                 if(pp > (epp - 3)) break;                                                   \
                 pp += sprintf(pp, "%%%02x", *((unsigned char *)p));                         \
@@ -111,7 +113,8 @@ do                                                                              
         }                                                                                   \
         while(p < e && pp < epp)                                                            \
         {                                                                                   \
-            if(*((unsigned char *)p) > 127 || *p == 0x20)                                   \
+            if(*p == '\r' || *p == '\n' || *p == '\t')++p;                                  \
+            else if(*((unsigned char *)p) > 127 || *p == 0x20)                              \
             {                                                                               \
                 if(pp > (epp - 3)) break;                                                   \
                 pp += sprintf(pp, "%%%02x", *((unsigned char *)p));                         \

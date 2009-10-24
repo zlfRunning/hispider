@@ -91,7 +91,7 @@ int http_download_error(int c_id, int err)
         p += sprintf(p, "%s", "\r\n");
         n = p - buf;
         tasklist[c_id].is_new_host = 0;
-        DEBUG_LOGGER(logger, "ERROR: ON task %d", tasklist[c_id].taskid);
+        //DEBUG_LOGGER(logger, "ERROR: ON task %d", tasklist[c_id].taskid);
         if(tasklist[c_id].s_conn)
             return tasklist[c_id].s_conn->push_chunk(tasklist[c_id].s_conn, buf, n);
     }
@@ -135,13 +135,12 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
                 ERROR_LOGGER(logger, "Invalid url:%s to location:%s", tasklist[c_id].url, url);
                 goto restart_task;
             }
-            DEBUG_LOGGER(logger, "Redirect %s to %s", tasklist[c_id].url, url);
             strcpy(tasklist[c_id].location, newurl);
             p = host;
             pp = newhost;
             epp = newhost + HTTP_HOST_MAX;
-            while(*p != '\0' && *p != '/' && *p != ':' && pp < epp) *++pp = *++p;
-            host = newhost;
+            memset(newhost, 0, HTTP_HOST_MAX);
+            while(*p != '\0' && *p != '/' && *p != ':' && pp < epp) *pp++ = *p++;
             sport = port = 80;
             if(*p == ':')
             {
@@ -154,6 +153,13 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
                 tasklist[c_id].c_conn->over(tasklist[c_id].c_conn);
                 tasklist[c_id].c_conn = NULL;
             }
+            DEBUG_LOGGER(logger, "Redirect %s to %s host[%s] newhost[%s]", tasklist[c_id].url, newurl, host, newhost);
+            if(strcasecmp(host, tasklist[c_id].host) == 0)
+            {
+                ip = tasklist[c_id].ip;
+            }
+            else ip = "255.255.255.255";
+            host = newhost;
         }
         else
         {
@@ -167,11 +173,13 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
                 ? (http_resp->hlines + n): NULL;
             if(host && path)
             {
-                if(sport > 0)
+                if(port > 0 && port != 80)
                     sprintf(tasklist[c_id].url, "http://%s:%d%s", host, sport, path);
                 else
                     sprintf(tasklist[c_id].url, "http://%s%s", host, path);
             }
+            DEBUG_LOGGER(logger, "host:%s ip:%s port:%d path:%s taskid:%d", 
+                host, ip, port, path, taskid);
         }
         pip = ((n = http_resp->headers[HEAD_REQ_USER_AGENT]) > 0)
                 ? (http_resp->hlines + n): NULL;
@@ -183,8 +191,6 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
             ? atoi(http_resp->hlines + n) : -1;
         uuid = tasklist[c_id].uuid = ((n = http_resp->headers[HEAD_GEN_UUID]) > 0)
             ? atoi(http_resp->hlines + n) : -1;
-        //fprintf(stdout, "%s::%d OK host:%s ip:%s port:%d path:%s taskid:%d \n", 
-        //        __FILE__, __LINE__, host, ip, port, path, taskid);
         if(pip && pport > 0) 
         {
             ip = pip;
@@ -192,7 +198,9 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
             is_use_proxy = 1; 
         }
         if(host == NULL || ip == NULL || path == NULL || port == 0 || taskid < 0) 
+        {
             goto restart_task;
+        }
         if(is_use_proxy == 0 && strcmp(ip, "255.255.255.255") == 0)
         {
             if((hp = gethostbyname(host)))
@@ -205,8 +213,7 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
             }
             else
             {
-                DEBUG_LOGGER(logger, "Resolving name[%s] failed, %s", 
-                        host, strerror(h_errno));
+                DEBUG_LOGGER(logger, "Resolving name[%s] failed, %s", host, strerror(h_errno));
                 goto restart_task;
             }
         }
@@ -264,7 +271,7 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
 int hitask_packet_handler(CONN *conn, CB_DATA *packet)
 {
     int n = 0, c_id = 0, doctype = -1, *px = NULL;
-    HTTP_RESPONSE http_resp = {0}, *presp = NULL;
+    HTTP_RESPONSE http_resp = {0}, resp = {0}, *presp = NULL;
     char *p = NULL, *end = NULL;
 
     if(conn && tasklist && (c_id = conn->c_id) >= 0 && c_id < ntask)
@@ -287,16 +294,17 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
                 && (n = http_resp.headers[HEAD_RESP_LOCATION]) > 0
                 && (p = (http_resp.hlines + n))
                 && (tasklist[c_id].s_conn) && tasklist[c_id].s_conn->cache
-                && (presp = (HTTP_RESPONSE *)(PCB(tasklist[c_id].s_conn->cache)->data)))
+                && (presp = (HTTP_RESPONSE *)(PCB(tasklist[c_id].s_conn->cache)->data))
+                && memcpy(&resp, presp, sizeof(HTTP_RESPONSE)))
             {
-                return http_download_error(c_id, ERR_PROGRAM);
-                //return http_request(c_id, presp, p);
+                //return http_download_error(c_id, ERR_PROGRAM);
+                return http_request(c_id, &resp, p);
             }
             //check content-type
-            //if((n = http_resp.headers[HEAD_ENT_CONTENT_TYPE]) > 0 && (p = http_resp.hlines + n))
-            //    doctype = doctype_id(&doctype_map, p, strlen(p));
-            if(http_resp.respid != RESP_OK)
-                //|| (doctype_map.num > 0 && doctype == -1))
+            if((n = http_resp.headers[HEAD_ENT_CONTENT_TYPE]) > 0 && (p = http_resp.hlines + n))
+                doctype = doctype_id(&doctype_map, p, strlen(p));
+            if(http_resp.respid != RESP_OK
+                || (doctype_map.num > 0 && doctype == -1))
             {
                 conn->over_cstate(conn);
                 conn->close(conn);
@@ -337,6 +345,9 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
                 conn->save_cache(conn, &http_resp, sizeof(HTTP_RESPONSE));
                 memset(tasklist[c_id].url, 0, HTTP_URL_MAX);
                 memset(tasklist[c_id].location, 0, HTTP_URL_MAX);
+                memset(tasklist[c_id].host, 0, DNS_NAME_MAX);
+                memset(tasklist[c_id].ip, 0, DNS_IP_MAX);
+                memset(tasklist[c_id].request, 0, HTTP_BUF_SIZE);
                 return http_request(c_id, &http_resp, NULL);
             }
         }

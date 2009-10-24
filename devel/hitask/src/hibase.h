@@ -105,6 +105,7 @@ typedef struct _URLNODE
 #define REG_IS_POST              0x10
 #define REG_IS_UNIQE             0x20
 #define REG_IS_LIST              0x40
+#define REG_IS_NEED_TRIM         0x80
 typedef struct _IREGX
 {
     short flag;

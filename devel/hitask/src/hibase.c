@@ -1194,11 +1194,11 @@ int hibase_add_urlnode(HIBASE *hibase, int tnodeid, int parentid, int urlid, int
         MUTEX_LOCK(hibase->mutex);
         if((tnode = HIO_MAP(hibase->tnodeio, TNODE))) 
         {
-            fprintf(stdout, "%s::%d urlid:%d parent_root:%d tnode_root:%d\n", __FILE__, __LINE__, urlid, parent.childs_rootid, tnode[tnodeid].urlnodes_rootid);
+            //fprintf(stdout, "%s::%d urlid:%d parent_root:%d tnode_root:%d\n", __FILE__, __LINE__, urlid, parent.childs_rootid, tnode[tnodeid].urlnodes_rootid);
             if(((mmtree_find(hibase->mmtree, tnode[tnodeid].urlnodes_rootid, urlid, NULL) <= 0
                 && mmtree_find(hibase->mmtree, parent.childs_rootid, urlid, NULL) <= 0)))
             {
-                fprintf(stdout, "%s::%d urlid:%d parent_root:%d tnode_root:%d\n", __FILE__, __LINE__, urlid, parent.childs_rootid, tnode[tnodeid].urlnodes_rootid);
+                //fprintf(stdout, "%s::%d urlid:%d parent_root:%d tnode_root:%d\n", __FILE__, __LINE__, urlid, parent.childs_rootid, tnode[tnodeid].urlnodes_rootid);
                 if(hibase->urlnodeio.left == 0)
                 {
                     HIO_INCRE(hibase->urlnodeio, URLNODE, URLNODE_INCRE_NUM);
@@ -1234,7 +1234,7 @@ int hibase_add_urlnode(HIBASE *hibase, int tnodeid, int parentid, int urlid, int
                     urlnode.mmid = mmtree_insert(hibase->mmtree, &(parent.childs_rootid), 
                             urlid, urlnodeid, &old);
                 }
-                fprintf(stdout, "%d::nodeid:%d parentid:%d urlid:%d level:%d id:%d\n", __LINE__, tnodeid, parentid, urlid, level, urlnodeid);
+                //fprintf(stdout, "%d::nodeid:%d parentid:%d urlid:%d level:%d id:%d\n", __LINE__, tnodeid, parentid, urlid, level, urlnodeid);
                 urlnode.status = URLNODE_STATUS_OK;
                 if(level >= 0) urlnode.level = level;
                 if(level > 0) 
