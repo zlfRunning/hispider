@@ -961,7 +961,7 @@ int main(int argc, char **argv)
     sbase->running(sbase, 0);
     //sbase->running(sbase, 3600);
     //sbase->running(sbase, 60000000);
-    sbase->stop(sbase);
+    //sbase->stop(sbase);
     sbase->clean(&sbase);
     doctype_map_clean(&doctype_map);
     if(tasklist){free(tasklist); tasklist = NULL;}
