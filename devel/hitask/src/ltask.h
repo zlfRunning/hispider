@@ -46,7 +46,7 @@
 #define DNS_TASK_MAX            32
 #define DNS_IP_MAX              16
 #define DNS_NAME_MAX            128
-#define HTTP_DOWNLOAD_TIMEOUT   20000000
+#define HTTP_DOWNLOAD_TIMEOUT   60000000
 #define HTML_MAX_SIZE           1048576
 #define TASK_STATE_INIT         0x00
 #define TASK_STATE_OK           0x02
