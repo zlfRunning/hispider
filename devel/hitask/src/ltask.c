@@ -1590,7 +1590,13 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
         {
             DEBUG_LOGGER(task->logger, "url:%s nurl:%d status:%d url_off:%lld", 
                     url, meta.url_len, meta.status, meta.url_off);
-        }else goto end;
+        }
+        else 
+        {
+            FATAL_LOGGER(task->logger, "Invalid urlid:%d", urlid);
+            if(task->state) task->state->url_task_error++;
+            goto end;
+        }
         if(meta.url_len > 0 && meta.url_len <= HTTP_URL_MAX && meta.status >= 0 
                 && (n = pread(task->url_fd, url, meta.url_len, meta.url_off)) > 0)
         {
@@ -1623,6 +1629,16 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
                         meta.content_len);
                 ret = 0;
             }
+            else
+            {
+                if(task->state) task->state->url_task_error++;
+                ERROR_LOGGER(task->logger, "Invalid urlid:%d url:%s", urlid, url);
+            }
+        }
+        else
+        {
+            if(task->state) task->state->url_task_error++;
+            ERROR_LOGGER(task->logger, "Invalid urlid:%d url:%s", urlid, url);
         }
         if(date)
         {
