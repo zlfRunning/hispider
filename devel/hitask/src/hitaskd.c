@@ -1586,7 +1586,7 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                             }
                             else
                             {
-                                ERROR_LOGGER(hitaskd_logger, "link error link:%s pattern:%s url:%s",
+                                ERROR_LOGGER(histore_logger, "link error link:%s pattern:%s url:%s",
                                         templates[i].link, templates[i].pattern, url);
                             }
                         }
@@ -1604,8 +1604,8 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                                 //fprintf(stdout, "%s::%d %.*s\n", __FILE__,__LINE__,
                                 //length, content+start);
                                 //handling data
-                                DEBUG_LOGGER(histore_logger, "Matched count:%d nfields:%d flag:%d",
-                                    count, templates[i].nfields, templates[i].map[x].flag);
+                                //DEBUG_LOGGER(histore_logger, "Matched count:%d nfields:%d flag:%d",
+                                //count, templates[i].nfields, templates[i].map[x].flag);
                                 nodeid = templates[i].map[x].nodeid;
                                 if((templates[i].map[x].flag & REG_IS_URL) && nodeid > 0 
                                         && length > 0 && length < HTTP_URL_MAX 
@@ -1660,8 +1660,8 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                         start_offset = -1;
                         if(n == PCRE_ERROR_NOMATCH)
                         {
-                            fprintf(stdout, "No match result with pattern[%s] at url[%s]\n", 
-                                    templates[i].pattern, url);
+                            FATAL_LOGGER(histore_logger, 
+                                    "No match result pattern[%s] url[%s]", templates[i].pattern, url);
                         }
                     }
                 }
@@ -1671,8 +1671,8 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
             {
                 //fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__, ntemplates);
                 //error
-                fprintf(stdout, "%s::%d pcre compile error:%s at offset:%d\n", 
-                        __FILE__, __LINE__, error, erroffset);
+                FATAL_LOGGER(histore_logger, "pcre compile error:%s at offset:%d\n", 
+                        error, erroffset);
             }
         }
     }
