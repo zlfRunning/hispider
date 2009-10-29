@@ -1597,7 +1597,7 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
             if(task->state) task->state->url_task_error++;
             goto end;
         }
-        if(meta.url_len > 0 && meta.url_len <= HTTP_URL_MAX && meta.status >= 0 
+        if(meta.url_len > 0 && meta.url_len <= HTTP_URL_MAX 
                 && (n = pread(task->url_fd, url, meta.url_len, meta.url_off)) > 0)
         {
             pdocheader->nurl    = (short)meta.url_len;
