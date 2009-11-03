@@ -835,9 +835,10 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
             {
                 err = atoi(http_req.hlines + n);
                 if((n = http_req.headers[HEAD_GEN_UUID]) > 0
-                    && (uuid = atoi(http_req.hlines + n)) > 0
-                    && err != ERR_HTTP_RESP)
+                    && (uuid = atoi(http_req.hlines + n)) > 0)
+                    //&& err != ERR_HTTP_RESP)
                 {
+                    DEBUG_LOGGER(hitaskd_logger, "ERR-redownload urlid:%d uuid:%d", urlid, uuid);
                     hibase->update_urlnode(hibase, uuid, 1);
                 }
                 ltask->set_url_status(ltask, urlid, NULL, URL_STATUS_ERR, err);

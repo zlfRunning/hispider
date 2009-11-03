@@ -39,7 +39,7 @@
 #define USER_STATUS_READY       2
 #define TASK_WAIT_TIMEOUT       1000000
 #define TASK_WAIT_MAX           10000000
-#define TASK_RETRY_TIMES        8
+#define TASK_RETRY_TIMES        1
 #define DNS_TIMEOUT_MAX         4
 #define DNS_PATH_MAX            256
 #define DNS_BUF_SIZE            65536
@@ -146,6 +146,7 @@ typedef struct _LSTATE
     int   url_ntasks;
     int   url_task_ok;
     int   url_task_error;
+    int   host_ok;
     int   host_current;
     int   host_total;
     off_t doc_total_zsize;

@@ -41,6 +41,18 @@ do                                                                              
     }                                                                                       \
 }while(0)
 static const char *running_ops[] = {"running", "stop"};
+static const char *err_list[] = {"Invalid Proxy", "Bad Response", 
+    "Bad HTTP header or program", "Invalid Content-type", "Bad Host IP",
+    "ERROR TASK on connection", "Timeout", "Invalid data", ""};
+#define ERR_MSG_NUM  8
+const char *get_err_msg(int id)
+{
+    int n = id, no = 0;
+    while((n /= 2))++no;
+    if(no < 0 || no > ERR_MSG_NUM) no = ERR_MSG_NUM;
+    return err_list[no];
+}
+
 /* mkdir */
 int ltask_mkdir(char *path, int mode)
 {
@@ -590,7 +602,8 @@ int ltask_set_host_ip(LTASK *task, char *host, int *ips, int nips)
         MUTEX_LOCK(task->mutex);
         TRIETAB_RGET(task->table, host, n, dp);
         if((i = ((long)dp - 1)) >= 0 && i < task->hostio.total 
-                && task->hostio.map && task->hostio.map != (void *)-1)
+                && (host_node = (LHOST *)(task->hostio.map)) && host_node != (void *)-1
+                && host_node[i].ip_count <= 0 )
         {
             if((task->ipio.end + nips * sizeof(int)) >= task->ipio.size)
             {
@@ -603,6 +616,7 @@ int ltask_set_host_ip(LTASK *task, char *host, int *ips, int nips)
                 host_node->ip_off = task->ipio.end;
                 host_node->ip_count = (short)nips;
                 task->ipio.end += (off_t)(nips * sizeof(int));
+                if(task->state) task->state->host_ok++;
                 ret = 0;
             }
         }
@@ -1061,7 +1075,7 @@ int ltask_set_url_status(LTASK *task, int urlid, char *url, short status, short 
             ret = 0;
         }
         if(status && task->state)task->state->url_task_error++;
-        if(err){REALLOG(task->errlogger, "%d:%d", id, err);}
+        if(err){REALLOG(task->errlogger, "%d:%d %s", id, err, get_err_msg(err));}
         MUTEX_UNLOCK(task->mutex);
     }
     return ret;
@@ -1554,7 +1568,7 @@ int ltask_get_stateinfo(LTASK *task, char *block)
                 "'t_min':'%d', 't_sec':'%d', 't_usec':'%d', 'speed':'%f', 'speed_limit':'%f'})", 
                 p, task->state->url_total, task->state->url_ntasks,
                 task->state->url_task_ok, task->state->url_task_error, task->state->doc_total_zsize, 
-                task->state->doc_total_size, task->state->host_current, task->state->host_total, 
+                task->state->doc_total_size, task->state->host_ok, task->state->host_total, 
                 day, hour, min, sec, usec, task->state->speed, task->state->speed_limit);
         ret = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
                 "Content-Length:%d\r\nConnection:close\r\n\r\n%s", n, buf);
