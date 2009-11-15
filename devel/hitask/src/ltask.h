@@ -180,6 +180,12 @@ typedef struct _LDNS
     int  status;
     char name[HTTP_IP_MAX];
 }LDNS;
+typedef struct _LUPDATE
+{
+    int status;
+    int urlid;
+    int time;
+}LUPDATE;
 /* COOKIE */
 typedef struct _LCOOKIE
 {
@@ -202,6 +208,7 @@ typedef struct _LTASK
     LIO  ipio;
     LIO  dnsio;
     LIO  userio;
+    LIO  updateio;
     int  key_fd;
     int  url_fd;
     int  domain_fd;

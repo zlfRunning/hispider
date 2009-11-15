@@ -150,16 +150,17 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
             }
             if(tasklist[c_id].c_conn) 
             {
-                tasklist[c_id].c_conn->over(tasklist[c_id].c_conn);
+                tasklist[c_id].c_conn->over_cstate(tasklist[c_id].c_conn);
+                tasklist[c_id].c_conn->close(tasklist[c_id].c_conn);
                 tasklist[c_id].c_conn = NULL;
             }
-            DEBUG_LOGGER(logger, "Redirect %s to %s host[%s] newhost[%s]", tasklist[c_id].url, newurl, host, newhost);
+            DEBUG_LOGGER(logger, "Redirect %s to %s host[%s] newhost[%s:%d]", tasklist[c_id].url, newurl, host, newhost, port);
+            host = newhost;
             if(strcasecmp(host, tasklist[c_id].host) == 0)
             {
                 ip = tasklist[c_id].ip;
             }
             else ip = "255.255.255.255";
-            host = newhost;
         }
         else
         {
@@ -308,7 +309,9 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
             {
                 conn->over_cstate(conn);
                 conn->close(conn);
-                ERROR_LOGGER(logger, "Invalid http response number[%d] on %s", http_resp.respid, tasklist[c_id].url);
+                tasklist[c_id].c_conn = NULL;
+                ERROR_LOGGER(logger, "Invalid http response number[%d] on task[%d].url:%s", 
+                        http_resp.respid, c_id, tasklist[c_id].url);
                 return http_download_error(c_id, ERR_CONTENT_TYPE);
             }
             else
@@ -374,7 +377,7 @@ int hitask_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                 tasklist[c_id].state = TASK_STATE_ERROR;
                 tasklist[c_id].c_conn = NULL;
                 conn->over_cstate(conn);
-                conn->over(conn);
+                conn->close(conn);
                 return http_download_error(c_id, ERR_TASK_CONN);
             }
         }

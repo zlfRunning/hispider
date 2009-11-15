@@ -227,12 +227,12 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
             //HIO_MUNMAP(hibase->urlnodeio);
         }*/
         //urlio
-        //sprintf(path, "%s%s", hibase->basedir, HIBASE_URI_NAME);
-        //HIO_INIT(hibase->uriio, p, st, URI, 0, URI_INCRE_NUM);
-        //if(hibase->uriio.fd < 0)
-        //{
-        //    _EXIT_("open %s failed, %s\n", path, strerror(errno));
-        //
+        sprintf(path, "%s%s", hibase->basedir, HIBASE_URI_NAME);
+        HIO_INIT(hibase->uriio, p, st, URI, 0, URI_INCRE_NUM);
+        if(hibase->uriio.fd < 0)
+        {
+            _EXIT_("open %s failed, %s\n", path, strerror(errno));
+        }
         //RESUME_STATE(hibase, uriio);
         sprintf(path, "%s%s", hibase->basedir, HIBASE_MMTREE_NAME);
         hibase->mmtree = mmtree_init(path);
@@ -1179,7 +1179,107 @@ int hibase_view_templates(HIBASE *hibase, int tnodeid, char *block)
     }
     return n;
 }
+/* url => urlnodes */
 
+int hibase_add_uri(HIBASE *hibase, int urlid, int urlnodeid)
+{
+    URI uri = {0};
+    off_t offset = 0;
+    int n = 0, mmid = -1, old = 0;
+
+    if(hibase && urlid >= 0 && urlnodeid > 0 && hibase->uriio.fd > 0)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if(hibase->istate->uriio_total <= urlid)
+        {
+            n = urlid / URI_INCRE_NUM;
+            if((urlid % URI_INCRE_NUM)) n++;
+            hibase->istate->uriio_total = n * URI_INCRE_NUM;
+            offset = (off_t)(hibase->istate->uriio_total) * (off_t)sizeof(URI);
+            if(ftruncate(hibase->uriio.fd, offset) <= 0) goto err;
+            mmid = uri.rootid = mmtree_new_tree(hibase->mmtree, urlid, urlnodeid);
+            uri.count++;
+        }
+        else
+        {
+            offset = (off_t)urlid * (off_t)sizeof(URI);
+            if(pread(hibase->uriio.fd, &uri, sizeof(URI), offset) <= 0) goto err;
+            mmid = mmtree_insert(hibase->mmtree, &(uri.rootid), urlid, urlnodeid, &old);
+            if(old <= 0) uri.count++;
+        }
+        if(mmid > 0 && old <= 0)
+        {
+            offset = (off_t)urlid * (off_t)sizeof(URI);
+            if(pwrite(hibase->uriio.fd, &uri, sizeof(URI), offset) <= 0)
+                mmid = -1;
+        }
+
+err:
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return mmid;
+}
+
+/* get uris */
+int hibase_get_uris(HIBASE *hibase, int urlid, int **urlnodeids)
+{
+    int n = 0, x = 0, id = 0, urlnodeid = 0;
+    off_t offset = 0;
+    URI uri = {0};
+
+    if(hibase && urlnodeids && hibase->uriio.fd > 0)
+    {
+        MUTEX_LOCK(hibase->mutex);   
+        offset = (off_t)urlid * (off_t)sizeof(URI);
+        if(hibase->istate && urlid >= 0 && urlid < hibase->istate->uriio_total
+            && pread(hibase->uriio.fd, &uri, sizeof(URI), offset) > 0 && uri.rootid > 0 
+            && uri.count > 0 && (*urlnodeids = (int *)calloc(uri.count, sizeof(int))))
+        {
+            urlnodeid = 0;
+            if((x = mmtree_min(hibase->mmtree, uri.rootid, &urlnodeid, &id)) > 0)
+            {
+                do
+                {
+                    *urlnodeids[n++] = urlnodeid;
+                    urlnodeid = 0;
+                }while((x = mmtree_next(hibase->mmtree, uri.rootid, x, &urlnodeid, &id))>0);
+            }
+        }
+        MUTEX_UNLOCK(hibase->mutex);   
+    }
+    return n;
+}
+
+/* delete uri */
+void hibase_del_uri(HIBASE *hibase, int urlid, int urlnodeid)
+{
+    off_t offset = 0;
+    URI uri = {0};
+    int mmid = 0;
+
+    if(hibase && hibase->uriio.fd > 0)
+    {
+        MUTEX_LOCK(hibase->mutex);   
+        offset = (off_t)urlid * (off_t)sizeof(URI);
+        if(hibase->istate && urlid >= 0 && urlid < hibase->istate->uriio_total
+            && pread(hibase->uriio.fd, &uri, sizeof(URI), offset) > 0
+            && uri.rootid > 0 && uri.count > 0)
+        {
+            if((mmid = mmtree_find(hibase->mmtree, uri.rootid, urlnodeid, NULL)) > 0)
+                mmtree_remove(hibase->mmtree, &(uri.rootid), mmid, NULL, NULL);
+        }
+        MUTEX_UNLOCK(hibase->mutex);   
+    }
+    return ;
+}
+
+/* free uri */
+void hibase_free_uris(int *urlnodeids)
+{
+    if(urlnodeids) free(urlnodeids);
+}
+
+/* add urlnode */
 int hibase_add_urlnode(HIBASE *hibase, int tnodeid, int parentid, int urlid, int level)
 {
     int urlnodeid = -1, x = 0, old = 0, *px = NULL;
@@ -1592,6 +1692,10 @@ HIBASE * hibase_init()
         hibase->update_template     = hibase_update_template;
         hibase->delete_template     = hibase_delete_template;
         hibase->view_templates      = hibase_view_templates;
+        hibase->add_uri             = hibase_add_uri;
+        hibase->get_uris            = hibase_get_uris;
+        hibase->del_uri             = hibase_del_uri;
+        hibase->free_uris           = hibase_free_uris;
         hibase->add_urlnode         = hibase_add_urlnode;
         hibase->update_urlnode      = hibase_update_urlnode;
         hibase->delete_urlnode      = hibase_delete_urlnode;

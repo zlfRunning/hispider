@@ -147,6 +147,7 @@ typedef struct _ISTATE
     int urlnodeio_current;
     int urlnodeio_left;
     int urlnodeio_total;
+    int uriio_total;
     int urlnode_task_current;
     int update_current;
 }ISTATE;
@@ -161,6 +162,12 @@ typedef struct _HIO
     off_t   size;
     void    *map;
 }HIO;
+/* URI */
+typedef struct _URI
+{
+    int rootid;
+    int count;
+}URI;
 /* hibase */
 typedef struct _HIBASE
 {
@@ -220,6 +227,10 @@ typedef struct _HIBASE
     int     (*view_tnode_childs)(struct _HIBASE *, int id, char *block);
     int     (*update_tnode)(struct _HIBASE *, int parentid, int id, char *name);
     int     (*delete_tnode)(struct _HIBASE *, int parentid, int id);
+    int     (*add_uri)(struct _HIBASE *, int urlid, int urlnodeid);
+    int     (*get_uris)(struct _HIBASE *, int urlid, int **urlnodeids);
+    void    (*del_uri)(struct _HIBASE *, int urlid, int urlnodeid);
+    void    (*free_uris)(int *urlnodeids);
     int     (*add_urlnode)(struct _HIBASE *, int nodeid, int parentid, int urlid, int level);
     int     (*update_urlnode)(struct _HIBASE *, int urlnodeid, int level);
     int     (*delete_urlnode)(struct _HIBASE *, int urlnodeid);

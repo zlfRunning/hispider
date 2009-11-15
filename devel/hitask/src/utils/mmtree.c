@@ -665,8 +665,8 @@ void mmtree_remove(void *x, int *prootid, int tnodeid, int *key, int *data)
         MUTEX_LOCK(MMT(x)->mutex);
         if(MMT(x)->map && MMT(x)->state && tnodeid < MMT(x)->state->total)
         {
-            *key = MMT(x)->map[tnodeid].key;
-            *data = MMT(x)->map[tnodeid].data;
+            if(key) *key = MMT(x)->map[tnodeid].key;
+            if(data) *data = MMT(x)->map[tnodeid].data;
             if(MMT(x)->map[tnodeid].left == 0)
                 child = MMT(x)->map[tnodeid].right;
             else if(MMT(x)->map[tnodeid].right == 0)
