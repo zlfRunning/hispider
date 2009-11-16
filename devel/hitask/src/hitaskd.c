@@ -696,7 +696,11 @@ int hitaskd_newtask(CONN *conn)
             conn->over_evstate(conn);
             return conn->push_chunk(conn, buf, n);
         }
-        else goto time_out;
+        else 
+        {
+            ERROR_LOGGER(hitaskd_logger, "get_urltask() failed");
+            goto time_out;
+        }
         /*
            if((urlnodeid = hibase->pop_urlnode(hibase, &urlnode)) > 0 
            && (urlid = urlnode.urlid) >= 0)

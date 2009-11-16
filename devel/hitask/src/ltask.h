@@ -62,7 +62,8 @@
 #define L_IP_NAME               "hi.ip"
 #define L_DOMAIN_NAME           "hi.domain"
 #define L_DOC_NAME              "hi.doc"
-#define L_QURLTASK_NAME         "hi.qurltask"
+#define L_QPRIORITY_NAME        "hi.qpriority"
+#define L_QHOST_NAME            "hi.qhost"
 #define L_QTASK_NAME            "hi.qtask"
 #define L_LOG_NAME              "hi.log"
 #define L_KEY_NAME              "hi.key"
@@ -218,7 +219,8 @@ typedef struct _LTASK
     void *urlmap;
     void *table;
     void *qproxy;
-    void *qurltask;
+    void *qpriority;
+    void *qhost;
     void *qtask;
     void *users;
     LSTATE *state;

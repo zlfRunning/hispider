@@ -1186,7 +1186,7 @@ int hibase_add_uri(HIBASE *hibase, int urlid, int urlnodeid)
 {
     URI uri = {0};
     off_t offset = 0;
-    int n = 0, mmid = -1, old = 0;
+    int n = 0, mmid = -1, old = -1;
 
     if(hibase && urlid >= 0 && urlnodeid > 0 && hibase->uri_fd > 0)
     {
@@ -1210,7 +1210,17 @@ int hibase_add_uri(HIBASE *hibase, int urlid, int urlnodeid)
         {
             offset = (off_t)urlid * (off_t)sizeof(URI);
             if(pread(hibase->uri_fd, &uri, sizeof(URI), offset) <= 0) goto err;
-            mmid = mmtree_insert(hibase->mmtree, &(uri.rootid), urlnodeid, urlid, &old);
+            DEBUG_LOGGER(hibase->logger, "Ready for read uri from offset:%lld "
+                    "and insert to mmtree[%d:%d] count:%d",
+                    offset, urlnodeid, urlid, uri.count);
+            if(uri.count == 0)
+                mmid = uri.rootid = mmtree_new_tree(hibase->mmtree, urlnodeid, urlid);
+            else
+            {
+                mmid = mmtree_insert(hibase->mmtree, &(uri.rootid), urlnodeid, urlid, &old);
+                DEBUG_LOGGER(hibase->logger, "Ready for insert to mmtree[%d:%d] count:%d",
+                        urlnodeid, urlid, uri.count);
+            }
             if(old <= 0) uri.count++;
         }
         if(mmid > 0 && old <= 0)
@@ -1279,9 +1289,11 @@ void hibase_del_uri(HIBASE *hibase, int urlid, int urlnodeid)
             && uri.rootid > 0 && uri.count > 0)
         {
             if((mmid = mmtree_find(hibase->mmtree, uri.rootid, urlnodeid, NULL)) > 0)
+            {
                 mmtree_remove(hibase->mmtree, &(uri.rootid), mmid, NULL, NULL);
-            memset(&uri, 0, sizeof(URI));
-            pwrite(hibase->uri_fd, &uri, sizeof(URI), offset);
+                uri.count--;
+                pwrite(hibase->uri_fd, &uri, sizeof(URI), offset);
+            }
         }
         MUTEX_UNLOCK(hibase->mutex);   
     }
@@ -1374,6 +1386,7 @@ int hibase_add_urlnode(HIBASE *hibase, int tnodeid, int parentid, int urlid, int
         MUTEX_UNLOCK(hibase->mutex);
         if(urlid >= 0 && urlnodeid >0)
         {
+            DEBUG_LOGGER(hibase->logger, "Ready for add URI[%d:%d]", urlid, urlnodeid);
             hibase_add_uri(hibase, urlid, urlnodeid);
         }
     }

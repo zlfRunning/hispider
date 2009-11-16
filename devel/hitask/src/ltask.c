@@ -166,11 +166,12 @@ int ltask_set_basedir(LTASK *task, char *dir)
         {
             _EXIT_("open %s failed, %s\n", path, strerror(errno));
         }
-        sprintf(path, "%s/%s", dir, L_QURLTASK_NAME);
         p = path;
-        FQUEUE_INIT(task->qurltask, p, LNODE);
+        sprintf(path, "%s/%s", dir, L_QPRIORITY_NAME);
+        FQUEUE_INIT(task->qpriority, p, LNODE);
+        sprintf(path, "%s/%s", dir, L_QHOST_NAME);
+        FQUEUE_INIT(task->qhost, p, int);
         sprintf(path, "%s/%s", dir, L_QTASK_NAME);
-        p = path;
         FQUEUE_INIT(task->qtask, p, int);
         /* host/key/ip/url/domain/document */
         sprintf(path, "%s/%s", dir, L_KEY_NAME);
@@ -750,7 +751,7 @@ int ltask_set_host_level(LTASK *task, int hostid, char *host, short level)
                 node.type = Q_TYPE_HOST;
                 node.id = id;
                 tnode = &node;
-                FQUEUE_PUSH(task->qurltask, LNODE, tnode);
+                FQUEUE_PUSH(task->qpriority, LNODE, tnode);
             }
             host_node->level = level;
             ret = 0;
@@ -765,11 +766,12 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url, int fl
 {
     char newurl[HTTP_BUF_SIZE], URL[HTTP_BUF_SIZE], *p = NULL, 
          *pp = NULL, *e = NULL, *host = NULL, *purl = NULL;
+    int ret = -1, n = 0, nurl = 0, id = 0, host_id = 0, *px  = NULL;
     void *dp = NULL, *olddp = NULL;
-    int ret = -1, n = 0, nurl = 0, id = 0, host_id = 0;
     LHOST *host_node = NULL;
     unsigned char key[MD5_LEN];
     struct stat st = {0};
+    off_t offset = 0;
     LMETA meta = {0};
 
     if(task && url)
@@ -886,13 +888,32 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url, int fl
                 }
                 else
                 {
-                    pwrite(task->meta_fd, &id, sizeof(int), (off_t)(host_node->url_last_id) 
-                            * (off_t)sizeof(LMETA) + (off_t)((char *)&(meta.next) - (char *)&meta));
+                    offset = (off_t)(host_node->url_last_id) * (off_t)sizeof(LMETA);
+                    offset += (off_t) ((char *)&(meta.next) - (char *)&meta);
+                    if(pwrite(task->meta_fd, &id, sizeof(int), offset) <= 0)
+                    {
+                        ERROR_LOGGER(task->logger, "write back meta.next:%d offset:%lld failed,%s", 
+                                id, offset, strerror(errno));
+                    }
+                    if(host_node->url_current_id == -1) host_node->url_current_id = id;
+                    //* (off_t)sizeof(LMETA) + (off_t)((char *)&(meta.next) - (char *)&meta));
+                }
+                if(host_node->url_left == 0 && task->qhost)
+                {
+                    px = &host_id;
+                    FQUEUE_PUSH(task->qhost, int, px);
+                    DEBUG_LOGGER(task->logger, "Ready for add host:%d to qhost qtotal:%d", 
+                            host_id, FQTOTAL(task->qhost));
                 }
                 host_node->url_left++;
                 host_node->url_last_id = id;
                 host_node->url_total++;
-                pwrite(task->meta_fd, &meta, sizeof(LMETA), (off_t)id * (off_t)sizeof(LMETA));
+                offset = (off_t)id * (off_t)sizeof(LMETA);
+                if(pwrite(task->meta_fd, &meta, sizeof(LMETA), offset) <= 0)
+                {
+                    ERROR_LOGGER(task->logger, "write meta[%d] offset:%lld failed, %s", 
+                            id, offset, strerror(errno));
+                }
                 if(task->state) task->state->url_total++;
                 ret = id;
             }
@@ -915,7 +936,7 @@ err:
 int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime, 
         int referid, char *refer, char *cookie)
 {
-    int urlid = -1, n = -1, x = 0;
+    int urlid = -1, n = -1, x = -1, *px = NULL;
     LNODE node = {0}, *tnode = NULL;
     LHOST *host_node = NULL;
     LMETA meta = {0};
@@ -926,7 +947,7 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
         if(url_id >= 0) urlid = url_id;
         else
         {
-            if(FQUEUE_POP(task->qurltask, LNODE, &node) == 0)
+            if(FQUEUE_POP(task->qpriority, LNODE, &node) == 0)
             {
                 if(node.type == Q_TYPE_HOST && node.id >= 0)
                 {
@@ -935,7 +956,7 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
                     if(host_node->url_left > 1)
                     {
                         tnode = &node;
-                        FQUEUE_PUSH(task->qurltask, LNODE, tnode);
+                        FQUEUE_PUSH(task->qpriority, LNODE, tnode);
                     }
                 }
                 else if(node.type == Q_TYPE_URL && node.id >= 0)
@@ -950,24 +971,22 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
             }
             else
             {
-                x = task->state->host_current;
-                DEBUG_LOGGER(task->logger, "QURL host:%d", x);
-                do
-                {
-                    host_node = (LHOST *)(task->hostio.map 
-                            + task->state->host_current * sizeof(LHOST));
-                    if(task->state->host_current++ == task->state->host_total) 
-                        task->state->host_current = 0;
-                    if(host_node && host_node->status >= 0 && host_node->url_left > 0)
+                    px = &x;
+                    if(FQTOTAL(task->qhost) > 0 && FQUEUE_POP(task->qhost, int, px) == 0 && x >= 0)
                     {
-                        urlid = host_node->url_current_id;
-                        DEBUG_LOGGER(task->logger, "urlid:%d current:%d left:%d total:%d", urlid, 
-                        task->state->host_current, host_node->url_left, host_node->url_total);
-                        break;
+                        DEBUG_LOGGER(task->logger, "QURL host:%d", x);
+                        host_node = (LHOST *)(task->hostio.map + x * sizeof(LHOST));
+                        if(host_node && host_node->status >= 0 && host_node->url_left > 0)
+                        {
+                            urlid = host_node->url_current_id;
+                            DEBUG_LOGGER(task->logger, "urlid:%d current:%d left:%d total:%d", 
+                                    urlid, task->state->host_current, host_node->url_left, 
+                                    host_node->url_total);
+                        }
+                        if(host_node && host_node->url_left > 1)
+                            FQUEUE_PUSH(task->qhost, int, px);
                     }
-                    else host_node = NULL;
-                    if(x == task->state->host_current) break;
-                }while(host_node == NULL);
+                //}while(FQTOTAL(task->qhost) > 0);
             }
         }
         /* read url */
@@ -1123,7 +1142,7 @@ int ltask_set_url_level(LTASK *task, int urlid, char *url, short level)
             node.type = Q_TYPE_URL;
             node.id = id;
             tnode = &node;
-            FQUEUE_PUSH(task->qurltask, LNODE, tnode);
+            FQUEUE_PUSH(task->qpriority, LNODE, tnode);
             ret = 0;
         }
         MUTEX_UNLOCK(task->mutex);
@@ -1945,7 +1964,8 @@ void ltask_clean(LTASK **ptask)
         if((*ptask)->table) {TRIETAB_CLEAN((*ptask)->table);}
         if((*ptask)->users) {TRIETAB_CLEAN((*ptask)->users);}
         if((*ptask)->cookies) {TRIETAB_CLEAN((*ptask)->cookies);}
-        if((*ptask)->qurltask){FQUEUE_CLEAN((*ptask)->qurltask);}
+        if((*ptask)->qpriority){FQUEUE_CLEAN((*ptask)->qpriority);}
+        if((*ptask)->qhost){FQUEUE_CLEAN((*ptask)->qhost);}
         if((*ptask)->qtask){FQUEUE_CLEAN((*ptask)->qtask);}
         if((*ptask)->qproxy){QUEUE_CLEAN((*ptask)->qproxy);}
         if((*ptask)->key_fd > 0) close((*ptask)->key_fd);
