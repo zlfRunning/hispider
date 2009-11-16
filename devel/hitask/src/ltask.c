@@ -166,9 +166,12 @@ int ltask_set_basedir(LTASK *task, char *dir)
         {
             _EXIT_("open %s failed, %s\n", path, strerror(errno));
         }
-        sprintf(path, "%s/%s", dir, L_TASK_NAME);
+        sprintf(path, "%s/%s", dir, L_QURLTASK_NAME);
         p = path;
-        FQUEUE_INIT(task->qtask, p, LNODE);
+        FQUEUE_INIT(task->qurltask, p, LNODE);
+        sprintf(path, "%s/%s", dir, L_QTASK_NAME);
+        p = path;
+        FQUEUE_INIT(task->qtask, p, int);
         /* host/key/ip/url/domain/document */
         sprintf(path, "%s/%s", dir, L_KEY_NAME);
         if((task->key_fd = open(path, O_CREAT|O_RDWR|O_APPEND, 0644)) < 0)
@@ -747,7 +750,7 @@ int ltask_set_host_level(LTASK *task, int hostid, char *host, short level)
                 node.type = Q_TYPE_HOST;
                 node.id = id;
                 tnode = &node;
-                FQUEUE_PUSH(task->qtask, LNODE, tnode);
+                FQUEUE_PUSH(task->qurltask, LNODE, tnode);
             }
             host_node->level = level;
             ret = 0;
@@ -906,14 +909,15 @@ err:
     }
     return ret;
 }
+/* */
 
 /* pop url */
 int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime, 
         int referid, char *refer, char *cookie)
 {
     int urlid = -1, n = -1, x = 0;
-    LHOST *host_node = NULL;
     LNODE node = {0}, *tnode = NULL;
+    LHOST *host_node = NULL;
     LMETA meta = {0};
 
     if(task && url)
@@ -922,7 +926,7 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
         if(url_id >= 0) urlid = url_id;
         else
         {
-            if(FQUEUE_POP(task->qtask, LNODE, &node) == 0)
+            if(FQUEUE_POP(task->qurltask, LNODE, &node) == 0)
             {
                 if(node.type == Q_TYPE_HOST && node.id >= 0)
                 {
@@ -931,7 +935,7 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
                     if(host_node->url_left > 1)
                     {
                         tnode = &node;
-                        FQUEUE_PUSH(task->qtask, LNODE, tnode);
+                        FQUEUE_PUSH(task->qurltask, LNODE, tnode);
                     }
                 }
                 else if(node.type == Q_TYPE_URL && node.id >= 0)
@@ -1119,7 +1123,7 @@ int ltask_set_url_level(LTASK *task, int urlid, char *url, short level)
             node.type = Q_TYPE_URL;
             node.id = id;
             tnode = &node;
-            FQUEUE_PUSH(task->qtask, LNODE, tnode);
+            FQUEUE_PUSH(task->qurltask, LNODE, tnode);
             ret = 0;
         }
         MUTEX_UNLOCK(task->mutex);
@@ -1128,7 +1132,7 @@ int ltask_set_url_level(LTASK *task, int urlid, char *url, short level)
 }
 
 /* NEW TASK */
-int ltask_get_task(LTASK *task, int url_id, int referid, int uuid, 
+int ltask_get_urltask(LTASK *task, int url_id, int referid, int uuid, 
         int userid, char *buf, int *nbuf)
 {
     char url[HTTP_URL_MAX], date[64], refer[HTTP_URL_MAX], cookie[HTTP_COOKIE_MAX], 
@@ -1196,6 +1200,23 @@ int ltask_get_task(LTASK *task, int url_id, int referid, int uuid,
                     port, host, path);
             if(task->state) task->state->url_ntasks++;
         }
+    }
+    return urlid;
+}
+
+/* POP TASK for content extract */
+int ltask_pop_task(LTASK *task)
+{
+    int urlid = -1, *px = NULL;
+    if(task)
+    {
+       MUTEX_LOCK(task->mutex); 
+       if(FQTOTAL(task->qtask) > 0)
+       {
+           px = &urlid;
+           FQUEUE_POP(task->qtask, int, px);
+       }
+       MUTEX_UNLOCK(task->mutex); 
     }
     return urlid;
 }
@@ -1582,7 +1603,7 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
         char *content, int ncontent , int is_extract_link)
 {
     char buf[HTTP_BUF_SIZE], *url = NULL, *p = NULL, *data = NULL;
-    int ret = -1, n = 0, interval = 0;
+    int ret = -1, n = 0, interval = 0, *px = NULL;
     size_t  ndata = 0;
     LDOCHEADER  *pdocheader = NULL;
     struct stat st = {0};
@@ -1638,6 +1659,8 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
                     task->state->url_task_ok++;
                     UPDATE_SPEED(task, interval);
                 }
+                px = &urlid;
+                FQUEUE_PUSH(task->qtask, int, px);
                 DEBUG_LOGGER(task->logger, "nurl:%d[%s] ntype:%d[%s] ncontent:%d total:%d ", 
                         pdocheader->nurl, url, pdocheader->ntype, type, pdocheader->ncontent, 
                         meta.content_len);
@@ -1920,6 +1943,7 @@ void ltask_clean(LTASK **ptask)
         if((*ptask)->table) {TRIETAB_CLEAN((*ptask)->table);}
         if((*ptask)->users) {TRIETAB_CLEAN((*ptask)->users);}
         if((*ptask)->cookies) {TRIETAB_CLEAN((*ptask)->cookies);}
+        if((*ptask)->qurltask){FQUEUE_CLEAN((*ptask)->qurltask);}
         if((*ptask)->qtask){FQUEUE_CLEAN((*ptask)->qtask);}
         if((*ptask)->qproxy){QUEUE_CLEAN((*ptask)->qproxy);}
         if((*ptask)->key_fd > 0) close((*ptask)->key_fd);
@@ -1983,7 +2007,8 @@ LTASK *ltask_init()
         task->set_url_level         = ltask_set_url_level;
         task->pop_url               = ltask_pop_url;
         task->get_url               = ltask_get_url;
-        task->get_task              = ltask_get_task;
+        task->get_urltask           = ltask_get_urltask;
+        task->pop_task              = ltask_pop_task;
         task->add_user              = ltask_add_user;
         task->del_user              = ltask_del_user;
         task->set_user_status       = ltask_set_user_status;
@@ -2193,7 +2218,7 @@ int main(int argc, char **argv)
         task->set_url_level(task, -1, 
                 "http://news.sina.com.cn/w/2009-01-28/101215088878S.shtml", 
                 L_LEVEL_UP);
-        while((urlid = task->get_task(task, buf, &nbuf)) >= 0)
+        while((urlid = task->get_urltask(task, buf, &nbuf)) >= 0)
         {
             fprintf(stdout, "%d::block[%s]\n", urlid, buf);
         }

@@ -62,7 +62,8 @@
 #define L_IP_NAME               "hi.ip"
 #define L_DOMAIN_NAME           "hi.domain"
 #define L_DOC_NAME              "hi.doc"
-#define L_TASK_NAME             "hi.task"
+#define L_QURLTASK_NAME         "hi.qurltask"
+#define L_QTASK_NAME            "hi.qtask"
 #define L_LOG_NAME              "hi.log"
 #define L_KEY_NAME              "hi.key"
 #define L_META_NAME             "hi.meta"
@@ -217,6 +218,7 @@ typedef struct _LTASK
     void *urlmap;
     void *table;
     void *qproxy;
+    void *qurltask;
     void *qtask;
     void *users;
     LSTATE *state;
@@ -257,8 +259,9 @@ typedef struct _LTASK
     int (*get_url)(struct _LTASK *, int urlid, char *url);
     int (*set_url_status)(struct _LTASK *, int urlid, char *url, short status, short err);
     int (*set_url_level)(struct _LTASK *, int urlid, char *url, short level);
-    int (*get_task)(struct _LTASK *, int urlid, int referid, int urlnodeid, 
+    int (*get_urltask)(struct _LTASK *, int urlid, int referid, int urlnodeid, 
             int userid, char *buf, int *nbuf);
+    int (*pop_task)(struct _LTASK *);
     int (*add_user)(struct _LTASK *, char *name, char *passwd);
     int (*del_user)(struct _LTASK *, int userid, char *username);
     int (*update_passwd)(struct _LTASK *, int userid, char *username, char *passwd);

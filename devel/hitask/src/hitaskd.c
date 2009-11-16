@@ -682,42 +682,46 @@ int hitaskd_auth(CONN *conn, HTTP_REQ *http_req)
 /* new task */
 int hitaskd_newtask(CONN *conn)
 {
-    int n = 0, urlnodeid = -1, urlid = -1, referid = -1;
-    URLNODE urlnode = {0}, parent = {0};
+    //int n = 0, urlnodeid = -1, urlid = -1, referid = -1;
+    //URLNODE urlnode = {0}, parent = {0};
     char buf[HTTP_BUF_SIZE];
+    int n = 0;
 
     if(conn)
     {   
         //fprintf(stdout, "%s::%d OK\n", __FILE__,__LINE__);
-        DEBUG_LOGGER(hitaskd_logger, "Ready for pop_urlnode -> total:%d on %s:%d via %d", hibase->istate->urlnodeio_current, conn->remote_ip, conn->remote_port, conn->fd);
-        if((urlnodeid = hibase->pop_urlnode(hibase, &urlnode)) > 0 
-                && (urlid = urlnode.urlid) >= 0)
+        //DEBUG_LOGGER(hitaskd_logger, "Ready for pop_urlnode -> total:%d on %s:%d via %d", hibase->istate->urlnodeio_current, conn->remote_ip, conn->remote_port, conn->fd);
+        if(ltask->get_urltask(ltask, -1, -1, -1, -1, buf, &n) >= 0 && n > 0) 
         {
-            DEBUG_LOGGER(hitaskd_logger, "pop_urlnode(%d) on %s:%d via %d", urlnodeid, conn->remote_ip, conn->remote_port, conn->fd);
-            //fprintf(stdout, "urlid:%d parent:%d node:%d\n", urlnode.urlid, urlnode.parentid, urlnode.tnodeid);
-            //fprintf(stdout, "urlid:%d\n", urlnode.urlid);
-            //fprintf(stdout, "%d::usernodeid:%d userid:%d\n", __LINE__, urlnodeid, urlid);
-            if(urlnode.parentid> 0 && hibase->get_urlnode(hibase,urlnode.parentid,&parent) > 0)
-            {
-                referid = parent.urlid;
-            }
-            if((ltask->get_task(ltask,urlnode.urlid,referid,urlnodeid,-1,buf,&n))>= 0 && n > 0)
-            {
-                //fprintf(stdout, "%d::usernodeid:%d userid:%d %s\n", 
-                //    __LINE__, urlnodeid, urlid, buf);
-                conn->over_evstate(conn);
-                return conn->push_chunk(conn, buf, n);
-            }
-            goto time_out;
+            conn->over_evstate(conn);
+            return conn->push_chunk(conn, buf, n);
+        }
+        else goto time_out;
+        /*
+           if((urlnodeid = hibase->pop_urlnode(hibase, &urlnode)) > 0 
+           && (urlid = urlnode.urlid) >= 0)
+           {
+           DEBUG_LOGGER(hitaskd_logger, "pop_urlnode(%d) on %s:%d via %d", urlnodeid, conn->remote_ip, conn->remote_port, conn->fd);
+        //fprintf(stdout, "urlid:%d parent:%d node:%d\n", urlnode.urlid, urlnode.parentid, urlnode.tnodeid);
+        //fprintf(stdout, "urlid:%d\n", urlnode.urlid);
+        //fprintf(stdout, "%d::usernodeid:%d userid:%d\n", __LINE__, urlnodeid, urlid);
+        if(urlnode.parentid> 0 && hibase->get_urlnode(hibase,urlnode.parentid,&parent) > 0)
+        {
+        referid = parent.urlid;
+        }
+        if((ltask->get_urltask(ltask,urlnode.urlid,referid,urlnodeid,-1,buf,&n))>= 0 && n > 0)
+        {
+        //fprintf(stdout, "%d::usernodeid:%d userid:%d %s\n", 
+        //    __LINE__, urlnodeid, urlid, buf);
+        conn->over_evstate(conn);
+        return conn->push_chunk(conn, buf, n);
+        }
+        goto time_out;
         }
         else
         {
-            if(working_mode  == 0 && ltask->get_task(ltask, -1, -1, -1, -1, buf, &n) >= 0 && n > 0) 
-            {
-                conn->over_evstate(conn);
-                return conn->push_chunk(conn, buf, n);
-            }
         }
+        */
         //fprintf(stdout, "%s::%d URLNODEID:%d OK\n", __FILE__,__LINE__, urlnodeid);
 time_out:
         if(conn->timeout >= TASK_WAIT_MAX) conn->timeout = 0;
@@ -1736,7 +1740,7 @@ void histore_task_handler(void *arg)
         if(block)ltask->free_content(block); 
     }
     //new task 
-    if((id = hibase->pop_task_urlnodeid(hibase)) > 0)
+    if((id = ltask->pop_task(ltask)) >= 0)
     {
         argx = (void *)((long) id);
         histore->newtask(histore, &histore_task_handler, argx);
@@ -1762,17 +1766,17 @@ int histore_oob_handler(CONN *conn, CB_DATA *oob)
 /* hearbeat handler */
 void histore_heartbeat_handler(void *arg)
 {
-    int urlnodeid = -1;
+    int id = -1;
     void *argx = NULL;
 
     if(arg && arg == histore && histore_ntask > 0)
     {
         while(histore_task_running < histore_ntask)
         {
-            if((urlnodeid = hibase->pop_task_urlnodeid(hibase)) > 0)
+            if((id = ltask->pop_task(ltask)) > 0)
             {
                 //fprintf(stdout, "%s::%d new task:%d\n", __FILE__, __LINE__, urlnodeid);
-                argx = (void *)((long) urlnodeid);
+                argx = (void *)((long) id);
                 histore->newtask(histore, &histore_task_handler, argx);
                 histore_task_running++;
             }
