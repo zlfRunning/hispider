@@ -147,9 +147,8 @@ typedef struct _ISTATE
     int urlnodeio_current;
     int urlnodeio_left;
     int urlnodeio_total;
-    int uriio_total;
     int urlnode_task_current;
-    int update_current;
+    int uri_total;
 }ISTATE;
 /* hibase io/map */
 typedef struct _HIO
@@ -181,7 +180,7 @@ typedef struct _HIBASE
     int     uid_max;
     HIO     templateio;
     void    *qtemplate;
-    HIO     uriio;
+    int     uri_fd;
     void    *mmtree;
     HIO     urlnodeio;
     void    *qurlnode;

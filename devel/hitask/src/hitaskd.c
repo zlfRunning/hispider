@@ -1494,6 +1494,7 @@ int histore_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                     p = http_req->hlines + n;
                 ltask->update_content(ltask, urlid, date, p, 
                         chunk->data, chunk->ndata, is_need_extract_link);
+                /*
                 if((n = http_req->headers[HEAD_GEN_UUID]) > 0
                     && (uuid = atoi(http_req->hlines + n)) > 0)
                 {
@@ -1501,6 +1502,7 @@ int histore_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                             __LINE__, uuid, chunk->ndata);
                     hibase->push_task_urlnodeid(hibase, uuid);
                 }
+                */
             }
             else if(http_req->reqid == HTTP_POST)
             {
@@ -1642,7 +1644,7 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                                         DEBUG_LOGGER(histore_logger,"new-urlnode:%s id:%d x:%d "
                                                 "nodeid:%d parent:%d urlid:%d level:%d", 
                                                 newurl, id, x, templates[i].map[x].nodeid, 
-                                                urlnode->id, urlid, urlnode->level);
+                                                urlnode->urlid, urlid, urlnode->level);
                                     }
                                     else
                                     {
@@ -1689,7 +1691,8 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
 void histore_task_handler(void *arg)
 {
     char *block = NULL, *url = NULL, *type = NULL, *content = NULL, *zdata = NULL;
-    int id = -1, len = 0, count = -1; 
+    int i = 0, id = 0, urlid = -1, urlnodeid = -1, len = 0, 
+        count = -1, n = 0, *uris = NULL; 
     LDOCHEADER *docheader = NULL;
     ITEMPLATE *templates = NULL;
     URLNODE urlnode = {0};
@@ -1697,54 +1700,67 @@ void histore_task_handler(void *arg)
     TNODE tnode = {0};
     size_t ndata = 0;
 
-    if(arg && (id  = (int)((long)arg)) > 0
-        && hibase->get_urlnode(hibase, id, &urlnode) > 0 && urlnode.tnodeid > 0 
-        && hibase->get_tnode(hibase, urlnode.tnodeid, &tnode) > 0 
-        && (len = ltask->get_content(ltask, urlnode.urlid, &block)) > 0) 
+    DEBUG_LOGGER(histore_logger, "Ready for task_handler();");
+    if((urlid  = (int)((long)arg)) >= 0
+            && (n = hibase->get_uris(hibase, urlid, &uris)) > 0
+            //&& hibase->get_urlnode(hibase, id, &urlnode) > 0 && urlnode.tnodeid > 0 
+            //&& hibase->get_tnode(hibase, urlnode.tnodeid, &tnode) > 0 
+            && (len = ltask->get_content(ltask, urlid, &block)) > 0
+            && len > sizeof(LDOCHEADER) && (docheader = (LDOCHEADER *)block))
     {
-
-        DEBUG_LOGGER(histore_logger, "ready for deal task:%d arg:%p", id, arg);
-        if(len > sizeof(LDOCHEADER) && (docheader = (LDOCHEADER *)block)
-            && (count = hibase->get_tnode_templates(hibase, urlnode.tnodeid, &templates)) > 0) 
+        url = block + sizeof(LDOCHEADER);
+        type = url + docheader->nurl + 1;
+        zdata = type + docheader->ntype + 1;
+        ndata = docheader->ncontent * 16;
+        DEBUG_LOGGER(histore_logger, "ready for deal url:%s type:%s ncontent:%d -> ndata:%d", 
+                url, type, docheader->ncontent, (int)ndata);
+        if(type && strncasecmp(type, "text", 4) == 0 && zdata < (block + len) 
+                && (content = (char *)calloc(1, ndata)))
         {
-            DEBUG_LOGGER(histore_logger,"ready for deal url:%d nodeid:%d "
-                "content_len:%d nurl:%d ntype:%d ncentent:%d", urlnode.urlid, urlnode.tnodeid, 
-                len, docheader->nurl, docheader->ntype, docheader->ncontent);
-            url = block + sizeof(LDOCHEADER);
-            type = url + docheader->nurl + 1;
-            zdata = type + docheader->ntype + 1;
-            ndata = docheader->ncontent * 16;
-            DEBUG_LOGGER(histore_logger, "ready for deal url:%s type:%s ncontent:%d -> ndata:%d", 
-                    url, type, docheader->ncontent, (int)ndata);
-            if(type && strncasecmp(type, "text", 4) == 0 && zdata < (block + len) 
-                    && (content = (char *)calloc(1, ndata)))
+            DEBUG_LOGGER(histore_logger, "ready for decompress %d:%d ",
+                    docheader->ncontent, (int)ndata);
+            if(zdecompress((Bytef *)zdata, (uLong )docheader->ncontent, 
+                        (Bytef *)content, (uLong *)&ndata) == 0)
             {
-                DEBUG_LOGGER(histore_logger, "ready for decompress %d:%d ",
-                        docheader->ncontent, (int)ndata);
-                if(zdecompress((Bytef *)zdata, (uLong )docheader->ncontent, 
-                            (Bytef *)content, (uLong *)&ndata) == 0)
+                DEBUG_LOGGER(histore_logger, "compressed nzdata:%d -> ndata:%d", 
+                        (int)docheader->ncontent, (int)ndata);
+                for(i = 0; i < n; i++)
                 {
-                    DEBUG_LOGGER(histore_logger, "compressed nzdata:%d -> ndata:%d", 
-                            (int)docheader->ncontent, (int)ndata);
-                    histore_data_matche(templates, count, &tnode, &urlnode,
-                            docheader, content, ndata, url, type);
+                    memset(&urlnode, 0, sizeof(URLNODE));
+                    memset(&tnode, 0, sizeof(TNODE));
+                    urlnodeid = uris[i];
+                    DEBUG_LOGGER(histore_logger, "Ready for reading urlnode:%d", urlnodeid);
+                    if(hibase->get_urlnode(hibase, urlnodeid, &urlnode) > 0 && urlnode.tnodeid > 0
+                            && hibase->get_tnode(hibase, urlnode.tnodeid, &tnode) > 0
+                            && (count = hibase->get_tnode_templates(hibase, 
+                                    urlnode.tnodeid, &templates)) > 0) 
+                    {
+                        DEBUG_LOGGER(histore_logger,"ready for deal url:%d nodeid:%d "
+                                "content_len:%d nurl:%d ntype:%d ncentent:%d", urlnode.urlid, 
+                                urlnode.tnodeid, len, docheader->nurl, docheader->ntype, 
+                                docheader->ncontent);
+                        histore_data_matche(templates, count, &tnode, &urlnode,
+                                docheader, content, ndata, url, type);
+                        if(templates)hibase->free_templates(templates);
+                        templates = NULL;
+                    }
                 }
-                else
-                {
-                    ERROR_LOGGER(hitaskd_logger, "decompress failed, %s", strerror(errno));
-                }
-                if(content) free(content);
             }
-            if(templates)hibase->free_templates(templates);
+            else
+            {
+                ERROR_LOGGER(hitaskd_logger, "decompress failed, %s", strerror(errno));
+            }
+            if(content) free(content);
         }
-        if(block)ltask->free_content(block); 
     }
+    if(block)ltask->free_content(block); 
+    if(uris) hibase->free_uris(uris);
     //new task 
     if((id = ltask->pop_task(ltask)) >= 0)
     {
         argx = (void *)((long) id);
         histore->newtask(histore, &histore_task_handler, argx);
-        //fprintf(stdout, "%s::%d id:%d\n", __FILE__, __LINE__, id);
+        fprintf(stdout, "%s::%d id:%d\n", __FILE__, __LINE__, id);
     }
     else
     {
@@ -1773,9 +1789,9 @@ void histore_heartbeat_handler(void *arg)
     {
         while(histore_task_running < histore_ntask)
         {
-            if((id = ltask->pop_task(ltask)) > 0)
+            if((id = ltask->pop_task(ltask)) >= 0)
             {
-                //fprintf(stdout, "%s::%d new task:%d\n", __FILE__, __LINE__, urlnodeid);
+                fprintf(stdout, "%s::%d new task:%d\n", __FILE__, __LINE__, id);
                 argx = (void *)((long) id);
                 histore->newtask(histore, &histore_task_handler, argx);
                 histore_task_running++;

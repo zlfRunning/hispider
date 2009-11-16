@@ -25,6 +25,7 @@
 #define  HIBASE_QTASK_NAME          "hibase.qtask"
 #define  HIBASE_QWAIT_NAME          "hibase.qwait"
 #define  HIBASE_ISTATE_NAME         "hibase.istate"
+#define  HIBASE_LOG_NAME            "hibase.log"
 #define INCRE_STATE(hibase, io, name) (hibase->istate->io##_##name = ++(hibase->io.name))
 #define DECRE_STATE(hibase, io, name) (hibase->istate->io##_##name = --(hibase->io.name))
 #define UPDATE_STATE(hibase, io)                                        \
@@ -98,6 +99,8 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
     {
         n = sprintf(hibase->basedir, "%s/", dir);
         hibase_mkdir(hibase->basedir, 0755);
+        sprintf(path, "%s/%s", dir, HIBASE_LOG_NAME);
+        LOGGER_INIT(hibase->logger, path);
         //resum state 
         sprintf(path, "%s/%s", dir, HIBASE_ISTATE_NAME);
         if((fd = open(path, O_CREAT|O_RDWR, 0644)) > 0)
@@ -228,12 +231,10 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
         }*/
         //urlio
         sprintf(path, "%s%s", hibase->basedir, HIBASE_URI_NAME);
-        HIO_INIT(hibase->uriio, p, st, URI, 0, URI_INCRE_NUM);
-        if(hibase->uriio.fd < 0)
+        if((hibase->uri_fd = open(path, O_CREAT|O_RDWR, 0644))  <= 0)
         {
             _EXIT_("open %s failed, %s\n", path, strerror(errno));
         }
-        //RESUME_STATE(hibase, uriio);
         sprintf(path, "%s%s", hibase->basedir, HIBASE_MMTREE_NAME);
         hibase->mmtree = mmtree_init(path);
     }
@@ -1187,31 +1188,40 @@ int hibase_add_uri(HIBASE *hibase, int urlid, int urlnodeid)
     off_t offset = 0;
     int n = 0, mmid = -1, old = 0;
 
-    if(hibase && urlid >= 0 && urlnodeid > 0 && hibase->uriio.fd > 0)
+    if(hibase && urlid >= 0 && urlnodeid > 0 && hibase->uri_fd > 0)
     {
         MUTEX_LOCK(hibase->mutex);
-        if(hibase->istate->uriio_total <= urlid)
+        if(hibase->istate->uri_total == 0 || hibase->istate->uri_total  <= urlid)
         {
-            n = urlid / URI_INCRE_NUM;
-            if((urlid % URI_INCRE_NUM)) n++;
-            hibase->istate->uriio_total = n * URI_INCRE_NUM;
-            offset = (off_t)(hibase->istate->uriio_total) * (off_t)sizeof(URI);
-            if(ftruncate(hibase->uriio.fd, offset) <= 0) goto err;
-            mmid = uri.rootid = mmtree_new_tree(hibase->mmtree, urlid, urlnodeid);
+            if(hibase->istate->uri_total == 0)
+                n  = 1;
+            else
+            {
+                n = urlid / URI_INCRE_NUM;
+                if((urlid % URI_INCRE_NUM)) n++;
+            }
+            hibase->istate->uri_total = n * URI_INCRE_NUM;
+            offset = (off_t)(hibase->istate->uri_total) * (off_t)sizeof(URI);
+            if(ftruncate(hibase->uri_fd, offset) < 0) goto err;
+            mmid = uri.rootid = mmtree_new_tree(hibase->mmtree, urlnodeid, urlid);
             uri.count++;
         }
         else
         {
             offset = (off_t)urlid * (off_t)sizeof(URI);
-            if(pread(hibase->uriio.fd, &uri, sizeof(URI), offset) <= 0) goto err;
-            mmid = mmtree_insert(hibase->mmtree, &(uri.rootid), urlid, urlnodeid, &old);
+            if(pread(hibase->uri_fd, &uri, sizeof(URI), offset) <= 0) goto err;
+            mmid = mmtree_insert(hibase->mmtree, &(uri.rootid), urlnodeid, urlid, &old);
             if(old <= 0) uri.count++;
         }
         if(mmid > 0 && old <= 0)
         {
             offset = (off_t)urlid * (off_t)sizeof(URI);
-            if(pwrite(hibase->uriio.fd, &uri, sizeof(URI), offset) <= 0)
+            DEBUG_LOGGER(hibase->logger, "Ready write_back URI[%d] {%d,%d} offset:%lld total:%d", 
+                    urlid, uri.rootid, uri.count, offset, hibase->istate->uri_total);
+            if(pwrite(hibase->uri_fd, &uri, sizeof(URI), offset) <= 0)
                 mmid = -1;
+            DEBUG_LOGGER(hibase->logger, "Over write_back URI[%d] {%d,%d} offset:%lld total:%d", 
+                    urlid, uri.rootid, uri.count, offset, hibase->istate->uri_total);
         }
 
 err:
@@ -1227,14 +1237,16 @@ int hibase_get_uris(HIBASE *hibase, int urlid, int **urlnodeids)
     off_t offset = 0;
     URI uri = {0};
 
-    if(hibase && urlnodeids && hibase->uriio.fd > 0)
+    if(hibase && urlnodeids && hibase->uri_fd > 0)
     {
         MUTEX_LOCK(hibase->mutex);   
         offset = (off_t)urlid * (off_t)sizeof(URI);
-        if(hibase->istate && urlid >= 0 && urlid < hibase->istate->uriio_total
-            && pread(hibase->uriio.fd, &uri, sizeof(URI), offset) > 0 && uri.rootid > 0 
+        DEBUG_LOGGER(hibase->logger, "Ready for reading uris from urlid:%d offset:%lld", urlid, offset);
+        if(hibase->istate && urlid >= 0 && urlid < hibase->istate->uri_total
+            && pread(hibase->uri_fd, &uri, sizeof(URI), offset) > 0 && uri.rootid > 0 
             && uri.count > 0 && (*urlnodeids = (int *)calloc(uri.count, sizeof(int))))
         {
+            DEBUG_LOGGER(hibase->logger, "Ready for read uris");
             urlnodeid = 0;
             if((x = mmtree_min(hibase->mmtree, uri.rootid, &urlnodeid, &id)) > 0)
             {
@@ -1244,6 +1256,7 @@ int hibase_get_uris(HIBASE *hibase, int urlid, int **urlnodeids)
                     urlnodeid = 0;
                 }while((x = mmtree_next(hibase->mmtree, uri.rootid, x, &urlnodeid, &id))>0);
             }
+            DEBUG_LOGGER(hibase->logger, "Over for read uris count:%d", n);
         }
         MUTEX_UNLOCK(hibase->mutex);   
     }
@@ -1257,16 +1270,18 @@ void hibase_del_uri(HIBASE *hibase, int urlid, int urlnodeid)
     URI uri = {0};
     int mmid = 0;
 
-    if(hibase && hibase->uriio.fd > 0)
+    if(hibase && hibase->uri_fd > 0)
     {
         MUTEX_LOCK(hibase->mutex);   
         offset = (off_t)urlid * (off_t)sizeof(URI);
-        if(hibase->istate && urlid >= 0 && urlid < hibase->istate->uriio_total
-            && pread(hibase->uriio.fd, &uri, sizeof(URI), offset) > 0
+        if(hibase->istate && urlid >= 0 && urlid < hibase->istate->uri_total
+            && pread(hibase->uri_fd, &uri, sizeof(URI), offset) > 0
             && uri.rootid > 0 && uri.count > 0)
         {
             if((mmid = mmtree_find(hibase->mmtree, uri.rootid, urlnodeid, NULL)) > 0)
                 mmtree_remove(hibase->mmtree, &(uri.rootid), mmid, NULL, NULL);
+            memset(&uri, 0, sizeof(URI));
+            pwrite(hibase->uri_fd, &uri, sizeof(URI), offset);
         }
         MUTEX_UNLOCK(hibase->mutex);   
     }
@@ -1296,7 +1311,7 @@ int hibase_add_urlnode(HIBASE *hibase, int tnodeid, int parentid, int urlid, int
         {
             //fprintf(stdout, "%s::%d urlid:%d parent_root:%d tnode_root:%d\n", __FILE__, __LINE__, urlid, parent.childs_rootid, tnode[tnodeid].urlnodes_rootid);
             if(((mmtree_find(hibase->mmtree, tnode[tnodeid].urlnodes_rootid, urlid, NULL) <= 0
-                && mmtree_find(hibase->mmtree, parent.childs_rootid, urlid, NULL) <= 0)))
+                            && mmtree_find(hibase->mmtree, parent.childs_rootid, urlid, NULL) <= 0)))
             {
                 //fprintf(stdout, "%s::%d urlid:%d parent_root:%d tnode_root:%d\n", __FILE__, __LINE__, urlid, parent.childs_rootid, tnode[tnodeid].urlnodes_rootid);
                 if(hibase->urlnodeio.left == 0)
@@ -1357,6 +1372,10 @@ int hibase_add_urlnode(HIBASE *hibase, int tnodeid, int parentid, int urlid, int
             }
         }
         MUTEX_UNLOCK(hibase->mutex);
+        if(urlid >= 0 && urlnodeid >0)
+        {
+            hibase_add_uri(hibase, urlid, urlnodeid);
+        }
     }
     return urlnodeid;
 }
@@ -1639,6 +1658,8 @@ void hibase_clean(HIBASE **phibase)
         HIO_CLEAN((*phibase)->templateio);
         HIO_CLEAN((*phibase)->tnodeio);
         HIO_CLEAN((*phibase)->urlnodeio);
+        if((*phibase)->uri_fd > 0) close((*phibase)->uri_fd);
+        //HIO_CLEAN((*phibase)->uriio);
         FQUEUE_CLEAN((*phibase)->qtnode);
         FQUEUE_CLEAN((*phibase)->qtemplate);
         FQUEUE_CLEAN((*phibase)->qurlnode);
@@ -1650,6 +1671,7 @@ void hibase_clean(HIBASE **phibase)
             munmap((*phibase)->istate, sizeof(ISTATE));
         }
         MUTEX_DESTROY((*phibase)->mutex);
+        LOGGER_CLEAN((*phibase)->logger);
         //fprintf(stdout, "%s::%d::OK\n", __FILE__, __LINE__);
         free(*phibase);
         *phibase = NULL;

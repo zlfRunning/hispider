@@ -1213,8 +1213,10 @@ int ltask_pop_task(LTASK *task)
        MUTEX_LOCK(task->mutex); 
        if(FQTOTAL(task->qtask) > 0)
        {
+           DEBUG_LOGGER(task->logger, "Ready for pop_task() total:%d", FQTOTAL(task->qtask));
            px = &urlid;
            FQUEUE_POP(task->qtask, int, px);
+           DEBUG_LOGGER(task->logger, "pop_task() urlid:%d", urlid);
        }
        MUTEX_UNLOCK(task->mutex); 
     }
