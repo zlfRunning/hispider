@@ -693,7 +693,7 @@ int hitaskd_newtask(CONN *conn)
         //DEBUG_LOGGER(hitaskd_logger, "Ready for pop_urlnode -> total:%d on %s:%d via %d", hibase->istate->urlnodeio_current, conn->remote_ip, conn->remote_port, conn->fd);
         if(ltask->get_urltask(ltask, -1, -1, -1, -1, buf, &n) >= 0 && n > 0) 
         {
-            conn->over_evstate(conn);
+            //conn->over_evstate(conn);
             return conn->push_chunk(conn, buf, n);
         }
         else 
@@ -1764,7 +1764,7 @@ void histore_task_handler(void *arg)
     {
         argx = (void *)((long) id);
         histore->newtask(histore, &histore_task_handler, argx);
-        fprintf(stdout, "%s::%d id:%d\n", __FILE__, __LINE__, id);
+        //fprintf(stdout, "%s::%d id:%d\n", __FILE__, __LINE__, id);
     }
     else
     {
@@ -1795,7 +1795,7 @@ void histore_heartbeat_handler(void *arg)
         {
             if((id = ltask->pop_task(ltask)) >= 0)
             {
-                fprintf(stdout, "%s::%d new task:%d\n", __FILE__, __LINE__, id);
+                //fprintf(stdout, "%s::%d new task:%d\n", __FILE__, __LINE__, id);
                 argx = (void *)((long) id);
                 histore->newtask(histore, &histore_task_handler, argx);
                 histore_task_running++;
