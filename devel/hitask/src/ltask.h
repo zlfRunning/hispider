@@ -23,6 +23,8 @@
 #define ERR_TASK_CONN           0x20
 #define ERR_TASK_TIMEOUT        0x40
 #define ERR_DATA                0x80
+#define URL_IS_POST             0x01
+#define URL_IS_PRIORITY         0x02
 #define L_LEVEL_UP              1
 #define L_LEVEL_DOWN            -1
 #define PROXY_STATUS_OK         1

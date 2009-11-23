@@ -768,6 +768,7 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url, int fl
          *pp = NULL, *e = NULL, *host = NULL, *purl = NULL;
     int ret = -1, n = 0, nurl = 0, id = 0, host_id = 0, *px  = NULL;
     void *dp = NULL, *olddp = NULL;
+    LNODE node = {0}, *tnode = NULL;
     LHOST *host_node = NULL;
     unsigned char key[MD5_LEN];
     struct stat st = {0};
@@ -873,7 +874,18 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url, int fl
                     && write(task->key_fd, key, MD5_LEN) > 0)
             {
                 meta.depth   = parent_depth + 1;
-                if(flag >= 0) meta.flag = flag;
+                if(flag > 0) 
+                {
+                    meta.flag |= flag;
+                    meta.level = 1;
+                    if(flag & URL_IS_PRIORITY)
+                    {
+                        node.type = Q_TYPE_URL;
+                        node.id = id;
+                        tnode = &node;
+                        FQUEUE_PUSH(task->qpriority, LNODE, tnode);
+                    }
+                }
                 meta.parent  = parentid;
                 meta.url_off = st.st_size;
                 meta.url_len = n - 1;
@@ -969,7 +981,8 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
                     goto end;
                 }
             }
-            else
+            else goto end;
+            /*
             {
                     px = &x;
                     if(FQTOTAL(task->qhost) > 0 && FQUEUE_POP(task->qhost, int, px) == 0 && x >= 0)
@@ -987,7 +1000,7 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
                             FQUEUE_PUSH(task->qhost, int, px);
                     }
                 //}while(FQTOTAL(task->qhost) > 0);
-            }
+            }*/
         }
         /* read url */
         DEBUG_LOGGER(task->logger, "READURL urlid:%d", urlid);
@@ -1230,6 +1243,7 @@ int ltask_pop_task(LTASK *task)
     if(task)
     {
        MUTEX_LOCK(task->mutex); 
+       DEBUG_LOGGER(task->logger, "qtask_total:%d", FQTOTAL(task->qtask));
        if(FQTOTAL(task->qtask) > 0)
        {
            DEBUG_LOGGER(task->logger, "Ready for pop_task() total:%d", FQTOTAL(task->qtask));
@@ -1644,8 +1658,8 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
         url = buf + sizeof(LDOCHEADER);
         if(pread(task->meta_fd, &meta, sizeof(LMETA), (off_t)urlid * (off_t)sizeof(LMETA)) > 0 )
         {
-            DEBUG_LOGGER(task->logger, "url:%s nurl:%d status:%d url_off:%lld", 
-                    url, meta.url_len, meta.status, meta.url_off);
+            DEBUG_LOGGER(task->logger, "urlid:%d nurl:%d status:%d url_off:%lld", 
+                    urlid, meta.url_len, meta.status, meta.url_off);
         }
         else 
         {

@@ -374,6 +374,10 @@ int hitask_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
             }
             else
             {
+                ERROR_LOGGER(logger, "error_handler(%p) on remote[%s:%d] local[%s:%d] via %d "
+                    "packet_len:%d cache_len:%d chunk_len:%d", conn, conn->remote_ip, 
+                    conn->remote_port, conn->local_ip, conn->local_port, conn->fd,
+                    packet->ndata, cache->ndata, chunk->ndata);
                 tasklist[c_id].state = TASK_STATE_ERROR;
                 tasklist[c_id].c_conn = NULL;
                 conn->over_cstate(conn);

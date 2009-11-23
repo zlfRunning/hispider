@@ -873,8 +873,9 @@ do                                                                              
             buf[0] = '\0';                                                                      \
             ltask->get_url(ltask, urlnodes[i].urlid, buf);                                      \
             p += sprintf(p, "'%d':{'id':'%d', 'nodeid':'%d', 'level':'%d', "                    \
-                    "'nchilds':'%d', 'url':'%s'},", urlnodes[i].id, urlnodes[i].id,             \
-                    urlnodes[i].tnodeid, urlnodes[i].level, urlnodes[i].nchilds, buf);          \
+                    "'nchilds':'%d', 'urlid':'%d', 'url':'%s'},", urlnodes[i].id,               \
+                    urlnodes[i].id, urlnodes[i].tnodeid, urlnodes[i].level,                     \
+                    urlnodes[i].nchilds, urlnodes[i].urlid, buf);                               \
         }                                                                                       \
         if(count > 0)--p;                                                                       \
         p += sprintf(p, "%s", "}})");                                                           \
@@ -1260,6 +1261,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         }else goto err_end;
                         break;
                     case E_OP_URLNODE_ADD:
+                        if(level > 0) flag = URL_IS_PRIORITY;
                         if(nodeid >= 0 && url && (urlid=ltask->add_url(ltask,-1,0,url, flag))>= 0
                             && (urlnodeid = hibase->add_urlnode(hibase, nodeid, 0, urlid,level))> 0
                             && (n = hibase->get_tnode_urlnodes(hibase, nodeid, &urlnodes)) > 0)
@@ -1277,7 +1279,8 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         break;
                     case E_OP_URLNODE_UPDATE:
                         if(nodeid >= 0 && urlnodeid > 0 && level >= 0 
-                            && hibase->update_urlnode(hibase, urlnodeid, level)> 0
+                            && (hibase->update_urlnode(hibase, urlnodeid, level))> 0
+                            && (ltask->set_url_level(ltask, urlid, NULL, level)) == 0
                             && (n = hibase->get_tnode_urlnodes(hibase, nodeid, &urlnodes)) > 0)
                         {
                             VIEW_URLNODES(conn, pp, p, buf, nodeid, urlnodes, i, n);
@@ -1496,6 +1499,7 @@ int histore_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                 /* doctype */
                 if((n = http_req->headers[HEAD_ENT_CONTENT_TYPE]) > 0)
                     p = http_req->hlines + n;
+                DEBUG_LOGGER(histore_logger, "recv urlid:%d data_len:%d", urlid, chunk->ndata);
                 ltask->update_content(ltask, urlid, date, p, 
                         chunk->data, chunk->ndata, is_need_extract_link);
                 /*
@@ -1546,7 +1550,7 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
          *host = NULL, *path = NULL, *last = NULL, newurl[HTTP_URL_MAX];
     int i = -1, j = 0, flag = 0, start_offset = 0, erroffset = 0, res[FIELD_NUM_MAX * 2], 
         nres = 0, n = 0, count = 0, x = 0, urlid = 0, nodeid = 0, id = 0,
-        parentid = 0, start = 0, over = 0, length = 0, level = 0;
+        parentid = 0, start = 0, over = 0, length = 0, level = 0, urlflag = 0;
     const char *error = NULL;
     pcre *reg = NULL;
     PRES *pres = NULL;
@@ -1581,16 +1585,22 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                             MATCHEURL(count, p, pp, epp, s, es, x, pres, content);
                             DEBUG_LOGGER(histore_logger, "Matched count:%d nfields:%d flag:%d",  
                                     count, templates[i].nfields, templates[i].linkmap.flag);
+                            level = 0;
+                            urlflag = 0;
+                            if(templates[i].linkmap.flag & REG_IS_LIST) 
+                            {
+                                urlflag |= URL_IS_PRIORITY;
+                                level = 1;
+                            }
+                            if(templates[i].linkmap.flag & REG_IS_POST) urlflag |=  URL_IS_POST;
                             if(pp>newurl && *pp == '\0'&& (nodeid=templates[i].linkmap.nodeid)>0 
-                                    && (urlid = ltask->add_url(ltask,  urlnode->urlid, 0, newurl,  
-                                            (templates[i].linkmap.flag & REG_IS_POST))) >= 0)
+                                    && (urlid = ltask->add_url(ltask,  urlnode->urlid, 
+                                            0, newurl, urlflag))>= 0)
                             {
                                 DEBUG_LOGGER(histore_logger, "extract link-url:%s", newurl);
                                 //nodeid = templates[i].linkmap.nodeid;
                                 parentid = urlnode->id;
                                 if(nodeid == urlnode->tnodeid) parentid = urlnode->parentid;
-                                level = 0;
-                                if(templates[i].linkmap.flag & REG_IS_LIST) level = 1;
                                 id = hibase->add_urlnode(hibase,nodeid,parentid,urlid,level);
                                 DEBUG_LOGGER(histore_logger,"new-URLNODE id:%d url:%s level:%d", 
                                         id, newurl, level);
@@ -1635,8 +1645,14 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                                     n = (pp - newurl);
                                     DEBUG_LOGGER(histore_logger, "RES-URL url:%s newurl:%s %.*s",
                                             url, newurl, (over-start), content+start);
+                                    urlflag = 0;
+                                    if(templates[i].map[x].flag & REG_IS_LIST) 
+                                    {
+                                        urlflag |= URL_IS_PRIORITY;
+                                        level = 1;
+                                    }
                                     if(pp > newurl && *pp == '\0' && (urlid = ltask->add_url(
-                                                    ltask, urlnode->urlid, 0, newurl,  0)) >= 0)
+                                                    ltask, urlnode->urlid, 0,newurl,urlflag))>= 0)
                                     {   
                                         //fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
                                         parentid = urlnode->id;
@@ -1764,6 +1780,7 @@ void histore_task_handler(void *arg)
     {
         argx = (void *)((long) id);
         histore->newtask(histore, &histore_task_handler, argx);
+        DEBUG_LOGGER(histore_logger, "newtask():%d", id);
         //fprintf(stdout, "%s::%d id:%d\n", __FILE__, __LINE__, id);
     }
     else
@@ -1799,6 +1816,7 @@ void histore_heartbeat_handler(void *arg)
                 argx = (void *)((long) id);
                 histore->newtask(histore, &histore_task_handler, argx);
                 histore_task_running++;
+                DEBUG_LOGGER(histore_logger, "newtask():%d", id);
             }
             else break;
         }

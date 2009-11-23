@@ -2522,6 +2522,7 @@
                     {
                         urlitem = urllist['urlnodes'][x];
                         nodeid = urlitem['nodeid'];
+                        urlid = urlitem['urlid'];
                         urlnodeid = urlitem['id'];
                         htmlstr += "<li class='url-li' onmouseout=\"outDiv(this, 'url-li')\" ";
                         htmlstr += " onmousemove=\"onDiv(this, 'url-li-selected')\" >";
@@ -2530,7 +2531,7 @@
                         htmlstr += "["+urlitem['nchilds']+"]";
                         htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
                         htmlstr += "<select name='level' onchange=\"UpdateNodeURL(";
-                        htmlstr += nodeid+","+urlnodeid+", this)\">";
+                        htmlstr += nodeid+","+urlnodeid+", "+urlid+", this)\">";
                         htmlstr += "<option value='-1' selected>优先级</option>";
                         htmlstr += "<option value='0' ";
                         if(urlitem['level'] == 0) htmlstr += "selected=true";
@@ -2541,7 +2542,7 @@
                         htmlstr += "</select>";
                         htmlstr += "&nbsp;&nbsp;";
                         htmlstr += "<span class='edelete' title='Delete' ";
-                        htmlstr += "onclick=\"DeleteNodeURL("+nodeid+", "+urlnodeid+",";
+                        htmlstr += "onclick=\"DeleteNodeURL("+nodeid+", "+urlnodeid+","+urlid+",";
                         htmlstr += "'"+urlitem['url']+"')\">✘</span>";
                         htmlstr += "</li>";
                     }
@@ -2582,7 +2583,7 @@
                 }
                 return true;
             }
-            function UpdateNodeURL(nodeid, urlnodeid, oselect)
+            function UpdateNodeURL(nodeid, urlnodeid, urlid, oselect)
             {
                 var xmlHttp = null; 
                 var index = (oselect) ? oselect.selectedIndex : 0;
@@ -2593,7 +2594,7 @@
                     &&(xmlHttp = CreateXMLHTTP()) != null)
                 {
                     var argv = "op=urlnode_update&nodeid="+nodeid+"&urlnodeid=" 
-                        +urlnodeid+"&level="+level;
+                        +urlnodeid+"&urlid="+urlid+"&level="+level;
                     xmlHttp.open('POST', '/', true);
                     xmlHttp.setRequestHeader("Content-Length", argv.length);
                     xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
@@ -2611,14 +2612,15 @@
                 }
                 return true;
             }
-            function DeleteNodeURL(nodeid, urlnodeid, url)
+            function DeleteNodeURL(nodeid, urlnodeid, urlid, url)
             {
                 var xmlHttp = null; 
                 if(nodeid > 0 && urlnodeid > 0 
                     && confirm("您确认删除URL["+url+"] ?")
                     &&(xmlHttp = CreateXMLHTTP()) != null)
                 {
-                    var argv = "op=urlnode_delete&nodeid="+nodeid+"&urlnodeid="+urlnodeid;
+                var argv = "op=urlnode_delete&nodeid="+nodeid+"&urlnodeid="
+                    +urlnodeid+"&urlid="+urlid;
                     xmlHttp.open('POST', '/', true);
                     xmlHttp.setRequestHeader("Content-Length", argv.length);
                     xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
