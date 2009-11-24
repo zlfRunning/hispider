@@ -685,20 +685,20 @@ int hitaskd_newtask(CONN *conn)
     //int n = 0, urlnodeid = -1, urlid = -1, referid = -1;
     //URLNODE urlnode = {0}, parent = {0};
     char buf[HTTP_BUF_SIZE];
-    int n = 0;
+    int n = 0, urlid = 0;
 
     if(conn)
     {   
         //fprintf(stdout, "%s::%d OK\n", __FILE__,__LINE__);
-        //DEBUG_LOGGER(hitaskd_logger, "Ready for pop_urlnode -> total:%d on %s:%d via %d", hibase->istate->urlnodeio_current, conn->remote_ip, conn->remote_port, conn->fd);
-        if(ltask->get_urltask(ltask, -1, -1, -1, -1, buf, &n) >= 0 && n > 0) 
+        if((urlid = ltask->get_urltask(ltask, -1, -1, -1, -1, buf, &n)) >= 0 && n > 0) 
         {
+            DEBUG_LOGGER(hitaskd_logger, "Ready for download-urlid:%d buffer_len:%d", urlid, n);
             //conn->over_evstate(conn);
             return conn->push_chunk(conn, buf, n);
         }
         else 
         {
-            ERROR_LOGGER(hitaskd_logger, "get_urltask() failed");
+            //ERROR_LOGGER(hitaskd_logger, "get_urltask() failed");
             goto time_out;
         }
         /*
@@ -1499,7 +1499,7 @@ int histore_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                 /* doctype */
                 if((n = http_req->headers[HEAD_ENT_CONTENT_TYPE]) > 0)
                     p = http_req->hlines + n;
-                DEBUG_LOGGER(histore_logger, "recv urlid:%d data_len:%d", urlid, chunk->ndata);
+                DEBUG_LOGGER(histore_logger, "recv-urlid:%d data_len:%d", urlid, chunk->ndata);
                 ltask->update_content(ltask, urlid, date, p, 
                         chunk->data, chunk->ndata, is_need_extract_link);
                 /*
@@ -1782,7 +1782,7 @@ void histore_task_handler(void *arg)
     if(block)ltask->free_content(block); 
     if(uris) hibase->free_uris(uris);
     //new task 
-    DEBUG_LOGGER(histore_logger, "Ready for newtask():%d", id);
+    //DEBUG_LOGGER(histore_logger, "Ready for newtask():%d", id);
     if((id = ltask->pop_task(ltask)) >= 0)
     {
         argx = (void *)((long) id);
@@ -1817,7 +1817,7 @@ void histore_heartbeat_handler(void *arg)
     {
         while(histore_task_running < histore_ntask)
         {
-            DEBUG_LOGGER(histore_logger, "Ready for newtask():%d", id);
+            //DEBUG_LOGGER(histore_logger, "Ready for newtask():%d", id);
             if((id = ltask->pop_task(ltask)) >= 0)
             {
                 //fprintf(stdout, "%s::%d new task:%d\n", __FILE__, __LINE__, id);

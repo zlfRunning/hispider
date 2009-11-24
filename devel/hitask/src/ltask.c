@@ -986,26 +986,24 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
                     goto end;
                 }
             }
-            else goto end;
-            /*
+            else
             {
-                    px = &x;
-                    if(FQTOTAL(task->qhost) > 0 && FQUEUE_POP(task->qhost, int, px) == 0 && x >= 0)
+                px = &x;
+                if(FQTOTAL(task->qhost) > 0 && FQUEUE_POP(task->qhost, int, px) == 0 && x >= 0)
+                {
+                    DEBUG_LOGGER(task->logger, "QURL host:%d", x);
+                    host_node = (LHOST *)(task->hostio.map + x * sizeof(LHOST));
+                    if(host_node && host_node->status >= 0 && host_node->url_left > 0)
                     {
-                        DEBUG_LOGGER(task->logger, "QURL host:%d", x);
-                        host_node = (LHOST *)(task->hostio.map + x * sizeof(LHOST));
-                        if(host_node && host_node->status >= 0 && host_node->url_left > 0)
-                        {
-                            urlid = host_node->url_current_id;
-                            DEBUG_LOGGER(task->logger, "urlid:%d current:%d left:%d total:%d", 
-                                    urlid, task->state->host_current, host_node->url_left, 
-                                    host_node->url_total);
-                        }
-                        if(host_node && host_node->url_left > 1)
-                            FQUEUE_PUSH(task->qhost, int, px);
+                        urlid = host_node->url_current_id;
+                        DEBUG_LOGGER(task->logger, "urlid:%d current:%d left:%d total:%d", 
+                                urlid, task->state->host_current, host_node->url_left, 
+                                host_node->url_total);
                     }
-                //}while(FQTOTAL(task->qhost) > 0);
-            }*/
+                    if(host_node && host_node->url_left > 1)
+                        FQUEUE_PUSH(task->qhost, int, px);
+                }
+            }
         }
         /* read url */
         DEBUG_LOGGER(task->logger, "READURL urlid:%d", urlid);
@@ -1247,9 +1245,9 @@ int ltask_pop_task(LTASK *task)
     int urlid = -1, *px = NULL;
     if(task)
     {
-       DEBUG_LOGGER(task->logger, "Ready for pop_task() qtask_total:%d ", FQTOTAL(task->qtask));
+       //DEBUG_LOGGER(task->logger, "Ready for pop_task() qtask_total:%d ", FQTOTAL(task->qtask));
        MUTEX_LOCK(task->mutex); 
-       DEBUG_LOGGER(task->logger, "qtask_total:%d", FQTOTAL(task->qtask));
+       //DEBUG_LOGGER(task->logger, "qtask_total:%d", FQTOTAL(task->qtask));
        if(FQTOTAL(task->qtask) > 0)
        {
            DEBUG_LOGGER(task->logger, "Ready for pop_task() total:%d", FQTOTAL(task->qtask));
@@ -1258,7 +1256,7 @@ int ltask_pop_task(LTASK *task)
            DEBUG_LOGGER(task->logger, "pop_task() urlid:%d", urlid);
        }
        MUTEX_UNLOCK(task->mutex); 
-       DEBUG_LOGGER(task->logger, "over for pop_task()=%d qtask_total:%d ", urlid, FQTOTAL(task->qtask));
+       //DEBUG_LOGGER(task->logger, "over for pop_task()=%d qtask_total:%d ", urlid, FQTOTAL(task->qtask));
     }
     return urlid;
 }
