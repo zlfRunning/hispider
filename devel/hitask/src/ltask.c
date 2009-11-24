@@ -599,16 +599,20 @@ int ltask_set_host_ip(LTASK *task, char *host, int *ips, int nips)
 {
     LHOST *host_node = NULL;
     int i = 0, n = 0, ret = -1;
+    unsigned char *ip = NULL;
     void *dp = NULL;
 
     if(task && host && (n = strlen(host)) > 0)
     {
+        DEBUG_LOGGER(task->logger, "Ready for add dns:%s", host);
         MUTEX_LOCK(task->mutex);
         TRIETAB_RGET(task->table, host, n, dp);
         if((i = ((long)dp - 1)) >= 0 && i < task->hostio.total 
                 && (host_node = (LHOST *)(task->hostio.map)) && host_node != (void *)-1
                 && host_node[i].ip_count <= 0 )
         {
+            ip = (unsigned char *)&(ips[0]);
+            DEBUG_LOGGER(task->logger, "Ready for add dns:%s %d.%d.%d.%d", host, ip[0], ip[1], ip[2], ip[3]);
             if((task->ipio.end + nips * sizeof(int)) >= task->ipio.size)
             {
                 HIO_MMAP(task->ipio, int, IP_INCRE_NUM);
@@ -623,6 +627,7 @@ int ltask_set_host_ip(LTASK *task, char *host, int *ips, int nips)
                 if(task->state) task->state->host_ok++;
                 ret = 0;
             }
+            DEBUG_LOGGER(task->logger, "Over for add dns:%s %d.%d.%d.%d", host, ip[0], ip[1], ip[2], ip[3]);
         }
         MUTEX_UNLOCK(task->mutex);
     }
@@ -1242,6 +1247,7 @@ int ltask_pop_task(LTASK *task)
     int urlid = -1, *px = NULL;
     if(task)
     {
+       DEBUG_LOGGER(task->logger, "Ready for pop_task() qtask_total:%d ", FQTOTAL(task->qtask));
        MUTEX_LOCK(task->mutex); 
        DEBUG_LOGGER(task->logger, "qtask_total:%d", FQTOTAL(task->qtask));
        if(FQTOTAL(task->qtask) > 0)
@@ -1252,6 +1258,7 @@ int ltask_pop_task(LTASK *task)
            DEBUG_LOGGER(task->logger, "pop_task() urlid:%d", urlid);
        }
        MUTEX_UNLOCK(task->mutex); 
+       DEBUG_LOGGER(task->logger, "over for pop_task()=%d qtask_total:%d ", urlid, FQTOTAL(task->qtask));
     }
     return urlid;
 }
@@ -1646,12 +1653,12 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
 
     if(task && urlid >= 0 && content && ncontent > 0)
     {
+        MUTEX_LOCK(task->mutex);
         if(date)
         {
             DEBUG_LOGGER(task->logger, "Ready for update_content:(%d, %s,%s, %d)", 
                     urlid, date, type, ncontent);
         }
-        MUTEX_LOCK(task->mutex);
         fstat(task->doc_fd, &st); 
         memset(buf, 0, HTTP_BUF_SIZE);
         pdocheader = (LDOCHEADER *)buf;
@@ -1696,9 +1703,9 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
                 }
                 px = &urlid;
                 FQUEUE_PUSH(task->qtask, int, px);
-                DEBUG_LOGGER(task->logger, "nurl:%d[%s] ntype:%d[%s] ncontent:%d total:%d ", 
-                        pdocheader->nurl, url, pdocheader->ntype, type, pdocheader->ncontent, 
-                        meta.content_len);
+                DEBUG_LOGGER(task->logger, "urlid:%d nurl:%d[%s] ntype:%d[%s] ncontent:%d "
+                        "total:%d qtotal:%d", urlid, pdocheader->nurl, url, pdocheader->ntype, 
+                        type, pdocheader->ncontent, meta.content_len, FQTOTAL(task->qtask));
                 ret = 0;
             }
             else

@@ -1325,6 +1325,8 @@ int hibase_add_urlnode(HIBASE *hibase, int tnodeid, int parentid, int urlid, int
             if(((mmtree_find(hibase->mmtree, tnode[tnodeid].urlnodes_rootid, urlid, NULL) <= 0
                             && mmtree_find(hibase->mmtree, parent.childs_rootid, urlid, NULL) <= 0)))
             {
+                DEBUG_LOGGER(hibase->logger, "Ready for add urlnode[%d] left:%d total:%d",
+                        urlid, hibase->urlnodeio.left, hibase->urlnodeio.total);
                 //fprintf(stdout, "%s::%d urlid:%d parent_root:%d tnode_root:%d\n", __FILE__, __LINE__, urlid, parent.childs_rootid, tnode[tnodeid].urlnodes_rootid);
                 if(hibase->urlnodeio.left == 0)
                 {
@@ -1364,29 +1366,40 @@ int hibase_add_urlnode(HIBASE *hibase, int tnodeid, int parentid, int urlid, int
                 //fprintf(stdout, "%d::nodeid:%d parentid:%d urlid:%d level:%d id:%d\n", __LINE__, tnodeid, parentid, urlid, level, urlnodeid);
                 urlnode.status = URLNODE_STATUS_OK;
                 if(level >= 0) urlnode.level = level;
-                if(level > 0) 
-                {
-                    px = &urlnodeid;
-                    FQUEUE_PUSH(hibase->qtask, int, px);
-                }
+                /*
+                   if(level > 0) 
+                   {
+                   px = &urlnodeid;
+                   FQUEUE_PUSH(hibase->qtask, int, px);
+                   }
+                   */
                 urlnode.id = urlnodeid;
                 urlnode.parentid = parentid;
                 urlnode.urlid = urlid;
                 urlnode.tnodeid = tnodeid;
                 if(pwrite(hibase->urlnodeio.fd, &urlnode, sizeof(URLNODE),
-                            (off_t)urlnodeid * (off_t)sizeof(URLNODE))  > 0)
-                {
-                    parent.nchilds++;
-                    tnode[tnodeid].nurlnodes++;
-                    pwrite(hibase->urlnodeio.fd , &parent, sizeof(URLNODE), 
-                            (off_t)sizeof(URLNODE) * (off_t) parentid); 
+                            (off_t)urlnodeid * (off_t)sizeof(URLNODE))  > 0
+                        && parent.nchilds++ >= 0 && tnode[tnodeid].nurlnodes++ >= 0
+                        && pwrite(hibase->urlnodeio.fd , &parent, sizeof(URLNODE), 
+                            (off_t)sizeof(URLNODE) * (off_t) parentid) > 0) 
+                {                
+                    hibase->urlnodeio.left--;
+                    UPDATE_STATE(hibase, urlnodeio);
                 }
+                else
+                {
+                    ERROR_LOGGER(hibase->logger, "failed sync urlnode:%d urlid:%d parentid:%d",
+                            urlnodeid, urlid, parentid);
+                }
+                DEBUG_LOGGER(hibase->logger, "over for add urlnode[%d] left:%d total:%d",
+                        urlid, hibase->urlnodeio.left, hibase->urlnodeio.total);
             }
         }
         MUTEX_UNLOCK(hibase->mutex);
         if(urlid >= 0 && urlnodeid >0)
         {
-            DEBUG_LOGGER(hibase->logger, "Ready for add URI[%d:%d]", urlid, urlnodeid);
+            DEBUG_LOGGER(hibase->logger, "Ready for add URI[%d:%d] total:%d left:%d", 
+                    urlid, urlnodeid, hibase->urlnodeio.total, hibase->urlnodeio.left);
             hibase_add_uri(hibase, urlid, urlnodeid);
         }
     }
@@ -1457,6 +1470,8 @@ int hibase_reset_urlnode(HIBASE *hibase, int urlnodeid)
             }
             px = &urlnodeid;
             FQUEUE_PUSH(hibase->qurlnode, int, px);
+            hibase->urlnodeio.left++;
+            UPDATE_STATE(hibase, urlnodeio);
         }
     }
     return urlnodeid;
@@ -1481,12 +1496,16 @@ int hibase_get_urlnode(HIBASE *hibase, int urlnodeid, URLNODE *urlnode)
 {
     int ret = -1;
 
+    DEBUG_LOGGER(hibase->logger, "Ready for get_urlnode(%d) urlnode:%p total:%d", 
+            urlnodeid, urlnode, hibase->urlnodeio.total)
     if(hibase && urlnode && ID_IS_VALID2(hibase, urlnodeio, urlnodeid))
     {
+        DEBUG_LOGGER(hibase->logger, "Ready for read urlnode:%d", urlnodeid)
         MUTEX_LOCK(hibase->mutex);
         if(pread(hibase->urlnodeio.fd, urlnode, sizeof(URLNODE), 
                     (off_t)sizeof(URLNODE) * (off_t) urlnodeid) > 0)
         {
+            DEBUG_LOGGER(hibase->logger, "over for read urlnode:%d", urlnodeid)
             ret = urlnodeid;
         }
         MUTEX_UNLOCK(hibase->mutex);

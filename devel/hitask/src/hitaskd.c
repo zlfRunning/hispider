@@ -1749,6 +1749,7 @@ void histore_task_handler(void *arg)
                     memset(&urlnode, 0, sizeof(URLNODE));
                     memset(&tnode, 0, sizeof(TNODE));
                     urlnodeid = uris[i];
+                    count = 0;
                     DEBUG_LOGGER(histore_logger, "Ready for reading urlnode:%d", urlnodeid);
                     if(hibase->get_urlnode(hibase, urlnodeid, &urlnode) > 0 && urlnode.tnodeid > 0
                             && hibase->get_tnode(hibase, urlnode.tnodeid, &tnode) > 0
@@ -1764,6 +1765,11 @@ void histore_task_handler(void *arg)
                         if(templates)hibase->free_templates(templates);
                         templates = NULL;
                     }
+                    else
+                    {
+                        ERROR_LOGGER(histore_logger, "Read urlnode:%d failed, "
+                                "tnodeid:%d templates_count:%d ",urlnodeid,urlnode.tnodeid,count);
+                    }
                 }
             }
             else
@@ -1776,6 +1782,7 @@ void histore_task_handler(void *arg)
     if(block)ltask->free_content(block); 
     if(uris) hibase->free_uris(uris);
     //new task 
+    DEBUG_LOGGER(histore_logger, "Ready for newtask():%d", id);
     if((id = ltask->pop_task(ltask)) >= 0)
     {
         argx = (void *)((long) id);
@@ -1810,6 +1817,7 @@ void histore_heartbeat_handler(void *arg)
     {
         while(histore_task_running < histore_ntask)
         {
+            DEBUG_LOGGER(histore_logger, "Ready for newtask():%d", id);
             if((id = ltask->pop_task(ltask)) >= 0)
             {
                 //fprintf(stdout, "%s::%d new task:%d\n", __FILE__, __LINE__, id);
