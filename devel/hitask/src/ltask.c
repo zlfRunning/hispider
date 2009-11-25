@@ -589,6 +589,7 @@ int ltask_pop_host(LTASK *task, char *host)
             ++host_node;
             task->hostio.current++;
         }while(task->hostio.current < task->hostio.total);
+        DEBUG_LOGGER(task->logger, "POP-HOST:%s id:%d", host, host_id);
         MUTEX_UNLOCK(task->mutex);
     }
     return host_id;
@@ -598,8 +599,9 @@ int ltask_pop_host(LTASK *task, char *host)
 int ltask_set_host_ip(LTASK *task, char *host, int *ips, int nips)
 {
     LHOST *host_node = NULL;
-    int i = 0, n = 0, ret = -1;
+    int id = 0, n = 0, ret = -1;
     unsigned char *ip = NULL;
+    struct stat st = {0};
     void *dp = NULL;
 
     if(task && host && (n = strlen(host)) > 0)
@@ -607,12 +609,33 @@ int ltask_set_host_ip(LTASK *task, char *host, int *ips, int nips)
         DEBUG_LOGGER(task->logger, "Ready for add dns:%s", host);
         MUTEX_LOCK(task->mutex);
         TRIETAB_RGET(task->table, host, n, dp);
-        if((i = ((long)dp - 1)) >= 0 && i < task->hostio.total 
-                && (host_node = (LHOST *)(task->hostio.map)) && host_node != (void *)-1
-                && host_node[i].ip_count <= 0 )
+        if(dp == NULL)
+        {
+            if(task->hostio.end >= task->hostio.size)
+            {
+                HIO_MMAP(task->hostio, LHOST, HOST_INCRE_NUM);
+            }
+            id = task->hostio.end/(off_t)sizeof(LHOST);
+            host_node = (LHOST *)(task->hostio.map + task->hostio.end);
+            if(fstat(task->domain_fd, &st) != 0) goto err;
+            host_node->host_off = st.st_size;
+            host_node->host_len = n;
+            if(pwrite(task->domain_fd, host, n+1, st.st_size) <= 0) goto err;
+            dp = (void *)((long)(id + 1));
+            TRIETAB_RADD(task->table, host, n, dp);
+            task->hostio.end += (off_t)sizeof(LHOST);
+            if(task->state) task->state->host_total++;
+        }
+        else
+        {
+            host_node = (LHOST *)(task->hostio.map);
+        }
+        if(id >= 0 && id < task->hostio.total && host_node 
+                && host_node != (void *)-1 && host_node[id].ip_count <= 0 )
         {
             ip = (unsigned char *)&(ips[0]);
-            DEBUG_LOGGER(task->logger, "Ready for add dns:%s %d.%d.%d.%d", host, ip[0], ip[1], ip[2], ip[3]);
+            DEBUG_LOGGER(task->logger, "Ready for add dns:%s %d.%d.%d.%d", 
+                    host, ip[0], ip[1], ip[2], ip[3]);
             if((task->ipio.end + nips * sizeof(int)) >= task->ipio.size)
             {
                 HIO_MMAP(task->ipio, int, IP_INCRE_NUM);
@@ -620,7 +643,7 @@ int ltask_set_host_ip(LTASK *task, char *host, int *ips, int nips)
             if(task->ipio.map && task->ipio.map != (void *)-1)
             {
                 memcpy(task->ipio.map + task->ipio.end, ips, nips * sizeof(int));
-                host_node = (LHOST *)(task->hostio.map + i * sizeof(LHOST));
+                host_node = (LHOST *)(task->hostio.map + id * sizeof(LHOST));
                 host_node->ip_off = task->ipio.end;
                 host_node->ip_count = (short)nips;
                 task->ipio.end += (off_t)(nips * sizeof(int));
@@ -629,6 +652,7 @@ int ltask_set_host_ip(LTASK *task, char *host, int *ips, int nips)
             }
             DEBUG_LOGGER(task->logger, "Over for add dns:%s %d.%d.%d.%d", host, ip[0], ip[1], ip[2], ip[3]);
         }
+err:
         MUTEX_UNLOCK(task->mutex);
     }
     return ret;
@@ -837,7 +861,9 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url, int fl
         if(dp == NULL)
         {
             if(task->hostio.end >= task->hostio.size)
-            {HIO_MMAP(task->hostio, LHOST, HOST_INCRE_NUM);}
+            {
+                HIO_MMAP(task->hostio, LHOST, HOST_INCRE_NUM);
+            }
             host_id = task->hostio.end/(off_t)sizeof(LHOST);
             host_node = (LHOST *)(task->hostio.map + task->hostio.end);
 	        DEBUG_LOGGER(task->logger, "%d:url[%d:%s] URL[%d:%s] path[%s]", 
@@ -1019,7 +1045,6 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
             }
         }
         /* read url */
-        DEBUG_LOGGER(task->logger, "READURL urlid:%d", urlid);
         do
         {
 
@@ -1028,7 +1053,11 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
                     && meta.url_len > 0 && meta.url_len < HTTP_URL_MAX 
                     && meta.status >= 0 && meta.retry_times < TASK_RETRY_TIMES) 
             {
-                if(is_priority_url) break;
+                if(is_priority_url) 
+                {
+                    DEBUG_LOGGER(task->logger, "POP-PRIORITY-URL urlid:%d ", urlid);
+                    break;
+                }
                 else
                 {
                     if((meta.flag & URL_IS_PRIORITY))
@@ -1037,6 +1066,7 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
                     }
                     else 
                     {
+                        DEBUG_LOGGER(task->logger, "POP-URL urlid:%d ", urlid);
                         break;
                     }
                 }
@@ -1061,7 +1091,7 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
             url[n] = '\0';
             if(host_node == NULL) 
                     host_node = (LHOST *)(task->hostio.map + meta.host_id * sizeof(LHOST));
-            host_node->url_current_id = meta.next;
+            if(!is_priority_url) host_node->url_current_id = meta.next;
             host_node->url_left--;
             //refer
             refer[0] = '\0';
@@ -1222,11 +1252,11 @@ int ltask_get_urltask(LTASK *task, int url_id, int referid, int uuid,
         {
             DEBUG_LOGGER(task->logger, "TASK-URL:%s", url);
             host = p = ps = url + strlen(HTTP_PREF);
-            //DEBUG_LOGGER(task->logger, "TASK-HOST:%s", host);
             while(*p != '\0' && *p != ':' && *p != '/')++p;
             ch = *p;
             *p = '\0';
-            ip = ltask_get_host_ip(task, ps);
+            DEBUG_LOGGER(task->logger, "TASK-HOST:%s", host);
+            ip = ltask_get_host_ip(task, host);
             port = 80;
             if(ch == ':')
             {

@@ -690,10 +690,14 @@ int hitaskd_newtask(CONN *conn)
     if(conn)
     {   
         //fprintf(stdout, "%s::%d OK\n", __FILE__,__LINE__);
+        DEBUG_LOGGER(hitaskd_logger, "newtask() on connection[%s:%d] local[%s:%d] via %d",
+                conn->remote_ip, conn->remote_port, conn->local_ip, conn->local_port, conn->fd);
         if((urlid = ltask->get_urltask(ltask, -1, -1, -1, -1, buf, &n)) >= 0 && n > 0) 
         {
-            DEBUG_LOGGER(hitaskd_logger, "Ready for download-urlid:%d buffer_len:%d", urlid, n);
-            //conn->over_evstate(conn);
+            DEBUG_LOGGER(hitaskd_logger, "Ready for download-urlid:%d buffer_len:%d "
+                    " to download-node[%s:%d] local[%s:%d] via %d", urlid, n, conn->remote_ip, 
+                    conn->remote_port, conn->local_ip, conn->local_port, conn->fd);
+            conn->over_evstate(conn);
             return conn->push_chunk(conn, buf, n);
         }
         else 

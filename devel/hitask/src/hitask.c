@@ -33,10 +33,11 @@ typedef struct _TASK
     CONN *d_conn;
     CONN *s_conn;
     CONN *c_conn;
-    int  taskid;
+    int  urlid;
     int  userid;
     int  uuid;
     int  state;
+    int  is_redirect;
     char request[HTTP_BUF_SIZE];
     char location[HTTP_URL_MAX];
     char url[HTTP_URL_MAX];
@@ -77,12 +78,20 @@ int http_download_error(int c_id, int err)
     {
         memset(buf, 0, HTTP_BUF_SIZE);
         p = buf;
-        p += sprintf(p, "TASK %d HTTP/1.0\r\n", tasklist[c_id].taskid);
+        p += sprintf(p, "TASK %d HTTP/1.0\r\n", tasklist[c_id].urlid);
         if(tasklist[c_id].is_new_host)
         {
             p += sprintf(p, "Host: %s\r\n Server:%s\r\n\r\n", 
                     tasklist[c_id].host, tasklist[c_id].ip);
         }
+        tasklist[c_id].is_new_host = 0;
+        /*
+        if(tasklist[c_id].is_redirect)
+        {
+            p += sprintf(p, "Location: %s\r\n", tasklist[c_id].location);
+            memset(tasklist[c_id].location, 0, HTTP_URL_MAX);
+        }*/
+        tasklist[c_id].is_redirect = 0;
         if(tasklist[c_id].userid >= 0)
             p += sprintf(p, "UserID:%d\r\n", tasklist[c_id].userid);
         if(tasklist[c_id].uuid >= 0)
@@ -90,8 +99,8 @@ int http_download_error(int c_id, int err)
         if(err > 0) p += sprintf(p, "Warning: %d\r\n", err);
         p += sprintf(p, "%s", "\r\n");
         n = p - buf;
-        tasklist[c_id].is_new_host = 0;
-        DEBUG_LOGGER(logger, "Over task:%d error:%d", tasklist[c_id].taskid, err);
+        DEBUG_LOGGER(logger, "Over task:%d error:%d", tasklist[c_id].urlid, err);
+        tasklist[c_id].c_conn = NULL;
         if(tasklist[c_id].s_conn)
             return tasklist[c_id].s_conn->push_chunk(tasklist[c_id].s_conn, buf, n);
     }
@@ -114,12 +123,20 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
         *last = NULL, *end = NULL , *ip = NULL, *sip = NULL, *pip = NULL, *host = NULL, 
          *path = NULL, newurl[HTTP_URL_MAX], newhost[HTTP_HOST_MAX];
     // *cookie = NULL, *refer = NULL;
-    int taskid = 0, n = 0, port = 0, pport = 0, userid = -1, uuid = -1, 
+    int urlid = 0, n = 0, port = 0, pport = 0, userid = -1, uuid = -1, 
         sport = 0, is_use_proxy = 0;
+    CONN *conn = NULL;
     struct hostent *hp = NULL;
 
     if(c_id >= 0 && c_id < ntask && http_resp)
     {
+        if((conn = tasklist[c_id].c_conn))
+        {
+            FATAL_LOGGER(logger, "REPEAT-TASK[%d] to connection[%s:%d] "
+                    "local[%s:%d] via %d url:%s", c_id, conn->remote_ip, conn->remote_port,
+                    conn->local_ip, conn->local_port, conn->fd, url);
+            return -1;
+        }
         if(url)
         {
             s = tasklist[c_id].url;
@@ -132,9 +149,11 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
             CPURL(s, es, p, e, pp, epp, end, host, path, last);
             if(host == NULL || path == NULL) 
             {
-                ERROR_LOGGER(logger, "Invalid url:%s to location:%s", tasklist[c_id].url, url);
+                ERROR_LOGGER(logger, "Invalid url:%s on TASK[%d] to location:%s", 
+                        tasklist[c_id].url, c_id, url);
                 goto restart_task;
             }
+            tasklist[c_id].is_redirect = 1;
             strcpy(tasklist[c_id].location, newurl);
             p = host;
             pp = newhost;
@@ -154,7 +173,8 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
                 tasklist[c_id].c_conn->close(tasklist[c_id].c_conn);
                 tasklist[c_id].c_conn = NULL;
             }
-            DEBUG_LOGGER(logger, "Redirect %s to %s host[%s] newhost[%s:%d]", tasklist[c_id].url, newurl, host, newhost, port);
+            DEBUG_LOGGER(logger, "Redirect %s on TASK[%d] to %s host[%s] newhost[%s:%d]", 
+                    tasklist[c_id].url, c_id, newurl, host, newhost, port);
             host = newhost;
             if(strcasecmp(host, tasklist[c_id].host) == 0)
             {
@@ -179,14 +199,14 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
                 else
                     sprintf(tasklist[c_id].url, "http://%s%s", host, path);
             }
-            DEBUG_LOGGER(logger, "host:%s ip:%s port:%d path:%s taskid:%d", 
-                    host, ip, port, path, taskid);
+            DEBUG_LOGGER(logger, "TASK[%d] host:%s ip:%s port:%d path:%s urlid:%d", 
+                    c_id, host, ip, port, path, urlid);
         }
         pip = ((n = http_resp->headers[HEAD_REQ_USER_AGENT]) > 0)
             ? (http_resp->hlines + n): NULL;
         pport = ((n = http_resp->headers[HEAD_GEN_VIA]) > 0)
             ? atoi(http_resp->hlines + n) : 0;
-        taskid = tasklist[c_id].taskid = ((n = http_resp->headers[HEAD_REQ_FROM]) > 0)
+        urlid = tasklist[c_id].urlid = ((n = http_resp->headers[HEAD_REQ_FROM]) > 0)
             ? atoi(http_resp->hlines + n) : 0;
         userid = tasklist[c_id].userid = ((n = http_resp->headers[HEAD_GEN_USERID]) > 0)
             ? atoi(http_resp->hlines + n) : -1;
@@ -198,7 +218,7 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
             port = pport;
             is_use_proxy = 1; 
         }
-        if(host == NULL || ip == NULL || path == NULL || port == 0 || taskid < 0) 
+        if(host == NULL || ip == NULL || path == NULL || port == 0 || urlid < 0) 
         {
             goto restart_task;
         }
@@ -218,7 +238,7 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
                 goto restart_task;
             }
         }
-        if((tasklist[c_id].c_conn = service->newconn(service, -1, -1, ip, port, NULL)))
+        if((conn = tasklist[c_id].c_conn = service->newconn(service, -1, -1, ip, port, NULL)))
         {
             p = tasklist[c_id].request;
             //GET/POST path
@@ -255,12 +275,15 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
             tasklist[c_id].uuid = uuid;
             tasklist[c_id].c_conn->c_id = c_id;
             tasklist[c_id].c_conn->start_cstate(tasklist[c_id].c_conn);
+            DEBUG_LOGGER(logger, "starting TASK[%d] connection[%p] to remote[%s:%d] "
+                    " via local[%s:%d] fd[%d]", c_id, conn, conn->remote_ip, 
+                    conn->remote_port, conn->local_ip, conn->local_port, conn->fd);
             return service->newtransaction(service, tasklist[c_id].c_conn, c_id);
         }
         else
         {
-            ERROR_LOGGER(logger, "Connect task:%d to [%s][%s:%d] failed, %s\n", 
-                    tasklist[c_id].taskid, host, ip, port, strerror(errno));
+            ERROR_LOGGER(logger, "Connect TASK[%d] to [%s][%s:%d] failed, %s\n", 
+                    c_id, host, ip, port, strerror(errno));
         }
 restart_task:
         return http_download_error(c_id, ERR_HOST_IP);
@@ -279,7 +302,7 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
     {
         p = packet->data;
         end = packet->data + packet->ndata;
-        *end = '\0';
+        //*end = '\0';
         /* http handler */        
         if(conn == tasklist[c_id].c_conn)
         {
@@ -287,14 +310,16 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
             {
                 conn->over_cstate(conn);
                 conn->over(conn);
-                ERROR_LOGGER(logger, "Invalid http response header via taskid:%d", 
-                        tasklist[c_id].taskid);
+                ERROR_LOGGER(logger, "Invalid http response header on TASK[%d] via urlid:%d", 
+                        c_id, tasklist[c_id].urlid);
                 return http_download_error(c_id, ERR_PROGRAM);
             }
             if(http_resp.respid >= 0 && http_resp.respid < HTTP_RESPONSE_NUM)
                 p = response_status[http_resp.respid].e;
-            DEBUG_LOGGER(logger, "Ready for handling http response:[%d:%s] via taskid:%d", 
-                    http_resp.respid, p, tasklist[c_id].taskid);
+            DEBUG_LOGGER(logger, "Ready for handling http response:[%d:%s] on TASK[%d] "
+                    "remote[%s:%d] local[%s:%d] via %d", http_resp.respid, p, c_id,
+                    conn->remote_ip, conn->remote_port, conn->local_ip, 
+                    conn->local_port, conn->fd);
             //location
             if(http_resp.respid == RESP_MOVEDPERMANENTLY
                 && (n = http_resp.headers[HEAD_RESP_LOCATION]) > 0
@@ -315,8 +340,8 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
                 conn->over_cstate(conn);
                 conn->close(conn);
                 tasklist[c_id].c_conn = NULL;
-                ERROR_LOGGER(logger, "Invalid response number[%d] on task[%d].url:%s taskid:%d", 
-                        http_resp.respid, c_id, tasklist[c_id].url, tasklist[c_id].taskid);
+                ERROR_LOGGER(logger, "Invalid response number[%d] on TASK[%d].url:%s urlid:%d", 
+                        http_resp.respid, c_id, tasklist[c_id].url, tasklist[c_id].urlid);
                 return http_download_error(c_id, ERR_CONTENT_TYPE);
             }
             else
@@ -345,7 +370,7 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
                 px = &c_id;
                 QUEUE_PUSH(taskqueue, int,  px);
                 tasklist[c_id].s_conn = NULL;
-                ERROR_LOGGER(logger, "Invalid http response from taskd");
+                ERROR_LOGGER(logger, "Invalid http response from taskd on TASK[%d]", c_id);
                 return -1;
             }
             if(http_resp.respid == RESP_OK) 
@@ -358,6 +383,13 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
                 memset(tasklist[c_id].request, 0, HTTP_BUF_SIZE);
                 return http_request(c_id, &http_resp, NULL);
             }
+        }
+        else
+        {
+            FATAL_LOGGER(logger, "Invalid TASK[%d] connection[%p][%s:%d] local[%s:%d] via %d,"
+                    "c_conn:[%p] host:%s ip:%s", c_id, conn, conn->remote_ip, conn->remote_port, 
+                    conn->local_ip, conn->local_port, conn->fd, tasklist[c_id].c_conn, 
+                    tasklist[c_id].host, tasklist[c_id].ip);
         }
         return -1;
     }
@@ -420,9 +452,9 @@ int hitask_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA 
         //fprintf(stdout, "%s::%d OK chunk[%d]\n", __FILE__, __LINE__, packet->ndata);
         if(conn == tasklist[c_id].c_conn && packet && cache && chunk) 
         {
-            ERROR_LOGGER(logger, "TIMEOUT on %s:%d via %d, chunk->size:%d via taskid:%d", 
+            ERROR_LOGGER(logger, "TIMEOUT on %s:%d via %d, chunk->size:%d via urlid:%d", 
                         conn->remote_ip, conn->remote_port, conn->fd, 
-                        chunk->ndata, tasklist[c_id].taskid);
+                        chunk->ndata, tasklist[c_id].urlid);
             if(packet->ndata > 0 && cache->ndata > 0 && chunk->ndata > 0)
             {
                 return hitask_data_handler(conn, packet, cache, chunk);
@@ -469,6 +501,8 @@ int hitask_trans_handler(CONN *conn, int tid)
         else if(conn == tasklist[tid].s_conn)
         {
             n = sprintf(buf, "TASK %d HTTP/1.0\r\n\r\n", -1);
+            DEBUG_LOGGER(logger, "TASK[%d] transaction[%s:%d] via %d", 
+                    tid, conn->local_ip, conn->local_port, conn->fd);
             //fprintf(stdout, "%s::%d OK %s\n", __FILE__, __LINE__, buf);
             return conn->push_chunk(conn, buf, n);
         }
@@ -495,9 +529,9 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
         if(conn == tasklist[c_id].c_conn && chunk && chunk->data && chunk->ndata > 0
                 && cache && cache->ndata > 0 && (http_resp = (HTTP_RESPONSE *)cache->data))
         {
-            DEBUG_LOGGER(logger, "Ready for data handling on %s:%d via %d ndata:%d taskid:%d", 
-                    conn->remote_ip, conn->remote_port, conn->fd, 
-                    chunk->ndata, tasklist[c_id].taskid);
+            DEBUG_LOGGER(logger, "Ready for handling TASK[%d] on remote[%s:%d] "
+                    "via %d ndata:%d urlid:%d", c_id, conn->remote_ip, conn->remote_port, 
+                    conn->fd, chunk->ndata, tasklist[c_id].urlid);
             doc_total++;
             //check content is text 
             if((n = http_resp->headers[HEAD_ENT_CONTENT_TYPE]) > 0
@@ -564,8 +598,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     else 
                     {
                         ERROR_LOGGER(logger, "gzdecompress data from %ld to %ld "
-                                "via taskid:%d failed, %d:%s", LI(nzdata), LI(ndata), 
-                                tasklist[c_id].taskid, n, strerror(errno));
+                                "via urlid:%d failed, %d:%s", LI(nzdata), LI(ndata), 
+                                tasklist[c_id].urlid, n, strerror(errno));
                         goto err_end;
                     }
                 }
@@ -585,8 +619,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
             memset(charset, 0, CHARSET_MAX);
             if(is_text)
             {
-                DEBUG_LOGGER(logger, "is_need_convert:%d data:%p ndata:%ld via taskid:%d", 
-                        is_need_convert, rawdata, LI(nrawdata), tasklist[c_id].taskid);
+                DEBUG_LOGGER(logger, "is_need_convert:%d data:%p ndata:%ld via urlid:%d", 
+                        is_need_convert, rawdata, LI(nrawdata), tasklist[c_id].urlid);
                 if(rawdata && nrawdata > 0 && chardet_create(&pdet) == 0)
                 {
                     if(chardet_handle_data(pdet, rawdata, nrawdata) == 0 
@@ -597,8 +631,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     }
                     chardet_destroy(pdet);
                 }
-                DEBUG_LOGGER(logger, "is_need_convert:%d data:%p ndata:%ld via taskid:%d", 
-                        is_need_convert, rawdata, LI(nrawdata), tasklist[c_id].taskid);
+                DEBUG_LOGGER(logger, "is_need_convert:%d data:%p ndata:%ld via urlid:%d", 
+                        is_need_convert, rawdata, LI(nrawdata), tasklist[c_id].urlid);
                 //convert charset 
                 if(is_need_convert && (cd = iconv_open("UTF-8", charset)) != (iconv_t)-1)
                 {
@@ -615,8 +649,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                         else
                         {
                             noutbuf -= n;
-                            DEBUG_LOGGER(logger, "convert %s[%ld] to UTF-8 len:%ld via taskid:%d", 
-                                    charset, LI(nrawdata), LI(noutbuf), tasklist[c_id].taskid);
+                            DEBUG_LOGGER(logger, "convert %s[%ld] to UTF-8 len:%ld via urlid:%d", 
+                                    charset, LI(nrawdata), LI(noutbuf), tasklist[c_id].urlid);
                             rawdata = outbuf;
                             nrawdata = noutbuf;
                         }
@@ -628,8 +662,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
             zdata = NULL;
             nzdata = 0;
             //compress with zlib::inflate()
-            DEBUG_LOGGER(logger, "is_need_compess:%d data:%p ndata:%ld via taskid:%d", 
-                    is_need_compress, rawdata, LI(nrawdata), tasklist[c_id].taskid);
+            DEBUG_LOGGER(logger, "is_need_compess:%d data:%p ndata:%ld via urlid:%d", 
+                    is_need_compress, rawdata, LI(nrawdata), tasklist[c_id].urlid);
             if(is_need_compress && rawdata && nrawdata  > 0)
             {
                 nzdata = nrawdata + Z_HEADER_SIZE;
@@ -645,8 +679,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     }
                     else  is_new_zdata = 1;
                 }
-                DEBUG_LOGGER(logger, "compressed data %d to %ld via taskid:%d", 
-                        n, LI(nzdata), tasklist[c_id].taskid);
+                DEBUG_LOGGER(logger, "compressed data %d to %ld via urlid:%d", 
+                        n, LI(nzdata), tasklist[c_id].urlid);
             }
             //content data
             if(zdata && nzdata > 0 && http_resp)
@@ -654,7 +688,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 /* task header */
                 memset(buf, 0, HTTP_BUF_SIZE);
                 p = buf;
-                p += sprintf(p, "TASK %d HTTP/1.0\r\n", tasklist[c_id].taskid);
+                p += sprintf(p, "TASK %d HTTP/1.0\r\n", tasklist[c_id].urlid);
                 if((n = http_resp->headers[HEAD_ENT_LAST_MODIFIED]))
                 {
                     ps = http_resp->hlines + n;
@@ -662,8 +696,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 }
                 if(tasklist[c_id].is_new_host)
                 {
-                    DEBUG_LOGGER(logger, "new domain:%s ip:%s via taskid:%d", 
-                            tasklist[c_id].host, tasklist[c_id].ip, tasklist[c_id].taskid);
+                    DEBUG_LOGGER(logger, "new domain:%s ip:%s via urlid:%d", 
+                            tasklist[c_id].host, tasklist[c_id].ip, tasklist[c_id].urlid);
                     p += sprintf(p, "Host: %s\r\nServer: %s\r\n", 
                             tasklist[c_id].host, tasklist[c_id].ip);
                     tasklist[c_id].is_new_host = 0;
@@ -690,15 +724,15 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 p += sprintf(p, "%s", "\r\n");
                 if((s_conn = tasklist[c_id].s_conn) && (n = (p - buf)) > 0)
                 {
-                    DEBUG_LOGGER(logger, "sending header size:%d to hitaskd via taskid:%d",
-                            n, tasklist[c_id].taskid);
+                    DEBUG_LOGGER(logger, "sending header on TASK[%d] size:%d "
+                            "to hitaskd via urlid:%d", c_id, n, tasklist[c_id].urlid);
                     s_conn->push_chunk(s_conn, buf, n);
                     tasklist[c_id].c_conn = NULL;
                 }
                 //store data 
                 memset(buf, 0, HTTP_BUF_SIZE);
                 p = buf;
-                p += sprintf(p, "PUT %d HTTP/1.0\r\n", tasklist[c_id].taskid);
+                p += sprintf(p, "PUT %d HTTP/1.0\r\n", tasklist[c_id].urlid);
                 if((n = http_resp->headers[HEAD_ENT_LAST_MODIFIED]))
                 {
                     ps = http_resp->hlines + n;
@@ -716,16 +750,16 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 p += sprintf(p, "%s", "\r\n");
                 if((d_conn = tasklist[c_id].d_conn) && d_conn->push_chunk && (n = (p - buf)) > 0)
                 {
-                    DEBUG_LOGGER(logger, "send storage data:%p size:%ld via taskid:%d", 
-                            zdata, LI(nzdata), tasklist[c_id].taskid);
+                    DEBUG_LOGGER(logger, "send storage on TASK[%d] data:%p size:%ld via urlid:%d", 
+                            c_id, zdata, LI(nzdata), tasklist[c_id].urlid);
                     d_conn->push_chunk(d_conn, buf, n);
-                    DEBUG_LOGGER(logger, "sent storage data:%p size:%ld via taskid:%d", 
-                            zdata, LI(nzdata), tasklist[c_id].taskid);
+                    DEBUG_LOGGER(logger, "sent storage on TASK[%d] data:%p size:%ld via urlid:%d", 
+                            c_id, zdata, LI(nzdata), tasklist[c_id].urlid);
                     d_conn->push_chunk(d_conn, zdata, nzdata);
-                    DEBUG_LOGGER(logger, "sent storage data:%p size:%ld via taskid:%d", 
-                            zdata, LI(nzdata), tasklist[c_id].taskid);
+                    DEBUG_LOGGER(logger, "sent storage on TASK[%d] data:%p size:%ld via urlid:%d", 
+                            c_id, zdata, LI(nzdata), tasklist[c_id].urlid);
                 }
-                tasklist[c_id].taskid = -1;
+                tasklist[c_id].urlid = -1;
                 ret = 0;
                 goto end;
             }
@@ -773,7 +807,8 @@ void cb_heartbeat_handler(void *arg)
                     {
                         tasklist[id].s_conn->c_id = id;
                         tasklist[id].s_conn->start_cstate(tasklist[id].s_conn);
-                        service->newtransaction(service, tasklist[id].s_conn, id);
+                        if(tasklist[id].c_conn == NULL)
+                            service->newtransaction(service, tasklist[id].s_conn, id);
                     }
                     else
                     {
