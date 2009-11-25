@@ -870,7 +870,6 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url, int fl
         KVMAP_ADD(task->urlmap, key, dp, olddp); 
         if(olddp == NULL)
         {
-            //fprintf(stdout, "%d::url:%s id:%d md5:", __LINE__, newurl, id);
             //MD5OUT(key, stdout);
             //fprintf(stdout, "\n");
             if(fstat(task->url_fd, &st) != 0) goto err;
@@ -878,6 +877,7 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url, int fl
                     &&  write(task->url_fd, newurl, n) > 0 
                     && write(task->key_fd, key, MD5_LEN) > 0)
             {
+                DEBUG_LOGGER(task->logger, "NEW-URL:%s id:%d", newurl, id);
                 meta.depth   = parent_depth + 1;
                 if(flag > 0) 
                 {
@@ -926,6 +926,8 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url, int fl
                 host_node->url_last_id = id;
                 host_node->url_total++;
                 offset = (off_t)id * (off_t)sizeof(LMETA);
+                DEBUG_LOGGER(task->logger, "PREV-NEXT [%d:%d] host:%d left:%d total:%d", 
+                        meta.prev, id, host_id, host_node->url_left, host_node->url_total);
                 if(pwrite(task->meta_fd, &meta, sizeof(LMETA), offset) <= 0)
                 {
                     ERROR_LOGGER(task->logger, "write meta[%d] offset:%lld failed, %s", 
@@ -938,7 +940,7 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url, int fl
                     if(meta.prev >= 0 && meta.prev < id 
                             && pwrite(task->meta_fd, &id, sizeof(int), offset) > 0)
                     {
-                        DEBUG_LOGGER(task->logger, "urlid:%d prev:%d", id, meta.prev);
+                        DEBUG_LOGGER(task->logger, "write back  prev:%d urlid:%d", meta.prev, id);
                     }
                 }
                 if(task->state) task->state->url_total++;
@@ -963,7 +965,7 @@ err:
 int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime, 
         int referid, char *refer, char *cookie)
 {
-    int urlid = -1, n = -1, x = -1, *px = NULL;
+    int urlid = -1, n = -1, x = -1, *px = NULL, is_priority_url = 0;
     LNODE node = {0}, *tnode = NULL;
     LHOST *host_node = NULL;
     LMETA meta = {0};
@@ -988,6 +990,7 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
                 }
                 else if(node.type == Q_TYPE_URL && node.id >= 0)
                 {
+                    is_priority_url = 1;
                     urlid = node.id;
                 }
                 else 
@@ -1017,27 +1020,47 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
         }
         /* read url */
         DEBUG_LOGGER(task->logger, "READURL urlid:%d", urlid);
-        if(urlid < 0 || pread(task->meta_fd, &meta, sizeof(LMETA), 
-                    (off_t)urlid * (off_t)sizeof(LMETA)) < 0 || meta.url_len > HTTP_URL_MAX 
-                || (meta.status < 0 && meta.retry_times > TASK_RETRY_TIMES) ) 
+        do
         {
-            ERROR_LOGGER(task->logger, "ERR-META urlid:%d", urlid);
-            urlid = -1;
-            goto end;
-        }
-        if(meta.retry_times < 0)
+
+            if(urlid >= 0 &&  pread(task->meta_fd, &meta, sizeof(LMETA), 
+                        (off_t)urlid * (off_t)sizeof(LMETA)) > 0 
+                    && meta.url_len > 0 && meta.url_len < HTTP_URL_MAX 
+                    && meta.status >= 0 && meta.retry_times < TASK_RETRY_TIMES) 
+            {
+                if(is_priority_url) break;
+                else
+                {
+                    if((meta.flag & URL_IS_PRIORITY))
+                    {
+                       urlid = meta.next; 
+                    }
+                    else 
+                    {
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                ERROR_LOGGER(task->logger, "ERR-META urlid:%d", urlid);
+                urlid = -1;
+                goto end;
+            }
+        }while(urlid >= 0);
+        if(urlid >= 0 && meta.retry_times < 0)
         {
             meta.retry_times++;
             pwrite(task->meta_fd, &(meta.retry_times), sizeof(short), 
                     (off_t)urlid * (off_t)sizeof(LMETA) 
                     + (off_t)((char *)&(meta.retry_times) - (char *)&meta));        
         }
-        if((n = pread(task->url_fd, url, meta.url_len, meta.url_off)) > 0)
+        if(urlid >= 0 && (n = pread(task->url_fd, url, meta.url_len, meta.url_off)) > 0)
         {
             if(itime) *itime = meta.last_modified;
-            if(host_node == NULL) 
-                host_node = (LHOST *)(task->hostio.map + meta.host_id * sizeof(LHOST));
             url[n] = '\0';
+            if(host_node == NULL) 
+                    host_node = (LHOST *)(task->hostio.map + meta.host_id * sizeof(LHOST));
             host_node->url_current_id = meta.next;
             host_node->url_left--;
             //refer
