@@ -931,6 +931,16 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url, int fl
                     ERROR_LOGGER(task->logger, "write meta[%d] offset:%lld failed, %s", 
                             id, offset, strerror(errno));
                 }
+                else
+                {
+                    offset = (off_t)meta.prev * (off_t)sizeof(LMETA) 
+                            + (off_t)((char *)&(meta.next) - (char *)&(meta));
+                    if(meta.prev >= 0 && meta.prev < id 
+                            && pwrite(task->meta_fd, &id, sizeof(int), offset) > 0)
+                    {
+                        DEBUG_LOGGER(task->logger, "urlid:%d prev:%d", id, meta.prev);
+                    }
+                }
                 if(task->state) task->state->url_total++;
                 ret = id;
             }

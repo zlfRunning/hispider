@@ -91,7 +91,7 @@ int http_download_error(int c_id, int err)
         p += sprintf(p, "%s", "\r\n");
         n = p - buf;
         tasklist[c_id].is_new_host = 0;
-        //DEBUG_LOGGER(logger, "ERROR: ON task %d", tasklist[c_id].taskid);
+        DEBUG_LOGGER(logger, "Over task:%d error:%d", tasklist[c_id].taskid, err);
         if(tasklist[c_id].s_conn)
             return tasklist[c_id].s_conn->push_chunk(tasklist[c_id].s_conn, buf, n);
     }
@@ -180,12 +180,12 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
                     sprintf(tasklist[c_id].url, "http://%s%s", host, path);
             }
             DEBUG_LOGGER(logger, "host:%s ip:%s port:%d path:%s taskid:%d", 
-                host, ip, port, path, taskid);
+                    host, ip, port, path, taskid);
         }
         pip = ((n = http_resp->headers[HEAD_REQ_USER_AGENT]) > 0)
-                ? (http_resp->hlines + n): NULL;
+            ? (http_resp->hlines + n): NULL;
         pport = ((n = http_resp->headers[HEAD_GEN_VIA]) > 0)
-                ? atoi(http_resp->hlines + n) : 0;
+            ? atoi(http_resp->hlines + n) : 0;
         taskid = tasklist[c_id].taskid = ((n = http_resp->headers[HEAD_REQ_FROM]) > 0)
             ? atoi(http_resp->hlines + n) : 0;
         userid = tasklist[c_id].userid = ((n = http_resp->headers[HEAD_GEN_USERID]) > 0)
@@ -259,11 +259,11 @@ int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
         }
         else
         {
-            ERROR_LOGGER(logger, "Connect to [%s][%s:%d] failed, %s\n", 
-                    host, ip, port, strerror(errno));
+            ERROR_LOGGER(logger, "Connect task:%d to [%s][%s:%d] failed, %s\n", 
+                    tasklist[c_id].taskid, host, ip, port, strerror(errno));
         }
-        restart_task:
-                return http_download_error(c_id, ERR_HOST_IP);
+restart_task:
+        return http_download_error(c_id, ERR_HOST_IP);
     }
     return -1;
 }
@@ -287,9 +287,14 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
             {
                 conn->over_cstate(conn);
                 conn->over(conn);
-                ERROR_LOGGER(logger, "Invalid http response header");
+                ERROR_LOGGER(logger, "Invalid http response header via taskid:%d", 
+                        tasklist[c_id].taskid);
                 return http_download_error(c_id, ERR_PROGRAM);
             }
+            if(http_resp.respid >= 0 && http_resp.respid < HTTP_RESPONSE_NUM)
+                p = response_status[http_resp.respid].e;
+            DEBUG_LOGGER(logger, "Ready for handling http response:[%d:%s] via taskid:%d", 
+                    http_resp.respid, p, tasklist[c_id].taskid);
             //location
             if(http_resp.respid == RESP_MOVEDPERMANENTLY
                 && (n = http_resp.headers[HEAD_RESP_LOCATION]) > 0
@@ -310,8 +315,8 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
                 conn->over_cstate(conn);
                 conn->close(conn);
                 tasklist[c_id].c_conn = NULL;
-                ERROR_LOGGER(logger, "Invalid http response number[%d] on task[%d].url:%s", 
-                        http_resp.respid, c_id, tasklist[c_id].url);
+                ERROR_LOGGER(logger, "Invalid response number[%d] on task[%d].url:%s taskid:%d", 
+                        http_resp.respid, c_id, tasklist[c_id].url, tasklist[c_id].taskid);
                 return http_download_error(c_id, ERR_CONTENT_TYPE);
             }
             else
@@ -415,8 +420,9 @@ int hitask_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA 
         //fprintf(stdout, "%s::%d OK chunk[%d]\n", __FILE__, __LINE__, packet->ndata);
         if(conn == tasklist[c_id].c_conn && packet && cache && chunk) 
         {
-            ERROR_LOGGER(logger, "TIMEOUT on %s:%d via %d, chunk->size:%d", 
-                        conn->remote_ip, conn->remote_port, conn->fd, chunk->ndata);
+            ERROR_LOGGER(logger, "TIMEOUT on %s:%d via %d, chunk->size:%d via taskid:%d", 
+                        conn->remote_ip, conn->remote_port, conn->fd, 
+                        chunk->ndata, tasklist[c_id].taskid);
             if(packet->ndata > 0 && cache->ndata > 0 && chunk->ndata > 0)
             {
                 return hitask_data_handler(conn, packet, cache, chunk);
@@ -489,8 +495,9 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
         if(conn == tasklist[c_id].c_conn && chunk && chunk->data && chunk->ndata > 0
                 && cache && cache->ndata > 0 && (http_resp = (HTTP_RESPONSE *)cache->data))
         {
-            DEBUG_LOGGER(logger, "Ready for data handling on %s:%d via %d ndata:%d", 
-                    conn->remote_ip, conn->remote_port, conn->fd, chunk->ndata);
+            DEBUG_LOGGER(logger, "Ready for data handling on %s:%d via %d ndata:%d taskid:%d", 
+                    conn->remote_ip, conn->remote_port, conn->fd, 
+                    chunk->ndata, tasklist[c_id].taskid);
             doc_total++;
             //check content is text 
             if((n = http_resp->headers[HEAD_ENT_CONTENT_TYPE]) > 0
@@ -556,8 +563,9 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     }
                     else 
                     {
-                        ERROR_LOGGER(logger, "gzdecompress data from %ld to %ld failed, %d:%s", 
-                                LI(nzdata), LI(ndata), n, strerror(errno));
+                        ERROR_LOGGER(logger, "gzdecompress data from %ld to %ld "
+                                "via taskid:%d failed, %d:%s", LI(nzdata), LI(ndata), 
+                                tasklist[c_id].taskid, n, strerror(errno));
                         goto err_end;
                     }
                 }
@@ -577,8 +585,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
             memset(charset, 0, CHARSET_MAX);
             if(is_text)
             {
-                DEBUG_LOGGER(logger, "is_need_convert:%d data:%p ndata:%ld", 
-                        is_need_convert, rawdata, LI(nrawdata));
+                DEBUG_LOGGER(logger, "is_need_convert:%d data:%p ndata:%ld via taskid:%d", 
+                        is_need_convert, rawdata, LI(nrawdata), tasklist[c_id].taskid);
                 if(rawdata && nrawdata > 0 && chardet_create(&pdet) == 0)
                 {
                     if(chardet_handle_data(pdet, rawdata, nrawdata) == 0 
@@ -589,8 +597,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     }
                     chardet_destroy(pdet);
                 }
-                DEBUG_LOGGER(logger, "is_need_convert:%d data:%p ndata:%ld", 
-                        is_need_convert, rawdata, LI(nrawdata));
+                DEBUG_LOGGER(logger, "is_need_convert:%d data:%p ndata:%ld via taskid:%d", 
+                        is_need_convert, rawdata, LI(nrawdata), tasklist[c_id].taskid);
                 //convert charset 
                 if(is_need_convert && (cd = iconv_open("UTF-8", charset)) != (iconv_t)-1)
                 {
@@ -607,8 +615,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                         else
                         {
                             noutbuf -= n;
-                            DEBUG_LOGGER(logger, "convert %s len:%ld to UTF-8 len:%ld", 
-                                    charset, LI(nrawdata), LI(noutbuf));
+                            DEBUG_LOGGER(logger, "convert %s[%ld] to UTF-8 len:%ld via taskid:%d", 
+                                    charset, LI(nrawdata), LI(noutbuf), tasklist[c_id].taskid);
                             rawdata = outbuf;
                             nrawdata = noutbuf;
                         }
@@ -620,8 +628,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
             zdata = NULL;
             nzdata = 0;
             //compress with zlib::inflate()
-            DEBUG_LOGGER(logger, "is_need_compess:%d data:%p ndata:%ld", 
-                    is_need_compress, rawdata, LI(nrawdata));
+            DEBUG_LOGGER(logger, "is_need_compess:%d data:%p ndata:%ld via taskid:%d", 
+                    is_need_compress, rawdata, LI(nrawdata), tasklist[c_id].taskid);
             if(is_need_compress && rawdata && nrawdata  > 0)
             {
                 nzdata = nrawdata + Z_HEADER_SIZE;
@@ -637,7 +645,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     }
                     else  is_new_zdata = 1;
                 }
-                DEBUG_LOGGER(logger, "compressed data %d to %ld", n, LI(nzdata));
+                DEBUG_LOGGER(logger, "compressed data %d to %ld via taskid:%d", 
+                        n, LI(nzdata), tasklist[c_id].taskid);
             }
             //content data
             if(zdata && nzdata > 0 && http_resp)
@@ -653,8 +662,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 }
                 if(tasklist[c_id].is_new_host)
                 {
-                    DEBUG_LOGGER(logger, "new domain:%s ip:%s", tasklist[c_id].host, 
-                            tasklist[c_id].ip);
+                    DEBUG_LOGGER(logger, "new domain:%s ip:%s via taskid:%d", 
+                            tasklist[c_id].host, tasklist[c_id].ip, tasklist[c_id].taskid);
                     p += sprintf(p, "Host: %s\r\nServer: %s\r\n", 
                             tasklist[c_id].host, tasklist[c_id].ip);
                     tasklist[c_id].is_new_host = 0;
@@ -681,7 +690,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 p += sprintf(p, "%s", "\r\n");
                 if((s_conn = tasklist[c_id].s_conn) && (n = (p - buf)) > 0)
                 {
-                    DEBUG_LOGGER(logger, "send header size:%d", n);
+                    DEBUG_LOGGER(logger, "sending header size:%d to hitaskd via taskid:%d",
+                            n, tasklist[c_id].taskid);
                     s_conn->push_chunk(s_conn, buf, n);
                     tasklist[c_id].c_conn = NULL;
                 }
@@ -706,11 +716,14 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 p += sprintf(p, "%s", "\r\n");
                 if((d_conn = tasklist[c_id].d_conn) && d_conn->push_chunk && (n = (p - buf)) > 0)
                 {
-                    DEBUG_LOGGER(logger, "send storage data:%p size:%ld", zdata, LI(nzdata));
+                    DEBUG_LOGGER(logger, "send storage data:%p size:%ld via taskid:%d", 
+                            zdata, LI(nzdata), tasklist[c_id].taskid);
                     d_conn->push_chunk(d_conn, buf, n);
-                    DEBUG_LOGGER(logger, "sent storage data:%p size:%ld", zdata, LI(nzdata));
+                    DEBUG_LOGGER(logger, "sent storage data:%p size:%ld via taskid:%d", 
+                            zdata, LI(nzdata), tasklist[c_id].taskid);
                     d_conn->push_chunk(d_conn, zdata, nzdata);
-                    DEBUG_LOGGER(logger, "sent storage data:%p size:%ld", zdata, LI(nzdata));
+                    DEBUG_LOGGER(logger, "sent storage data:%p size:%ld via taskid:%d", 
+                            zdata, LI(nzdata), tasklist[c_id].taskid);
                 }
                 tasklist[c_id].taskid = -1;
                 ret = 0;

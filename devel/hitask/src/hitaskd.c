@@ -698,7 +698,7 @@ int hitaskd_newtask(CONN *conn)
         }
         else 
         {
-            //ERROR_LOGGER(hitaskd_logger, "get_urltask() failed");
+            ERROR_LOGGER(hitaskd_logger, "get_urltask() failed");
             goto time_out;
         }
         /*
