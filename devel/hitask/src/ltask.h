@@ -6,11 +6,11 @@
 #define HTTP_URL_MAX            4096
 #define HTTP_URL_MMAX            2048
 #define HTTP_COOKIE_MAX         4096
-#define HOST_INCRE_NUM          1000000   
+#define HOST_INCRE_NUM          100000   
 #define PROXY_INCRE_NUM         10000
 #define DNS_INCRE_NUM           256
 #define URL_INCRE_NUM           1000000   
-#define IP_INCRE_NUM            1000000
+#define IP_INCRE_NUM            100000
 #define USER_INCRE_NUM          256
 #define HTTP_BUF_SIZE           65536
 #define Q_TYPE_URL              0x01
