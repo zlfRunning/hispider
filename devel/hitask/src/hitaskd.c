@@ -1393,18 +1393,16 @@ err_end:
 /* hitaskd timeout handler */
 int hitaskd_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
-    if(conn)
+    if(conn && conn->evstate == EVSTATE_WAIT)
     {
-        if(conn->evstate == EVSTATE_WAIT)
-        {
             return hitaskd_newtask(conn);
-        }
+        /*
         else
         {
             ERROR_LOGGER(hitaskd_logger, "Closing connection[%s:%d] via %d", 
                     conn->remote_ip, conn->remote_port, conn->fd);
             return conn->over(conn);
-        }
+        }*/
     }
     return -1;
 }
