@@ -1062,7 +1062,11 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
                 {
                     if((meta.flag & URL_IS_PRIORITY))
                     {
-                       urlid = meta.next; 
+                        DEBUG_LOGGER(task->logger, "PRIORITY-URL-urlid:%d next:%d", 
+                                urlid, meta.next);
+                        if(host_node == NULL) 
+                            host_node = (LHOST *)(task->hostio.map + meta.host_id * sizeof(LHOST));
+                        host_node->url_current_id = urlid = meta.next; 
                     }
                     else 
                     {
@@ -1073,7 +1077,9 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
             }
             else
             {
-                ERROR_LOGGER(task->logger, "ERR-META urlid:%d", urlid);
+                ERROR_LOGGER(task->logger, "ERR-META urlid:%d url_len:%d status:%d "
+                        " retry_times:%d next:%d, %s", urlid, meta.url_len, meta.status, 
+                        meta.retry_times, meta.next, strerror(errno));
                 urlid = -1;
                 goto end;
             }
@@ -1090,7 +1096,7 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
             if(itime) *itime = meta.last_modified;
             url[n] = '\0';
             if(host_node == NULL) 
-                    host_node = (LHOST *)(task->hostio.map + meta.host_id * sizeof(LHOST));
+                host_node = (LHOST *)(task->hostio.map + meta.host_id * sizeof(LHOST));
             if(!is_priority_url) host_node->url_current_id = meta.next;
             host_node->url_left--;
             //refer
