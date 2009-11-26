@@ -1308,9 +1308,9 @@ int ltask_pop_task(LTASK *task)
     int urlid = -1, *px = NULL;
     if(task)
     {
-       //DEBUG_LOGGER(task->logger, "Ready for pop_task() qtask_total:%d ", FQTOTAL(task->qtask));
+       DEBUG_LOGGER(task->logger, "Ready for pop_task() qtask_total:%d ", FQTOTAL(task->qtask));
        MUTEX_LOCK(task->mutex); 
-       //DEBUG_LOGGER(task->logger, "qtask_total:%d", FQTOTAL(task->qtask));
+       DEBUG_LOGGER(task->logger, "qtask_total:%d", FQTOTAL(task->qtask));
        if(FQTOTAL(task->qtask) > 0)
        {
            DEBUG_LOGGER(task->logger, "Ready for pop_task() total:%d", FQTOTAL(task->qtask));
