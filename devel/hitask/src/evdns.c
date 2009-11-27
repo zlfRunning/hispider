@@ -5,6 +5,18 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 #include "evdns.h"
+static const char *opcodes[] = {
+  "QUERY", "IQUERY", "STATUS", "(reserved)", "NOTIFY",
+  "(unknown)", "(unknown)", "(unknown)", "(unknown)",
+  "UPDATEA", "UPDATED", "UPDATEDA", "UPDATEM", "UPDATEMA",
+  "ZONEINIT", "ZONEREF"
+};
+
+static const char *rcodes[] = {
+  "NOERROR", "FORMERR", "SERVFAIL", "NXDOMAIN", "NOTIMP", "REFUSED",
+  "(unknown)", "(unknown)", "(unknown)", "(unknown)", "(unknown)",
+  "(unknown)", "(unknown)", "(unknown)", "(unknown)", "NOCHANGE"
+};
 
 int evdns_make_query(char *domain, int dnsclass, int type, 
         unsigned short id, int rd, unsigned char *buf)
@@ -90,11 +102,11 @@ unsigned char *evdns_expand_name(unsigned char *ptr, unsigned char *start,
         else
         {
             n = *p++;
-            while(p < end && n-- > 0 && q < (name + DNS_NAME_MAX))
+            while(p < end && n-- > 0 && q < (name + EVDNS_NAME_MAX))
             {
                 *q++ = *p++;
             }
-            if(q < (name + DNS_NAME_MAX)) *q++ = '.';
+            if(q < (name + EVDNS_NAME_MAX)) *q++ = '.';
         }
     }
     if(flag == 0) ret = p+1;
@@ -105,9 +117,9 @@ unsigned char *evdns_expand_name(unsigned char *ptr, unsigned char *start,
 }
 
 /* parse reply record */
-int evdns_parse_reply(unsigned char *buf, int nbuf, HOSTENT *hostent)
+int evdns_parse_reply(unsigned char *buf, int nbuf, EVHOSTENT *hostent)
 {
-    unsigned char name[DNS_NAME_MAX], *p = NULL, *end = NULL, *s = NULL, *ps = NULL; 
+    unsigned char name[EVDNS_NAME_MAX], *p = NULL, *end = NULL, *s = NULL, *ps = NULL; 
     int i = 0, qdcount = 0, ancount = 0, nscount = 0, arcount = 0, 
         qr = 0, opcode = 0, aa = 0, tc = 0, rd = 0, 
         ra = 0, rcode = 0, type = 0, dnsclass = 0, ttl = 0, rrlen = 0;
@@ -149,7 +161,7 @@ int evdns_parse_reply(unsigned char *buf, int nbuf, HOSTENT *hostent)
         if(p >= end) return -1;
         for(i = 0; i < qdcount; i++)
         {
-            ps = (unsigned char *)hostent->name;
+            ps = hostent->name;
             s = evdns_expand_name(p, buf, end, ps);
             if(s == p || (s+QFIXEDSZ) > end) return -1;
             p = s;
@@ -168,7 +180,7 @@ int evdns_parse_reply(unsigned char *buf, int nbuf, HOSTENT *hostent)
         /* parse A name */
         for(i = 0; i < ancount; i++)
         {
-            ps = (unsigned char *)hostent->alias[hostent->nalias++];
+            ps = hostent->alias[hostent->nalias++];
             s = evdns_expand_name(p, buf, end, ps);
             if(s == p || (s+RRFIXEDSZ) > end) return -1;
             p = s;
@@ -185,19 +197,20 @@ int evdns_parse_reply(unsigned char *buf, int nbuf, HOSTENT *hostent)
             /* addr name */
             if(type == TYPE_ANAME)
             {
-                hostent->addrs[hostent->naddrs++] = *((int *)p);
+                if(rrlen <= sizeof(int))
+                    memcpy(&(hostent->addrs[hostent->naddrs++]), p, rrlen);
             }
             /* Canonical name */
             else if(type == TYPE_CNAME)
             {
-                ps = (unsigned char *)hostent->alias[hostent->nalias++];
+                ps = hostent->alias[hostent->nalias++];
                 s = evdns_expand_name(p, buf, end, ps);
                 //fprintf(stdout, "cname:%s ", cname);
             }
             /* pointer */
             else if(type == TYPE_PTR)
             {
-                ps = (unsigned char *)hostent->alias[hostent->nalias++];
+                ps = hostent->alias[hostent->nalias++];
                 s = evdns_expand_name(p, buf, end, ps);
                 //fprintf(stdout, "pointer:%s ", cname);
             }
@@ -236,7 +249,9 @@ int evdns_parse_reply(unsigned char *buf, int nbuf, HOSTENT *hostent)
             if(p >= end || (p+rrlen) > end) return -1;
             p += rrlen;
         }
-        return (p - buf);
+        int n = ((char *)p - (char *)buf);
+        fprintf(stdout, "n:%d p:%p buf:%p sizeof(hostent):%d\n", n, p, buf, sizeof(EVHOSTENT));
+        return n;
     }
     return -1;
 }

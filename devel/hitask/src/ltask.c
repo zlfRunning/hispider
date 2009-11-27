@@ -566,30 +566,32 @@ int ltask_view_proxylist(LTASK *task, char *block)
 int ltask_pop_host(LTASK *task, char *host)
 {
     LHOST *host_node = NULL;
-    int host_id = -1;
+    int host_id = -1, last = -1;
 
-    if(task && host && task->hostio.total > 0 && task->hostio.current >= 0
-            && task->hostio.current < task->hostio.total
-            && task->hostio.map && task->hostio.map != (void *)-1)
+    last = task->hostio.end/(off_t)sizeof(LHOST);
+    if(task && host && last > 0 && task->hostio.current >= 0 && task->hostio.current < last)
     {
         MUTEX_LOCK(task->mutex);
-        host_node = (LHOST *)(task->hostio.map + task->hostio.current * sizeof(LHOST));
-        do
+        if(task->hostio.map && task->hostio.map != (void *)-1)
         {
-            if(host_node->host_len == 0) break;
-            if(host_node->host_len > 0 && host_node->ip_count == 0)
+            host_node = (LHOST *)(task->hostio.map + task->hostio.current * sizeof(LHOST));
+            do
             {
-                if(pread(task->domain_fd, host, host_node->host_len, host_node->host_off) > 0)
+                if(host_node->host_len == 0) break;
+                if(host_node->host_len > 0 && host_node->ip_count == 0)
                 {
-                    host_id = task->hostio.current++;
-                    host[host_node->host_len] = '\0';
+                    if(pread(task->domain_fd, host, host_node->host_len, host_node->host_off) > 0)
+                    {
+                        host_id = task->hostio.current++;
+                        host[host_node->host_len] = '\0';
+                    }
+                    break;
                 }
-                break;
-            }
-            ++host_node;
-            task->hostio.current++;
-        }while(task->hostio.current < task->hostio.total);
-        DEBUG_LOGGER(task->logger, "POP-HOST:%s id:%d", host, host_id);
+                ++host_node;
+                task->hostio.current++;
+            }while(task->hostio.current < last);
+            DEBUG_LOGGER(task->logger, "POP-HOST:%s id:%d", host, host_id);
+        }
         MUTEX_UNLOCK(task->mutex);
     }
     return host_id;
@@ -1316,7 +1318,6 @@ int ltask_pop_task(LTASK *task)
     {
        DEBUG_LOGGER(task->logger, "Ready for pop_task() qtask_total:%d ", FQTOTAL(task->qtask));
        MUTEX_LOCK(task->mutex); 
-       DEBUG_LOGGER(task->logger, "qtask_total:%d", FQTOTAL(task->qtask));
        if(FQTOTAL(task->qtask) > 0)
        {
            DEBUG_LOGGER(task->logger, "Ready for pop_task() total:%d", FQTOTAL(task->qtask));

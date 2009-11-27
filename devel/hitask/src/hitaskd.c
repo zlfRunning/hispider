@@ -159,27 +159,33 @@ static char *e_ops[]=
 /* dns packet reader */
 int adns_packet_reader(CONN *conn, CB_DATA *buffer)
 {
-    HOSTENT hostent = {0};
-    unsigned char *p = NULL;
+    EVHOSTENT hostent = {0};
+    unsigned char *p = NULL, *s = NULL;
     int tid = 0, n = 0, left = 0, ip  = 0;
 
     if(conn && (tid = conn->c_id) >= 0 && buffer->ndata > 0 && buffer->data)
     {
-        p = (unsigned char *)buffer->data;
+        s = (unsigned char *)buffer->data;
         left = buffer->ndata;
-        while((n = evdns_parse_reply(p, left, &hostent)) > 0)
+        do
         {
-            if(hostent.naddrs > 0)
+            if((n = evdns_parse_reply(s, left, &hostent)) > 0)
             {
-                ltask->set_host_ip(ltask, hostent.name, hostent.addrs, hostent.naddrs);
-                ip = hostent.addrs[0];
-                p = (unsigned char *)&ip;
-                DEBUG_LOGGER(adns_logger, "Got host[%s]'s ip[%d.%d.%d.%d] from %s:%d", 
-                        hostent.name, p[0], p[1], p[2], p[3], conn->remote_ip, conn->remote_port);
-            }
-            left -= n;
-            memset(&hostent, 0, sizeof(HOSTENT));
-        }
+                DEBUG_LOGGER(adns_logger, "name:%s left:%d naddrs:%d n:%d sizeof(EVHOSTENT):%d", hostent.name, left, hostent.naddrs, n, sizeof(EVHOSTENT));
+                if(hostent.naddrs > 0)
+                {
+                    ltask->set_host_ip(ltask, hostent.name, hostent.addrs, hostent.naddrs);
+                    ip = hostent.addrs[0];
+                    p = (unsigned char *)&ip;
+                    DEBUG_LOGGER(adns_logger, "Got host[%s]'s ip[%d.%d.%d.%d] from %s:%d", 
+                            hostent.name, p[0], p[1], p[2], p[3], 
+                            conn->remote_ip, conn->remote_port);
+                }
+                s += n;
+                left -= n;
+            }else break;
+            memset(&hostent, 0, sizeof(EVHOSTENT));
+        }while(left > 0);
         return (buffer->ndata - left);
     }
     return -1;
@@ -266,28 +272,6 @@ void adns_heartbeat_handler(void *arg)
 
     if(arg == (void *)adns)
     {
-        /*
-        total = QTOTAL(dnsqueue);
-        while(total-- > 0)
-        {
-            id = -1;
-            QUEUE_POP(dnsqueue, int, &id);
-            if(id >= 0 && id < DNS_TASK_MAX)
-            {
-                if((tasklist[id].conn = adns->newconn(adns, -1, 
-                    SOCK_DGRAM, tasklist[id].nameserver, DNS_DEFAULT_PORT, NULL)))
-                {
-                    tasklist[id].conn->c_id = id;
-                    tasklist[id].conn->start_cstate(tasklist[id].conn);
-                    adns->newtransaction(adns, tasklist[id].conn, id);
-                }
-                else
-                {
-                    QUEUE_PUSH(dnsqueue, int, &id);
-                }
-            }
-        }
-        */
         while((id = ltask->pop_dns(ltask, dns_ip)) >= 0 && 
                 (conn = adns->newconn(adns, -1, 
                 SOCK_DGRAM, dns_ip, DNS_DEFAULT_PORT, NULL)))

@@ -1,5 +1,5 @@
-#ifndef _DNS_H
-#define _DNS_H
+#ifndef _EVDNS_H
+#define _EVDNS_H
 /* Header format, from RFC 1035:
  *                                  1  1  1  1  1  1
  *    0  1  2  3  4  5  6  7  8  9  0  1  2  3  4  5
@@ -125,36 +125,24 @@
 #define DNS_RR_SET_TTL(r)               DNS__SET32BIT((r) + 4, v)
 #define DNS_RR_SET_LEN(r)               DNS__SET16BIT((r) + 8, v)
 #define EVDNS_BUF_SIZE                  512
-static const char *opcodes[] = {
-  "QUERY", "IQUERY", "STATUS", "(reserved)", "NOTIFY",
-  "(unknown)", "(unknown)", "(unknown)", "(unknown)",
-  "UPDATEA", "UPDATED", "UPDATEDA", "UPDATEM", "UPDATEMA",
-  "ZONEINIT", "ZONEREF"
-};
-
-static const char *rcodes[] = {
-  "NOERROR", "FORMERR", "SERVFAIL", "NXDOMAIN", "NOTIMP", "REFUSED",
-  "(unknown)", "(unknown)", "(unknown)", "(unknown)", "(unknown)",
-  "(unknown)", "(unknown)", "(unknown)", "(unknown)", "NOCHANGE"
-};
 #define EVDNS_TIMEOUT 30000000
 #define EVDNS_TIMEOUT_MAX 6
-#define DNS_MAX_NUM   32
-#ifndef DNS_NAME_MAX
-#define DNS_NAME_MAX  256
+#define EVDNS_MAX_NUM   32
+#ifndef EVDNS_NAME_MAX
+#define EVDNS_NAME_MAX  256
 #endif
 #define DNS_DEFAULT_PORT 53
-typedef struct _HOSTENT
+typedef struct _EVHOSTENT
 {
     int qid;
-    char name[DNS_NAME_MAX];
-    int nalias;
-    char alias[DNS_MAX_NUM][DNS_NAME_MAX];
-    int naddrs;
-    int  addrs[DNS_MAX_NUM];
-}HOSTENT;
+    short nalias;
+    short naddrs;
+    unsigned char alias[EVDNS_MAX_NUM][EVDNS_NAME_MAX];
+    int  addrs[EVDNS_MAX_NUM];
+    unsigned char name[EVDNS_NAME_MAX];
+}EVHOSTENT;
 /* return buffer length*/
 int evdns_make_query(char *hostname, int dnsclass, int type, unsigned short id, int rd, unsigned char *buf);
 /* parse reply record */
-int evdns_parse_reply(unsigned char *buf, int nbuf, HOSTENT *hostent);
+int evdns_parse_reply(unsigned char *buf, int nbuf, EVHOSTENT *hostent);
 #endif /* DNS_H */
