@@ -171,7 +171,10 @@ int adns_packet_reader(CONN *conn, CB_DATA *buffer)
         {
             if((n = evdns_parse_reply(s, left, &hostent)) > 0)
             {
-                DEBUG_LOGGER(adns_logger, "name:%s left:%d naddrs:%d n:%d sizeof(EVHOSTENT):%d", hostent.name, left, hostent.naddrs, n, sizeof(EVHOSTENT));
+                s += n;
+                left -= n;
+                DEBUG_LOGGER(adns_logger, "name:%s left:%d naddrs:%d", 
+                        hostent.name, left, hostent.naddrs, n, sizeof(EVHOSTENT));
                 if(hostent.naddrs > 0)
                 {
                     ltask->set_host_ip(ltask, hostent.name, hostent.addrs, hostent.naddrs);
@@ -181,8 +184,6 @@ int adns_packet_reader(CONN *conn, CB_DATA *buffer)
                             hostent.name, p[0], p[1], p[2], p[3], 
                             conn->remote_ip, conn->remote_port);
                 }
-                s += n;
-                left -= n;
             }else break;
             memset(&hostent, 0, sizeof(EVHOSTENT));
         }while(left > 0);

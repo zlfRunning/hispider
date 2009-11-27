@@ -249,9 +249,7 @@ int evdns_parse_reply(unsigned char *buf, int nbuf, EVHOSTENT *hostent)
             if(p >= end || (p+rrlen) > end) return -1;
             p += rrlen;
         }
-        int n = ((char *)p - (char *)buf);
-        fprintf(stdout, "n:%d p:%p buf:%p sizeof(hostent):%d\n", n, p, buf, sizeof(EVHOSTENT));
-        return n;
+        return (p - buf);
     }
     return -1;
 }
