@@ -569,6 +569,7 @@ int ltask_pop_host(LTASK *task, char *host)
     int host_id = -1, last = -1;
 
     last = task->hostio.end/(off_t)sizeof(LHOST);
+    DEBUG_LOGGER(task->logger, "pop_host() current:%d last:%d", task->hostio.current, last);
     if(task && host && last > 0 && task->hostio.current >= 0 && task->hostio.current < last)
     {
         MUTEX_LOCK(task->mutex);

@@ -203,6 +203,7 @@ int adns_packet_handler(CONN *conn, CB_DATA *packet)
     }
     else 
     {
+        DEBUG_LOGGER(adns_logger, "error_DNS()[%d] remote[%s:%d] local[%s:%d] via %d", tid, conn->remote_ip, conn->remote_port, conn->local_ip, conn->local_port, conn->fd);
         conn->over_cstate(conn);
         conn->over(conn);
         ltask->set_dns_status(ltask, tid, NULL, DNS_STATUS_ERR);
@@ -217,6 +218,7 @@ int adns_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chu
 
     if(conn && (tid = conn->c_id) >= 0 )
     {
+        DEBUG_LOGGER(adns_logger, "error_handler()[%d] remote[%s:%d] local[%s:%d] via %d", tid, conn->remote_ip, conn->remote_port, conn->local_ip, conn->local_port, conn->fd);
         conn->over_cstate(conn);
         conn->over(conn);
         ltask->set_dns_status(ltask, tid, NULL, DNS_STATUS_ERR);
@@ -231,6 +233,7 @@ int adns_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
 
     if(conn && (tid = conn->c_id) >= 0)
     {
+        DEBUG_LOGGER(adns_logger, "timeout_handler()[%d] remote[%s:%d] local[%s:%d] via %d", tid, conn->remote_ip, conn->remote_port, conn->local_ip, conn->local_port, conn->fd);
         return adns->newtransaction(adns, conn, tid);
     }
     return -1;
@@ -239,13 +242,13 @@ int adns_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
 /* adns transaction handler */
 int adns_trans_handler(CONN *conn, int tid)
 {
-    unsigned char hostname[DNS_NAME_MAX], buf[HTTP_BUF_SIZE];
+    unsigned char hostname[EVDNS_NAME_MAX], buf[HTTP_BUF_SIZE];
     int qid = 0, n = 0;
 
     if(conn && tid >= 0)
         //&& tid < DNS_TASK_MAX && tasklist[tid].conn == conn)
     {
-        memset(hostname, 0, DNS_NAME_MAX);
+        memset(hostname, 0, EVDNS_NAME_MAX);
         conn->c_id = tid;
         conn->start_cstate(conn);
         conn->set_timeout(conn, EVDNS_TIMEOUT);

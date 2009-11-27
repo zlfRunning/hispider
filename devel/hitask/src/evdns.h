@@ -125,7 +125,7 @@
 #define DNS_RR_SET_TTL(r)               DNS__SET32BIT((r) + 4, v)
 #define DNS_RR_SET_LEN(r)               DNS__SET16BIT((r) + 8, v)
 #define EVDNS_BUF_SIZE                  512
-#define EVDNS_TIMEOUT 30000000
+#define EVDNS_TIMEOUT 10000000
 #define EVDNS_TIMEOUT_MAX 6
 #define EVDNS_MAX_NUM   32
 #ifndef EVDNS_NAME_MAX
