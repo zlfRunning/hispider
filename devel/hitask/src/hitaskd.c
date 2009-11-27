@@ -174,10 +174,10 @@ int adns_packet_reader(CONN *conn, CB_DATA *buffer)
                 s += n;
                 left -= n;
                 DEBUG_LOGGER(adns_logger, "name:%s left:%d naddrs:%d", 
-                        hostent.name, left, hostent.naddrs, n, sizeof(EVHOSTENT));
+                        hostent.name, left, hostent.naddrs);
                 if(hostent.naddrs > 0)
                 {
-                    ltask->set_host_ip(ltask, hostent.name, hostent.addrs, hostent.naddrs);
+                    ltask->set_host_ip(ltask, (char *)hostent.name, hostent.addrs, hostent.naddrs);
                     ip = hostent.addrs[0];
                     p = (unsigned char *)&ip;
                     DEBUG_LOGGER(adns_logger, "Got host[%s]'s ip[%d.%d.%d.%d] from %s:%d", 
@@ -1471,7 +1471,7 @@ err_end:
 /*  data handler */
 int histore_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
-    int urlid = 0, n = 0, uuid = 0;
+    int urlid = 0, n = 0, uuid = 0, nrawdata = 0;
     char *date = NULL, *p = NULL;
     HTTP_REQ *http_req = NULL;
 
@@ -1486,12 +1486,16 @@ int histore_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                 {
                     date = (http_req->hlines + n);
                 }
+                if((n = http_req->headers[HEAD_GEN_RAW_LENGTH]) > 0)
+                {
+                    nrawdata = atoi(http_req->hlines + n);
+                }
                 /* doctype */
                 if((n = http_req->headers[HEAD_ENT_CONTENT_TYPE]) > 0)
                     p = http_req->hlines + n;
                 DEBUG_LOGGER(histore_logger, "recv-urlid:%d data_len:%d", urlid, chunk->ndata);
                 ltask->update_content(ltask, urlid, date, p, 
-                        chunk->data, chunk->ndata, is_need_extract_link);
+                        chunk->data, chunk->ndata, nrawdata, is_need_extract_link);
                 /*
                 if((n = http_req->headers[HEAD_GEN_UUID]) > 0
                     && (uuid = atoi(http_req->hlines + n)) > 0)

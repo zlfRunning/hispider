@@ -1711,7 +1711,7 @@ int ltask_get_stateinfo(LTASK *task, char *block)
 
 /* update url content  */
 int ltask_update_content(LTASK *task, int urlid, char *date, char *type, 
-        char *content, int ncontent , int is_extract_link)
+        char *content, int ncontent, int nrawdata, int is_extract_link)
 {
     char buf[HTTP_BUF_SIZE], *url = NULL, *p = NULL, *data = NULL;
     int ret = -1, n = 0, interval = 0, *px = NULL;
@@ -1766,7 +1766,7 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
                 if(task->state)
                 {
                     task->state->doc_total_zsize += (off_t)ncontent;
-                    task->state->doc_total_size += (off_t)ncontent;
+                    task->state->doc_total_size += (off_t)nrawdata;
                     task->state->url_task_ok++;
                     UPDATE_SPEED(task, interval);
                 }
@@ -2362,7 +2362,7 @@ int main(int argc, char **argv)
                             }
                         }
                         task->update_content(task, 35, "Mon, 08 Jun 2009 02:22:52 GMT", 
-                                "text/html", content, ncontent);
+                                "text/html", content, ncontent, 0, 0);
                     }
                     if(zdata) free(zdata);
                     zdata = NULL;

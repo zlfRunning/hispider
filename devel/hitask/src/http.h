@@ -325,9 +325,11 @@ static HTTP_ELEMENT http_headers[] =
 #define HEAD_GEN_USERID     49
     {49, "UserID:", 7, NULL},
 #define HEAD_GEN_UUID     50
-    {50, "UUID:", 5, NULL}
+    {50, "UUID:", 5, NULL},
+#define HEAD_GEN_RAW_LENGTH   51
+    {51, "Raw-Length:", 11, NULL}
 };
-#define HTTP_HEADER_NUM	51
+#define HTTP_HEADER_NUM	52
 
 /* HTTP/1.1 METHODS
    Method         = 

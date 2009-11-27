@@ -738,6 +738,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     ps = http_resp->hlines + n;
                     p += sprintf(p, "Last-Modified: %s\r\n", ps);
                 }
+                if(nrawdata > 0) p += sprintf(p, "Raw-Length: %d\r\n", nrawdata);
                 if((n = http_resp->headers[HEAD_ENT_CONTENT_TYPE]))
                 {
                     p += sprintf(p, "Content-Type: %s\r\n", http_resp->hlines +n);

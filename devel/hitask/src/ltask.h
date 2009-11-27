@@ -275,7 +275,7 @@ typedef struct _LTASK
     int (*list_users)(struct _LTASK *, char *block, int *nblock);
     int (*get_stateinfo)(struct _LTASK *, char *block);
     int (*update_content)(struct _LTASK *, int urlid, char *date, 
-            char *type, char *content, int ncontent, int is_extract_link);
+            char *type, char *content, int ncontent, int nrawdata, int is_extract_link);
     int (*get_content)(struct _LTASK *, int urlid, char **block);
     void (*free_content)(char *block);
     int (*extract_link)(struct _LTASK *, int urlid, int depth, 
