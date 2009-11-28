@@ -18,6 +18,7 @@
 #include "logger.h"
 #include "tm.h"
 #include "hio.h"
+#include "mmtree.h"
 #ifndef LI
 #define LI(_x_) ((long int)_x_)
 #endif
@@ -43,7 +44,7 @@ do                                                                              
 static const char *running_ops[] = {"running", "stop"};
 static const char *err_list[] = {"Invalid Proxy", "Bad Response", 
     "Bad HTTP header or program", "Invalid Content-type", "Bad Host IP",
-    "ERROR TASK on connection", "Timeout", "Invalid data", ""};
+    "ERROR TASK on connection", "Timeout", "Invalid data", "Network interrupt", "No data"};
 #define ERR_MSG_NUM  8
 const char *get_err_msg(int id)
 {
@@ -173,6 +174,8 @@ int ltask_set_basedir(LTASK *task, char *dir)
         FQUEUE_INIT(task->qhost, p, int);
         sprintf(path, "%s/%s", dir, L_QTASK_NAME);
         FQUEUE_INIT(task->qtask, p, int);
+        sprintf(path, "%s/%s", dir, L_QERROR_NAME);
+        FQUEUE_INIT(task->qerror, p, int);
         /* host/key/ip/url/domain/document */
         sprintf(path, "%s/%s", dir, L_KEY_NAME);
         if((task->key_fd = open(path, O_CREAT|O_RDWR|O_APPEND, 0644)) < 0)
@@ -609,7 +612,6 @@ int ltask_set_host_ip(LTASK *task, char *host, int *ips, int nips)
 
     if(task && host && (n = strlen(host)) > 0)
     {
-        DEBUG_LOGGER(task->logger, "Ready for add dns:%s", host);
         MUTEX_LOCK(task->mutex);
         TRIETAB_RGET(task->table, host, n, dp);
         if(dp == NULL)
@@ -619,10 +621,10 @@ int ltask_set_host_ip(LTASK *task, char *host, int *ips, int nips)
                 HIO_MMAP(task->hostio, LHOST, HOST_INCRE_NUM);
             }
             id = task->hostio.end/(off_t)sizeof(LHOST);
-            host_node = (LHOST *)(task->hostio.map + task->hostio.end);
+            host_node = (LHOST *)(task->hostio.map);
             if(fstat(task->domain_fd, &st) != 0) goto err;
-            host_node->host_off = st.st_size;
-            host_node->host_len = n;
+            host_node[id].host_off = st.st_size;
+            host_node[id].host_len = n;
             if(pwrite(task->domain_fd, host, n+1, st.st_size) <= 0) goto err;
             dp = (void *)((long)(id + 1));
             TRIETAB_RADD(task->table, host, n, dp);
@@ -631,6 +633,7 @@ int ltask_set_host_ip(LTASK *task, char *host, int *ips, int nips)
         }
         else
         {
+            id = (long)dp - 1;
             host_node = (LHOST *)(task->hostio.map);
         }
         if(id >= 0 && id < task->hostio.total && host_node 
@@ -646,9 +649,8 @@ int ltask_set_host_ip(LTASK *task, char *host, int *ips, int nips)
             if(task->ipio.map && task->ipio.map != (void *)-1)
             {
                 memcpy(task->ipio.map + task->ipio.end, ips, nips * sizeof(int));
-                host_node = (LHOST *)(task->hostio.map + id * sizeof(LHOST));
-                host_node->ip_off = task->ipio.end;
-                host_node->ip_count = (short)nips;
+                host_node[id].ip_off = task->ipio.end;
+                host_node[id].ip_count = (short)nips;
                 task->ipio.end += (off_t)(nips * sizeof(int));
                 if(task->state) task->state->host_ok++;
                 ret = 0;
@@ -991,7 +993,7 @@ err:
 /* */
 
 /* pop url */
-int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime, 
+int ltask_pop_url(LTASK *task, int task_type, int url_id, char *url, int *itime, 
         int referid, char *refer, char *cookie)
 {
     int urlid = -1, n = -1, x = -1, *px = NULL, is_priority_url = 0;
@@ -1003,6 +1005,18 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
     {
         MUTEX_LOCK(task->mutex);
         if(url_id >= 0) urlid = url_id;
+        else if(task_type == L_TASK_TYPE_ERROR)
+        {
+            if(FQTOTAL(task->qerror) > 0)
+            {
+                px = &urlid;
+                FQUEUE_POP(task->qerror, int, px);
+            }
+        }
+        else if(task_type == L_TASK_TYPE_UPDATE)
+        {
+
+        }
         else
         {
             if(FQUEUE_POP(task->qpriority, LNODE, &node) == 0)
@@ -1056,7 +1070,7 @@ int ltask_pop_url(LTASK *task, int url_id, char *url, int *itime,
                     && meta.url_len > 0 && meta.url_len < HTTP_URL_MAX 
                     && meta.status >= 0 && meta.retry_times < TASK_RETRY_TIMES) 
             {
-                if(is_priority_url) 
+                if((task_type & (L_TASK_TYPE_ERROR|L_TASK_TYPE_UPDATE)) || is_priority_url) 
                 {
                     DEBUG_LOGGER(task->logger, "POP-PRIORITY-URL urlid:%d ", urlid);
                     break;
@@ -1154,7 +1168,7 @@ int ltask_set_url_status(LTASK *task, int urlid, char *url, short status, short 
 {
     char newurl[HTTP_URL_MAX], *p = NULL, *pp = NULL;
     unsigned char key[MD5_LEN];
-    int n = 0, id = -1, ret = -1;
+    int n = 0, id = -1, ret = -1, *px = NULL;
     LMETA meta = {0};
     void *dp = NULL;
 
@@ -1185,7 +1199,19 @@ int ltask_set_url_status(LTASK *task, int urlid, char *url, short status, short 
                     + (off_t)((char *)&(meta.status) - (char *)&meta));        
             ret = 0;
         }
-        if(status && task->state)task->state->url_task_error++;
+        if(task->state)
+        {
+            if(status)
+            {
+                task->state->url_task_error++;
+                if(!(err & (ERR_HTTP_RESP|ERR_CONTENT_TYPE|ERR_NODATA)))
+                {
+                    px = &urlid;
+                    FQUEUE_PUSH(task->qerror, int, px);
+                }
+            }
+            else task->state->url_task_ok++;
+        }
         if(err){REALLOG(task->errlogger, "%d:%d %s", id, err, get_err_msg(err));}
         MUTEX_UNLOCK(task->mutex);
     }
@@ -1239,7 +1265,7 @@ int ltask_set_url_level(LTASK *task, int urlid, char *url, short level)
 }
 
 /* NEW TASK */
-int ltask_get_urltask(LTASK *task, int url_id, int referid, int uuid, 
+int ltask_get_urltask(LTASK *task, int url_id, int referid, int task_type, 
         int userid, char *buf, int *nbuf)
 {
     char url[HTTP_URL_MAX], date[64], refer[HTTP_URL_MAX], cookie[HTTP_COOKIE_MAX], 
@@ -1257,7 +1283,8 @@ int ltask_get_urltask(LTASK *task, int url_id, int referid, int uuid,
             fprintf(stdout, "%f:%f\n", task->state->speed, task->state->speed_limit);
             return urlid;
         }
-        if((urlid = ltask_pop_url(task, url_id, url, &itime, referid, refer, cookie)) >= 0)
+        if((urlid = ltask_pop_url(task, task_type, url_id, url, &itime, 
+                        referid, refer, cookie)) >= 0)
         {
             DEBUG_LOGGER(task->logger, "TASK-URL:%s", url);
             host = p = ps = url + strlen(HTTP_PREF);
@@ -1292,7 +1319,7 @@ int ltask_get_urltask(LTASK *task, int url_id, int referid, int uuid,
                 p += sprintf(p, "Last-Modified: %s\r\n", date);
             if(refer[0] != '\0') p += sprintf(p, "Referer: %s\r\n", refer);
             if(cookie[0] != '\0') p += sprintf(p, "Cookie: %s\r\n", cookie);
-            if(uuid >= 0) p += sprintf(p, "UUID: %d\r\n", uuid);
+            //if(uuid >= 0) p += sprintf(p, "UUID: %d\r\n", uuid);
             if(userid >= 0) p += sprintf(p, "UserID: %d\r\n", userid);
             if(task->state->is_use_proxy && ltask_get_proxy(task, &proxy) >= 0)
             {
@@ -1740,7 +1767,10 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
         else 
         {
             FATAL_LOGGER(task->logger, "Invalid urlid:%d", urlid);
-            if(task->state) task->state->url_task_error++;
+            if(task->state) 
+            {
+                task->state->url_task_error++;
+            }
             goto end;
         }
         if(meta.url_len > 0 && meta.url_len <= HTTP_URL_MAX 
@@ -2057,6 +2087,7 @@ void ltask_clean(LTASK **ptask)
         if((*ptask)->qpriority){FQUEUE_CLEAN((*ptask)->qpriority);}
         if((*ptask)->qhost){FQUEUE_CLEAN((*ptask)->qhost);}
         if((*ptask)->qtask){FQUEUE_CLEAN((*ptask)->qtask);}
+        if((*ptask)->qerror){FQUEUE_CLEAN((*ptask)->qerror);}
         if((*ptask)->qproxy){QUEUE_CLEAN((*ptask)->qproxy);}
         if((*ptask)->key_fd > 0) close((*ptask)->key_fd);
         if((*ptask)->url_fd > 0) close((*ptask)->url_fd);

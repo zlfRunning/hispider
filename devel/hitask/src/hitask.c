@@ -53,6 +53,7 @@ static SERVICE *service = NULL;
 static dictionary *dict = NULL;
 static TASK *tasklist = NULL;
 static int ntask = 0;
+static int task_type = 0;
 static char *hitaskd_ip = NULL;
 static int  hitaskd_port = 0;
 static char *histore_ip = NULL;
@@ -97,6 +98,7 @@ int http_download_error(int c_id, int err)
         if(tasklist[c_id].uuid >= 0)
             p += sprintf(p, "UUID:%d\r\n", tasklist[c_id].uuid);
         if(err > 0) p += sprintf(p, "Warning: %d\r\n", err);
+        p += sprintf(p, "Task-Type:%d\r\n", task_type);
         p += sprintf(p, "%s", "\r\n");
         n = p - buf;
         DEBUG_LOGGER(logger, "Over task:%d error:%d", tasklist[c_id].urlid, err);
@@ -514,12 +516,12 @@ int hitask_trans_handler(CONN *conn, int tid)
 /* data handler */
 int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
-    CONN *s_conn = NULL, *d_conn = NULL;
     char buf[HTTP_BUF_SIZE], charset[CHARSET_MAX], *zdata = NULL, *p = NULL, 
          *ps = NULL, *outbuf = NULL, *data = NULL, *rawdata = NULL;
-    int  ret = -1, c_id = 0, n = 0, i = 0, is_need_convert = 0, 
+    int  ret = -1, c_id = 0, n = 0, i = 0, is_need_convert = 0, urlid = 0, 
          is_need_compress = 0, is_new_zdata = 0, is_text = 0;
     size_t ninbuf = 0, noutbuf = 0, nzdata = 0, ndata = 0, nrawdata = 0;
+    CONN *s_conn = NULL, *d_conn = NULL;
     HTTP_RESPONSE *http_resp = NULL;
     chardet_t pdet = NULL;
     iconv_t cd = NULL;
@@ -529,6 +531,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
         if(conn == tasklist[c_id].c_conn && chunk && chunk->data && chunk->ndata > 0
                 && cache && cache->ndata > 0 && (http_resp = (HTTP_RESPONSE *)cache->data))
         {
+            urlid = tasklist[c_id].urlid;
             DEBUG_LOGGER(logger, "Ready for handling TASK[%d] on remote[%s:%d] "
                     "via %d ndata:%d urlid:%d", c_id, conn->remote_ip, conn->remote_port, 
                     conn->fd, chunk->ndata, tasklist[c_id].urlid);
@@ -688,7 +691,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 /* task header */
                 memset(buf, 0, HTTP_BUF_SIZE);
                 p = buf;
-                p += sprintf(p, "TASK %d HTTP/1.0\r\n", tasklist[c_id].urlid);
+                p += sprintf(p, "TASK %d HTTP/1.0\r\n", urlid);
                 if((n = http_resp->headers[HEAD_ENT_LAST_MODIFIED]))
                 {
                     ps = http_resp->hlines + n;
@@ -697,7 +700,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 if(tasklist[c_id].is_new_host)
                 {
                     DEBUG_LOGGER(logger, "new domain:%s ip:%s via urlid:%d", 
-                            tasklist[c_id].host, tasklist[c_id].ip, tasklist[c_id].urlid);
+                            tasklist[c_id].host, tasklist[c_id].ip, urlid);
                     p += sprintf(p, "Host: %s\r\nServer: %s\r\n", 
                             tasklist[c_id].host, tasklist[c_id].ip);
                     tasklist[c_id].is_new_host = 0;
@@ -721,24 +724,25 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     DEBUG_LOGGER(logger, "%s", ps); 
                     p += sprintf(p, "%s", "\r\n");
                 }
+                p += sprintf(p, "Task-Type:%d\r\n", task_type);
                 p += sprintf(p, "%s", "\r\n");
                 if((s_conn = tasklist[c_id].s_conn) && (n = (p - buf)) > 0)
                 {
                     DEBUG_LOGGER(logger, "sending header on TASK[%d] size:%d "
-                            "to hitaskd via urlid:%d", c_id, n, tasklist[c_id].urlid);
+                            "to hitaskd-urlid:%d", c_id, n, urlid);
                     s_conn->push_chunk(s_conn, buf, n);
                     tasklist[c_id].c_conn = NULL;
                 }
                 //store data 
                 memset(buf, 0, HTTP_BUF_SIZE);
                 p = buf;
-                p += sprintf(p, "PUT %d HTTP/1.0\r\n", tasklist[c_id].urlid);
+                p += sprintf(p, "PUT %d HTTP/1.0\r\n", urlid);
                 if((n = http_resp->headers[HEAD_ENT_LAST_MODIFIED]))
                 {
                     ps = http_resp->hlines + n;
                     p += sprintf(p, "Last-Modified: %s\r\n", ps);
                 }
-                if(nrawdata > 0) p += sprintf(p, "Raw-Length: %d\r\n", nrawdata);
+                if(nrawdata > 0) p += sprintf(p, "Raw-Length: %ld\r\n", LI(nrawdata));
                 if((n = http_resp->headers[HEAD_ENT_CONTENT_TYPE]))
                 {
                     p += sprintf(p, "Content-Type: %s\r\n", http_resp->hlines +n);
@@ -748,17 +752,22 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 if(tasklist[c_id].uuid >= 0)
                     p += sprintf(p, "UUID:%d\r\n", tasklist[c_id].uuid);
                 p += sprintf(p, "Content-Length: %ld\r\n", LI(nzdata));
+                p += sprintf(p, "Task-Type:%d\r\n", task_type);
                 p += sprintf(p, "%s", "\r\n");
                 if((d_conn = tasklist[c_id].d_conn) && d_conn->push_chunk && (n = (p - buf)) > 0)
                 {
+                    d_conn->start_cstate(d_conn);
                     DEBUG_LOGGER(logger, "send storage on TASK[%d] data:%p size:%ld via urlid:%d", 
                             c_id, zdata, LI(nzdata), tasklist[c_id].urlid);
                     d_conn->push_chunk(d_conn, buf, n);
                     DEBUG_LOGGER(logger, "sent storage on TASK[%d] data:%p size:%ld via urlid:%d", 
                             c_id, zdata, LI(nzdata), tasklist[c_id].urlid);
                     d_conn->push_chunk(d_conn, zdata, nzdata);
-                    DEBUG_LOGGER(logger, "sent storage on TASK[%d] data:%p size:%ld via urlid:%d", 
-                            c_id, zdata, LI(nzdata), tasklist[c_id].urlid);
+                    DEBUG_LOGGER(logger, "sent storage on TASK[%d] data:%p size:%ld "
+                            "to histore-urlid:%d remote[%s:%d] local[%s:%d] via %d", 
+                            c_id, zdata, LI(nzdata), tasklist[c_id].urlid, d_conn->remote_ip,
+                            d_conn->remote_port, d_conn->local_ip, d_conn->local_port,
+                            d_conn->fd);
                 }
                 tasklist[c_id].urlid = -1;
                 ret = 0;
@@ -927,6 +936,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
     }
     http_download_limit = iniparser_getint(dict, "HITASK:http_download_limit", 67108864);
     ntask = iniparser_getint(dict, "HITASK:ntask", 64);
+    task_type = iniparser_getint(dict, "HITASK:task_type", 0);
     if(ntask <= 0)
     {
         fprintf(stderr, "[ntask] is invalid...\n");

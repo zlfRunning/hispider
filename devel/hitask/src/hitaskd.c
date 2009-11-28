@@ -159,9 +159,9 @@ static char *e_ops[]=
 /* dns packet reader */
 int adns_packet_reader(CONN *conn, CB_DATA *buffer)
 {
-    EVHOSTENT hostent = {0};
+    int tid = 0,  i = 0, n = 0, left = 0, ip  = 0;
     unsigned char *p = NULL, *s = NULL;
-    int tid = 0, n = 0, left = 0, ip  = 0;
+    EVHOSTENT hostent = {0};
 
     if(conn && (tid = conn->c_id) >= 0 && buffer->ndata > 0 && buffer->data)
     {
@@ -177,7 +177,13 @@ int adns_packet_reader(CONN *conn, CB_DATA *buffer)
                         hostent.name, left, hostent.naddrs);
                 if(hostent.naddrs > 0)
                 {
-                    ltask->set_host_ip(ltask, (char *)hostent.name, hostent.addrs, hostent.naddrs);
+                    ltask->set_host_ip(ltask, (char *)hostent.name, 
+                            hostent.addrs, hostent.naddrs);
+                    for(i = 0; i < hostent.nalias; i++)
+                    {
+                        ltask->set_host_ip(ltask, (char *)hostent.alias[i], 
+                                hostent.addrs, hostent.naddrs);
+                    }
                     ip = hostent.addrs[0];
                     p = (unsigned char *)&ip;
                     DEBUG_LOGGER(adns_logger, "Got host[%s]'s ip[%d.%d.%d.%d] from %s:%d", 
@@ -678,18 +684,22 @@ int hitaskd_newtask(CONN *conn)
     if(conn)
     {   
         //fprintf(stdout, "%s::%d OK\n", __FILE__,__LINE__);
-        DEBUG_LOGGER(hitaskd_logger, "newtask() on connection[%s:%d] local[%s:%d] via %d",
-                conn->remote_ip, conn->remote_port, conn->local_ip, conn->local_port, conn->fd);
+        DEBUG_LOGGER(hitaskd_logger, "newtask()::%d on connection[%s:%d] local[%s:%d] via %d",
+                conn->s_id, conn->remote_ip, conn->remote_port, 
+                conn->local_ip, conn->local_port, conn->fd);
         if((urlid = ltask->get_urltask(ltask, -1, -1, -1, -1, buf, &n)) >= 0 && n > 0) 
         {
             DEBUG_LOGGER(hitaskd_logger, "Ready for download-urlid:%d buffer_len:%d "
                     " to download-node[%s:%d] local[%s:%d] via %d", urlid, n, conn->remote_ip, 
                     conn->remote_port, conn->local_ip, conn->local_port, conn->fd);
             conn->over_evstate(conn);
+            conn->start_cstate(conn);
+            conn->c_id = urlid;
             return conn->push_chunk(conn, buf, n);
         }
         else 
         {
+            conn->c_id = -1;
             ERROR_LOGGER(hitaskd_logger, "get_urltask() failed");
             goto time_out;
         }
@@ -730,9 +740,9 @@ time_out:
 /* packet handler */
 int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
 {
+    int urlid = 0, n = 0, ips = 0, err = 0, uuid = 0, nrawdata = 0;
     char buf[HTTP_BUF_SIZE], file[HTTP_PATH_MAX], *host = NULL, 
         *ip = NULL, *p = NULL, *end = NULL;
-    int urlid = 0, n = 0, ips = 0, err = 0, uuid = 0;
     struct stat st = {0};
     HTTP_REQ http_req = {0};
 
@@ -829,6 +839,8 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
                 ltask->set_host_ip(ltask, host, &ips, 1);
                 DEBUG_LOGGER(hitaskd_logger, "Resolved name[%s]'s ip[%s] from client", host, ip);
             }
+            if((n = http_req.headers[HEAD_GEN_TASK_TYPE]) > 0)
+                conn->s_id = atoi(http_req.hlines +n);
             urlid = atoi(http_req.path);
             //error 
             if(urlid >= 0 && (n = http_req.headers[HEAD_GEN_WARNING]) > 0)
@@ -842,6 +854,11 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
                     hibase->update_urlnode(hibase, uuid, 1);
                 }
                 ltask->set_url_status(ltask, urlid, NULL, URL_STATUS_ERR, err);
+            }
+            if((n = http_req.headers[HEAD_GEN_RAW_LENGTH]) > 0 
+                && (nrawdata = atoi(http_req.hlines + n)))
+            {
+                ltask->set_url_status(ltask, urlid, NULL, URL_STATUS_OK, ERR_NODATA);
             }
             /* get new task */
             return hitaskd_newtask(conn);
@@ -1400,10 +1417,13 @@ int hitaskd_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
 {
     if(conn)
     {
+        if(conn->c_id >= 0) 
+            ltask->set_url_status(ltask, conn->c_id, NULL, URL_STATUS_ERR, ERR_NETWORK);
         return 0;
     }
     return -1;
 }
+
 /* OOB handler */
 int hitaskd_oob_handler(CONN *conn, CB_DATA *oob)
 {
@@ -1435,7 +1455,7 @@ int histore_packet_handler(CONN *conn, CB_DATA *packet)
     {
         p = packet->data;
         end = packet->data + packet->ndata;
-        *end = '\0';
+        //*end = '\0';
         if(http_request_parse(p, end, &http_req) == -1) goto err_end;
         if(http_req.reqid == HTTP_GET)
         {
@@ -1448,10 +1468,9 @@ int histore_packet_handler(CONN *conn, CB_DATA *packet)
         else if(http_req.reqid == HTTP_PUT)
         {
             urlid = atoi(http_req.path);
-            if(urlid >= 0)
+            if((n = http_req.headers[HEAD_ENT_CONTENT_LENGTH]) > 0) 
             {
-                if((n = http_req.headers[HEAD_ENT_CONTENT_LENGTH]) > 0 
-                        && (n = atol(http_req.hlines + n)) > 0)
+                if((n = atol(http_req.hlines + n)) >= 0)
                 {
                     conn->save_cache(conn, &http_req, sizeof(HTTP_REQ));
                     conn->recv_chunk(conn, n);
@@ -1459,6 +1478,20 @@ int histore_packet_handler(CONN *conn, CB_DATA *packet)
                             n, conn->remote_ip, conn->remote_port, conn->fd);
                 }
             }
+            else
+            {
+                FATAL_LOGGER(histore_logger, "recv-data failed from remote[%s:%d]"
+                        " local[%s:%d] via %d", conn->remote_ip, conn->remote_port,
+                        conn->local_ip, conn->local_port, conn->fd);
+            }
+            /*
+               else
+               {
+               FATAL_LOGGER(histore_logger, "recv-data-urlid failed from remote[%s:%d]"
+               " local[%s:%d] via %d", conn->remote_ip, conn->remote_port,
+               conn->local_ip, conn->local_port, conn->fd);
+
+               }*/
         }
         else goto err_end;
         return 0;

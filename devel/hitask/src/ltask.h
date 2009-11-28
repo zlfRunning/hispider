@@ -23,6 +23,8 @@
 #define ERR_TASK_CONN           0x20
 #define ERR_TASK_TIMEOUT        0x40
 #define ERR_DATA                0x80
+#define ERR_NETWORK             0x100
+#define ERR_NODATA              0x200
 #define URL_IS_POST             0x01
 #define URL_IS_PRIORITY         0x02
 #define L_LEVEL_UP              1
@@ -67,6 +69,7 @@
 #define L_QPRIORITY_NAME        "hi.qpriority"
 #define L_QHOST_NAME            "hi.qhost"
 #define L_QTASK_NAME            "hi.qtask"
+#define L_QERROR_NAME           "hi.qerror"
 #define L_LOG_NAME              "hi.log"
 #define L_KEY_NAME              "hi.key"
 #define L_META_NAME             "hi.meta"
@@ -74,6 +77,9 @@
 #define L_USER_NAME             "hi.user"
 #define L_ERR_NAME              "hi.err"
 #define L_COOKIE_NAME           "hi.cookie"
+#define L_TASK_TYPE_NORMAL      0x00
+#define L_TASK_TYPE_UPDATE      0x01
+#define L_TASK_TYPE_ERROR       0x02
 #define USER_AGENT              "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10.5; zh-CN; rv:1.9.0.1) Gecko/2008070206 Firefox/3.0.1"
 #define ACCEPT_TYPE             "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 #define ACCEPT_LANGUAGE         "zh-cn,zh;q=0.5"
@@ -224,6 +230,7 @@ typedef struct _LTASK
     void *qpriority;
     void *qhost;
     void *qtask;
+    void *qerror;
     void *users;
     LSTATE *state;
     int state_fd;
@@ -258,12 +265,12 @@ typedef struct _LTASK
     int (*update_cookie)(struct _LTASK *, int hostid, char *cookies);
     int (*del_cookie)(struct _LTASK *, int hostid, char *cookies);
     int (*add_url)(struct _LTASK *, int parentid, int parent_depth, char *url, int flag);
-    int (*pop_url)(struct _LTASK *, int url_id, char *url, int *time, 
+    int (*pop_url)(struct _LTASK *, int task_type, int urlid, char *url, int *time, 
             int referid, char *refer, char *cookie);
     int (*get_url)(struct _LTASK *, int urlid, char *url);
     int (*set_url_status)(struct _LTASK *, int urlid, char *url, short status, short err);
     int (*set_url_level)(struct _LTASK *, int urlid, char *url, short level);
-    int (*get_urltask)(struct _LTASK *, int urlid, int referid, int urlnodeid, 
+    int (*get_urltask)(struct _LTASK *, int urlid, int referid, int type_task, 
             int userid, char *buf, int *nbuf);
     int (*pop_task)(struct _LTASK *);
     int (*add_user)(struct _LTASK *, char *name, char *passwd);

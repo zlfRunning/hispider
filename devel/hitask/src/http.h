@@ -72,7 +72,7 @@ typedef struct _HTTP_ELEMENT
    Reason-Phrase  = *<TEXT, excluding CR, LF>
  */
 #define HTTP_RESPONSE_NUM 40
-static HTTP_ELEMENT response_status[] = 
+static const HTTP_ELEMENT response_status[] = 
 {
 #define RESP_CONTINUE		0
 	{0, "100", 3, "Continue"},
@@ -222,7 +222,7 @@ static HTTP_ELEMENT response_status[] =
    | Cookies 
    | Set-Cookie 
  */
-static HTTP_ELEMENT http_headers[] = 
+static const HTTP_ELEMENT http_headers[] = 
 {
 #define HEAD_REQ_ACCEPT 0
 	{0, "Accept:", 7, NULL},
@@ -327,9 +327,11 @@ static HTTP_ELEMENT http_headers[] =
 #define HEAD_GEN_UUID     50
     {50, "UUID:", 5, NULL},
 #define HEAD_GEN_RAW_LENGTH   51
-    {51, "Raw-Length:", 11, NULL}
+    {51, "Raw-Length:", 11, NULL},
+#define HEAD_GEN_TASK_TYPE   52
+    {52, "Task-Type:", 10, NULL}
 };
-#define HTTP_HEADER_NUM	52
+#define HTTP_HEADER_NUM	53
 
 /* HTTP/1.1 METHODS
    Method         = 
@@ -345,7 +347,7 @@ static HTTP_ELEMENT http_headers[] =
    extension-method = token
  */
 #define HTTP_METHOD_NUM 11
-static HTTP_ELEMENT http_methods[] = 
+static const HTTP_ELEMENT http_methods[] = 
 {
 #define HTTP_OPTIONS	0
 	{0, "OPTIONS", 7, NULL},
@@ -373,7 +375,7 @@ static HTTP_ELEMENT http_methods[] =
 
 /* file ext support list */
 #define HTTP_EXT_NUM 52
-static HTTP_ELEMENT http_exts[]=
+static const HTTP_ELEMENT http_exts[]=
 {
 	{0, ".rpm", 4, "application/x-rpm"},
 	{1, ".pdf", 4, "application/pdf"},
@@ -429,7 +431,7 @@ static HTTP_ELEMENT http_exts[]=
 	{51, ".tar.bz2", 8, "application/x-bzip-compressed-tar"}
 };
 
-static char *ftypes[] = {
+static const char *ftypes[] = {
 	"UNKOWN",
 	"FIFO",
 	"CHR",

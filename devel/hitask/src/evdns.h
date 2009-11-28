@@ -134,11 +134,11 @@
 #define DNS_DEFAULT_PORT 53
 typedef struct _EVHOSTENT
 {
-    int qid;
     short nalias;
     short naddrs;
-    unsigned char alias[EVDNS_MAX_NUM][EVDNS_NAME_MAX];
+    int qid;
     int  addrs[EVDNS_MAX_NUM];
+    unsigned char alias[EVDNS_MAX_NUM][EVDNS_NAME_MAX];
     unsigned char name[EVDNS_NAME_MAX];
 }EVHOSTENT;
 /* return buffer length*/
