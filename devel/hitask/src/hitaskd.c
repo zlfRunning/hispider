@@ -1474,14 +1474,15 @@ int histore_packet_handler(CONN *conn, CB_DATA *packet)
                 {
                     conn->save_cache(conn, &http_req, sizeof(HTTP_REQ));
                     conn->recv_chunk(conn, n);
-                    DEBUG_LOGGER(histore_logger, "Ready for recv_chunk[%d] from %s:%d via %d",
-                            n, conn->remote_ip, conn->remote_port, conn->fd);
+                    DEBUG_LOGGER(histore_logger, "Ready for recv_chunk[%d] urlid:%d "
+                            "from %s:%d via %d", n, urlid, conn->remote_ip, 
+                            conn->remote_port, conn->fd);
                 }
             }
             else
             {
-                FATAL_LOGGER(histore_logger, "recv-data failed from remote[%s:%d]"
-                        " local[%s:%d] via %d", conn->remote_ip, conn->remote_port,
+                FATAL_LOGGER(histore_logger, "recv-data failed urlid:%d from remote[%s:%d]"
+                        " local[%s:%d] via %d", urlid, conn->remote_ip, conn->remote_port,
                         conn->local_ip, conn->local_port, conn->fd);
             }
             /*
@@ -1508,10 +1509,18 @@ int histore_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
     char *date = NULL, *p = NULL;
     HTTP_REQ *http_req = NULL;
 
-    if(conn && packet && cache && chunk && chunk->ndata > 0)
+    if(conn && packet && cache && chunk)
     {
-        if((http_req = (HTTP_REQ *)cache->data))
+        DEBUG_LOGGER(histore_logger, "recv-data-urlid:%d data_len:%d "
+                        " remote[%s:%d] local[%s:%d] via %d ", urlid, chunk->ndata, 
+                        conn->remote_ip, conn->remote_port, conn->local_ip, 
+                        conn->local_port, conn->fd);
+        if(chunk->ndata > 0 && (http_req = (HTTP_REQ *)cache->data))
         {
+            DEBUG_LOGGER(histore_logger, "reqid:%d data-urlid:%d data_len:%d "
+                        " remote[%s:%d] local[%s:%d] via %d ", http_req->reqid, 
+                        urlid, chunk->ndata, conn->remote_ip, conn->remote_port, 
+                        conn->local_ip, conn->local_port, conn->fd);
             if(http_req->reqid == HTTP_PUT)
             {
                 urlid = atoi(http_req->path);
@@ -1526,7 +1535,10 @@ int histore_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                 /* doctype */
                 if((n = http_req->headers[HEAD_ENT_CONTENT_TYPE]) > 0)
                     p = http_req->hlines + n;
-                DEBUG_LOGGER(histore_logger, "recv-urlid:%d data_len:%d", urlid, chunk->ndata);
+                DEBUG_LOGGER(histore_logger, "recv-urlid:%d data_len:%d "
+                        " remote[%s:%d] local[%s:%d] via %d ", urlid, chunk->ndata, 
+                        conn->remote_ip, conn->remote_port, conn->local_ip, 
+                        conn->local_port, conn->fd);
                 ltask->update_content(ltask, urlid, date, p, 
                         chunk->data, chunk->ndata, nrawdata, is_need_extract_link);
                 /*

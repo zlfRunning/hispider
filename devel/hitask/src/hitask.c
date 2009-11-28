@@ -705,10 +705,9 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                             tasklist[c_id].host, tasklist[c_id].ip);
                     tasklist[c_id].is_new_host = 0;
                 }
-                if(tasklist[c_id].userid >= 0)
-                    p += sprintf(p, "UserID:%d\r\n", tasklist[c_id].userid);
-                if(tasklist[c_id].uuid >= 0)
-                    p += sprintf(p, "UUID:%d\r\n", tasklist[c_id].uuid);
+                //if(tasklist[c_id].userid >= 0)
+                //    p += sprintf(p, "UserID:%d\r\n", tasklist[c_id].userid);
+                //if(tasklist[c_id].uuid >= 0)p += sprintf(p, "UUID:%d\r\n", tasklist[c_id].uuid);
                 if(http_resp->ncookies > 0)
                 {
                     ps = p;
@@ -747,25 +746,22 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 {
                     p += sprintf(p, "Content-Type: %s\r\n", http_resp->hlines +n);
                 }
-                if(tasklist[c_id].userid >= 0)
-                    p += sprintf(p, "UserID:%d\r\n", tasklist[c_id].userid);
-                if(tasklist[c_id].uuid >= 0)
-                    p += sprintf(p, "UUID:%d\r\n", tasklist[c_id].uuid);
+                //if(tasklist[c_id].userid >= 0)
+                //    p += sprintf(p, "UserID:%d\r\n", tasklist[c_id].userid);
+                //if(tasklist[c_id].uuid >= 0)
+                //    p += sprintf(p, "UUID:%d\r\n", tasklist[c_id].uuid);
                 p += sprintf(p, "Content-Length: %ld\r\n", LI(nzdata));
-                p += sprintf(p, "Task-Type:%d\r\n", task_type);
+                p += sprintf(p, "Task-Type: %d\r\n", task_type);
                 p += sprintf(p, "%s", "\r\n");
                 if((d_conn = tasklist[c_id].d_conn) && d_conn->push_chunk && (n = (p - buf)) > 0)
                 {
                     d_conn->start_cstate(d_conn);
-                    DEBUG_LOGGER(logger, "send storage on TASK[%d] data:%p size:%ld via urlid:%d", 
-                            c_id, zdata, LI(nzdata), tasklist[c_id].urlid);
+                    DEBUG_LOGGER(logger, "send header TASK[%d] len:%d urlid:%d", c_id, n, urlid);
                     d_conn->push_chunk(d_conn, buf, n);
-                    DEBUG_LOGGER(logger, "sent storage on TASK[%d] data:%p size:%ld via urlid:%d", 
-                            c_id, zdata, LI(nzdata), tasklist[c_id].urlid);
                     d_conn->push_chunk(d_conn, zdata, nzdata);
                     DEBUG_LOGGER(logger, "sent storage on TASK[%d] data:%p size:%ld "
                             "to histore-urlid:%d remote[%s:%d] local[%s:%d] via %d", 
-                            c_id, zdata, LI(nzdata), tasklist[c_id].urlid, d_conn->remote_ip,
+                            c_id, zdata, LI(nzdata), urlid, d_conn->remote_ip,
                             d_conn->remote_port, d_conn->local_ip, d_conn->local_port,
                             d_conn->fd);
                 }

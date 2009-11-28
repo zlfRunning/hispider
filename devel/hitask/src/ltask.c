@@ -920,6 +920,7 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url, int fl
                         node.id = id;
                         tnode = &node;
                         FQUEUE_PUSH(task->qpriority, LNODE, tnode);
+                        DEBUG_LOGGER(task->logger, "NEW-PRIORITY-URL:%s id:%d", newurl, id);
                     }
                 }
                 meta.parent  = parentid;
