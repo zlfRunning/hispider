@@ -856,7 +856,7 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
                 ltask->set_url_status(ltask, urlid, NULL, URL_STATUS_ERR, err);
             }
             if((n = http_req.headers[HEAD_GEN_RAW_LENGTH]) > 0 
-                && (nrawdata = atoi(http_req.hlines + n)))
+                && (nrawdata = atoi(http_req.hlines + n)) == 0)
             {
                 ltask->set_url_status(ltask, urlid, NULL, URL_STATUS_OK, ERR_NODATA);
             }
@@ -1505,7 +1505,7 @@ err_end:
 /*  data handler */
 int histore_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
-    int urlid = 0, n = 0, uuid = 0, nrawdata = 0;
+    int urlid = 0, n = 0, nrawdata = 0, ndownload = 0;
     char *date = NULL, *p = NULL;
     HTTP_REQ *http_req = NULL;
 
@@ -1529,9 +1529,9 @@ int histore_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                     date = (http_req->hlines + n);
                 }
                 if((n = http_req->headers[HEAD_GEN_RAW_LENGTH]) > 0)
-                {
                     nrawdata = atoi(http_req->hlines + n);
-                }
+                if((n = http_req->headers[HEAD_GEN_DOWNLOAD_LENGTH]) > 0)
+                    ndownload = atoi(http_req->hlines + n);
                 /* doctype */
                 if((n = http_req->headers[HEAD_ENT_CONTENT_TYPE]) > 0)
                     p = http_req->hlines + n;
@@ -1539,8 +1539,8 @@ int histore_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         " remote[%s:%d] local[%s:%d] via %d ", urlid, chunk->ndata, 
                         conn->remote_ip, conn->remote_port, conn->local_ip, 
                         conn->local_port, conn->fd);
-                ltask->update_content(ltask, urlid, date, p, 
-                        chunk->data, chunk->ndata, nrawdata, is_need_extract_link);
+                ltask->update_content(ltask, urlid, date, p, chunk->data, chunk->ndata, 
+                        nrawdata, ndownload, is_need_extract_link);
                 /*
                 if((n = http_req->headers[HEAD_GEN_UUID]) > 0
                     && (uuid = atoi(http_req->hlines + n)) > 0)
@@ -1689,6 +1689,10 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                                     {
                                         urlflag |= URL_IS_PRIORITY;
                                         level = 1;
+                                    }
+                                    if(templates[i].map[x].flag & REG_IS_FILE) 
+                                    {
+                                        urlflag |= URL_IS_FILE;
                                     }
                                     if(pp > newurl && *pp == '\0' && (urlid = ltask->add_url(
                                                     ltask, urlnode->urlid, 0,newurl,urlflag))>= 0)

@@ -329,9 +329,11 @@ static const HTTP_ELEMENT http_headers[] =
 #define HEAD_GEN_RAW_LENGTH   51
     {51, "Raw-Length:", 11, NULL},
 #define HEAD_GEN_TASK_TYPE   52
-    {52, "Task-Type:", 10, NULL}
+    {52, "Task-Type:", 10, NULL},
+#define HEAD_GEN_DOWNLOAD_LENGTH   53
+    {53, "Download-Length:", 16, NULL}
 };
-#define HTTP_HEADER_NUM	53
+#define HTTP_HEADER_NUM	54
 
 /* HTTP/1.1 METHODS
    Method         = 

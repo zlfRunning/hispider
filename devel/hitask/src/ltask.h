@@ -27,12 +27,14 @@
 #define ERR_NODATA              0x200
 #define URL_IS_POST             0x01
 #define URL_IS_PRIORITY         0x02
+#define URL_IS_FILE             0x04
 #define L_LEVEL_UP              1
 #define L_LEVEL_DOWN            -1
 #define PROXY_STATUS_OK         1
 #define PROXY_STATUS_ERR        -1
 #define HOST_STATUS_OK 	        1
 #define HOST_STATUS_ERR         -1
+#define URL_STATUS_INIT 	    0
 #define URL_STATUS_OK 	        1
 #define URL_STATUS_ERR          -1
 #define DNS_STATUS_OK           1
@@ -43,7 +45,7 @@
 #define USER_STATUS_READY       2
 #define TASK_WAIT_TIMEOUT       1000000
 #define TASK_WAIT_MAX           10000000
-#define TASK_RETRY_TIMES        1
+#define TASK_RETRY_TIMES        4
 #define DNS_TIMEOUT_MAX         4
 #define DNS_PATH_MAX            256
 #define DNS_BUF_SIZE            65536
@@ -69,7 +71,7 @@
 #define L_QPRIORITY_NAME        "hi.qpriority"
 #define L_QHOST_NAME            "hi.qhost"
 #define L_QTASK_NAME            "hi.qtask"
-#define L_QERROR_NAME           "hi.qerror"
+#define L_QFILE_NAME           "hi.qfile"
 #define L_LOG_NAME              "hi.log"
 #define L_KEY_NAME              "hi.key"
 #define L_META_NAME             "hi.meta"
@@ -79,7 +81,7 @@
 #define L_COOKIE_NAME           "hi.cookie"
 #define L_TASK_TYPE_NORMAL      0x00
 #define L_TASK_TYPE_UPDATE      0x01
-#define L_TASK_TYPE_ERROR       0x02
+#define L_TASK_TYPE_FILE        0x02
 #define USER_AGENT              "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10.5; zh-CN; rv:1.9.0.1) Gecko/2008070206 Firefox/3.0.1"
 #define ACCEPT_TYPE             "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 #define ACCEPT_LANGUAGE         "zh-cn,zh;q=0.5"
@@ -162,6 +164,7 @@ typedef struct _LSTATE
     off_t doc_total_zsize;
     off_t doc_total_size;
     off_t last_doc_size;
+    off_t download_doc_size;
     long long int last_usec;
     double  speed;
     double  speed_limit;
@@ -230,7 +233,7 @@ typedef struct _LTASK
     void *qpriority;
     void *qhost;
     void *qtask;
-    void *qerror;
+    void *qfile;
     void *users;
     LSTATE *state;
     int state_fd;
@@ -282,7 +285,8 @@ typedef struct _LTASK
     int (*list_users)(struct _LTASK *, char *block, int *nblock);
     int (*get_stateinfo)(struct _LTASK *, char *block);
     int (*update_content)(struct _LTASK *, int urlid, char *date, 
-            char *type, char *content, int ncontent, int nrawdata, int is_extract_link);
+            char *type, char *content, int ncontent, int nrawdata, 
+            int ndownload, int is_extract_link);
     int (*get_content)(struct _LTASK *, int urlid, char **block);
     void (*free_content)(char *block);
     int (*extract_link)(struct _LTASK *, int urlid, int depth, 

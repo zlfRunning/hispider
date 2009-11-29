@@ -24,22 +24,22 @@
 #endif
 #define HTTP_PREF  "http://"
 #define ISALPHA(p) ((*p >= '0' && *p <= '9') ||(*p >= 'A' && *p <= 'Z')||(*p >= 'a' && *p <= 'z'))
-#define UPDATE_SPEED(task, interval)                                                        \
-do                                                                                          \
-{                                                                                           \
-    if(task && task->state)                                                                 \
-    {                                                                                       \
-        if((interval = (int)((PT_L_USEC(task->timer) - task->state->last_usec))) > 0)       \
-        {                                                                                   \
-            task->state->speed = (double)1000000 * (((double)(task->state->doc_total_size   \
-                            - task->state->last_doc_size)/(double)1024)/(double)interval);  \
-        }                                                                                   \
-        if(interval  > L_SPEED_INTERVAL)                                                    \
-        {                                                                                   \
-            task->state->last_usec = PT_L_USEC(task->timer);                                \
-            task->state->last_doc_size = task->state->doc_total_size;                       \
-        }                                                                                   \
-    }                                                                                       \
+#define UPDATE_SPEED(task, interval)                                                            \
+do                                                                                              \
+{                                                                                               \
+    if(task && task->state)                                                                     \
+    {                                                                                           \
+        if((interval = (int)((PT_L_USEC(task->timer) - task->state->last_usec))) > 0)           \
+        {                                                                                       \
+            task->state->speed = (double)1000000 * (((double)(task->state->download_doc_size    \
+                            - task->state->last_doc_size)/(double)1024)/(double)interval);      \
+        }                                                                                       \
+        if(interval  > L_SPEED_INTERVAL)                                                        \
+        {                                                                                       \
+            task->state->last_usec = PT_L_USEC(task->timer);                                    \
+            task->state->last_doc_size = task->state->download_doc_size;                        \
+        }                                                                                       \
+    }                                                                                           \
 }while(0)
 static const char *running_ops[] = {"running", "stop"};
 static const char *err_list[] = {"Invalid Proxy", "Bad Response", 
@@ -174,8 +174,8 @@ int ltask_set_basedir(LTASK *task, char *dir)
         FQUEUE_INIT(task->qhost, p, int);
         sprintf(path, "%s/%s", dir, L_QTASK_NAME);
         FQUEUE_INIT(task->qtask, p, int);
-        sprintf(path, "%s/%s", dir, L_QERROR_NAME);
-        FQUEUE_INIT(task->qerror, p, int);
+        sprintf(path, "%s/%s", dir, L_QFILE_NAME);
+        FQUEUE_INIT(task->qfile, p, int);
         /* host/key/ip/url/domain/document */
         sprintf(path, "%s/%s", dir, L_KEY_NAME);
         if((task->key_fd = open(path, O_CREAT|O_RDWR|O_APPEND, 0644)) < 0)
@@ -913,14 +913,20 @@ int ltask_add_url(LTASK *task, int parentid, int parent_depth, char *url, int fl
                 if(flag > 0) 
                 {
                     meta.flag |= flag;
-                    meta.level = 1;
                     if(flag & URL_IS_PRIORITY)
                     {
+                        meta.level = 1;
                         node.type = Q_TYPE_URL;
                         node.id = id;
                         tnode = &node;
                         FQUEUE_PUSH(task->qpriority, LNODE, tnode);
                         DEBUG_LOGGER(task->logger, "NEW-PRIORITY-URL:%s id:%d", newurl, id);
+                    }
+                    if(flag & URL_IS_FILE)
+                    {
+                        px = &id;
+                        FQUEUE_PUSH(task->qfile, int, px);
+                        DEBUG_LOGGER(task->logger, "NEW-FILE-URL:%s id:%d", newurl, id);
                     }
                 }
                 meta.parent  = parentid;
@@ -1006,12 +1012,12 @@ int ltask_pop_url(LTASK *task, int task_type, int url_id, char *url, int *itime,
     {
         MUTEX_LOCK(task->mutex);
         if(url_id >= 0) urlid = url_id;
-        else if(task_type == L_TASK_TYPE_ERROR)
+        else if(task_type == L_TASK_TYPE_FILE)
         {
-            if(FQTOTAL(task->qerror) > 0)
+            if(FQTOTAL(task->qfile) > 0)
             {
                 px = &urlid;
-                FQUEUE_POP(task->qerror, int, px);
+                FQUEUE_POP(task->qfile, int, px);
             }
         }
         else if(task_type == L_TASK_TYPE_UPDATE)
@@ -1071,7 +1077,7 @@ int ltask_pop_url(LTASK *task, int task_type, int url_id, char *url, int *itime,
                     && meta.url_len > 0 && meta.url_len < HTTP_URL_MAX 
                     && meta.status >= 0 && meta.retry_times < TASK_RETRY_TIMES) 
             {
-                if((task_type & (L_TASK_TYPE_ERROR|L_TASK_TYPE_UPDATE)) || is_priority_url) 
+                if((task_type & (L_TASK_TYPE_FILE|L_TASK_TYPE_UPDATE)) || is_priority_url) 
                 {
                     DEBUG_LOGGER(task->logger, "POP-PRIORITY-URL urlid:%d ", urlid);
                     break;
@@ -1168,8 +1174,9 @@ int ltask_get_url(LTASK *task, int urlid, char *url)
 int ltask_set_url_status(LTASK *task, int urlid, char *url, short status, short err)
 {
     char newurl[HTTP_URL_MAX], *p = NULL, *pp = NULL;
+    LNODE node = {0}, *pnode = NULL;
+    int n = 0, id = -1, ret = -1;
     unsigned char key[MD5_LEN];
-    int n = 0, id = -1, ret = -1, *px = NULL;
     LMETA meta = {0};
     void *dp = NULL;
 
@@ -1194,24 +1201,24 @@ int ltask_set_url_status(LTASK *task, int urlid, char *url, short status, short 
                 if(dp) id = (long )dp - 1;
             }
         }else id = urlid;
-        if(id >= 0) 
+        if(id >= 0 && pread(task->meta_fd, &meta, sizeof(LMETA), 
+                    (off_t)id * (off_t)sizeof(LMETA)) > 0) 
         {
-            pwrite(task->meta_fd, &status, sizeof(short), (off_t)id * (off_t)sizeof(LMETA) 
-                    + (off_t)((char *)&(meta.status) - (char *)&meta));        
-            ret = 0;
-        }
-        if(task->state)
-        {
-            if(status)
+            if(status >= 0){if(task->state) task->state->url_task_ok++;}
+            else if(meta.retry_times < TASK_RETRY_TIMES)
             {
-                task->state->url_task_error++;
+                if(task->state)task->state->url_task_error++;
                 if(!(err & (ERR_HTTP_RESP|ERR_CONTENT_TYPE|ERR_NODATA)))
                 {
-                    px = &urlid;
-                    FQUEUE_PUSH(task->qerror, int, px);
+                    node.type = Q_TYPE_URL;
+                    node.id = id;
+                    pnode = &node;
+                    FQUEUE_PUSH(task->qpriority, LNODE, pnode);
                 }
             }
-            else task->state->url_task_ok++;
+            meta.status = status;
+            pwrite(task->meta_fd, &meta, sizeof(LMETA), (off_t)id * (off_t)sizeof(LMETA));
+            ret = 0;
         }
         if(err){REALLOG(task->errlogger, "%d:%d %s", id, err, get_err_msg(err));}
         MUTEX_UNLOCK(task->mutex);
@@ -1739,7 +1746,7 @@ int ltask_get_stateinfo(LTASK *task, char *block)
 
 /* update url content  */
 int ltask_update_content(LTASK *task, int urlid, char *date, char *type, 
-        char *content, int ncontent, int nrawdata, int is_extract_link)
+        char *content, int ncontent, int nrawdata, int ndownload, int is_extract_link)
 {
     char buf[HTTP_BUF_SIZE], *url = NULL, *p = NULL, *data = NULL;
     int ret = -1, n = 0, interval = 0, *px = NULL;
@@ -1798,6 +1805,7 @@ int ltask_update_content(LTASK *task, int urlid, char *date, char *type,
                 {
                     task->state->doc_total_zsize += (off_t)ncontent;
                     task->state->doc_total_size += (off_t)nrawdata;
+                    task->state->download_doc_size += (off_t)ndownload;
                     task->state->url_task_ok++;
                     UPDATE_SPEED(task, interval);
                 }
@@ -2088,7 +2096,7 @@ void ltask_clean(LTASK **ptask)
         if((*ptask)->qpriority){FQUEUE_CLEAN((*ptask)->qpriority);}
         if((*ptask)->qhost){FQUEUE_CLEAN((*ptask)->qhost);}
         if((*ptask)->qtask){FQUEUE_CLEAN((*ptask)->qtask);}
-        if((*ptask)->qerror){FQUEUE_CLEAN((*ptask)->qerror);}
+        if((*ptask)->qfile){FQUEUE_CLEAN((*ptask)->qfile);}
         if((*ptask)->qproxy){QUEUE_CLEAN((*ptask)->qproxy);}
         if((*ptask)->key_fd > 0) close((*ptask)->key_fd);
         if((*ptask)->url_fd > 0) close((*ptask)->url_fd);

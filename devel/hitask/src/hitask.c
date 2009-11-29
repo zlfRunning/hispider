@@ -723,12 +723,16 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     DEBUG_LOGGER(logger, "%s", ps); 
                     p += sprintf(p, "%s", "\r\n");
                 }
-                p += sprintf(p, "Task-Type:%d\r\n", task_type);
+                if(nrawdata > 0) p += sprintf(p, "Raw-Length: %ld\r\n", LI(nrawdata));
+                p += sprintf(p, "Download-Length: %d\r\n", chunk->ndata);
+                p += sprintf(p, "Task-Type: %d\r\n", task_type);
                 p += sprintf(p, "%s", "\r\n");
                 if((s_conn = tasklist[c_id].s_conn) && (n = (p - buf)) > 0)
                 {
                     DEBUG_LOGGER(logger, "sending header on TASK[%d] size:%d "
-                            "to hitaskd-urlid:%d", c_id, n, urlid);
+                            " remote[%s:%d] local[%s:%d] via %d to hitaskd-urlid:%d", 
+                            c_id, n, s_conn->remote_ip, s_conn->remote_port,
+                            s_conn->local_ip, s_conn->local_port, s_conn->fd, urlid);
                     s_conn->push_chunk(s_conn, buf, n);
                     tasklist[c_id].c_conn = NULL;
                 }
@@ -742,6 +746,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     p += sprintf(p, "Last-Modified: %s\r\n", ps);
                 }
                 if(nrawdata > 0) p += sprintf(p, "Raw-Length: %ld\r\n", LI(nrawdata));
+                p += sprintf(p, "Download-Length: %d\r\n", chunk->ndata);
                 if((n = http_resp->headers[HEAD_ENT_CONTENT_TYPE]))
                 {
                     p += sprintf(p, "Content-Type: %s\r\n", http_resp->hlines +n);
