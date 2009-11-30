@@ -882,8 +882,8 @@ do                                                                              
     {                                                                                           \
         hibase->get_tnode(hibase, node_id, &tnode);                                             \
         p += sprintf(p, "({'nodeid':'%d', 'parent':'%d', 'name':'%s', 'ntnodes':'%d',"          \
-        "'nurlnodes':'%d','total':'%d',",node_id, tnode.parent, tnode.name,                     \
-                ntnodes, nurlnodes, total);                                                     \
+            "'nurlnodes':'%d','pages':'%d',",node_id, tnode.parent, tnode.name,                 \
+            ntnodes, nurlnodes, (total/http_page_num)+((total%http_page_num)>0));               \
         if(tnodes && ntnodes > 0)                                                               \
         {                                                                                       \
             p += sprintf(p, "'tnodes':{");                                                      \

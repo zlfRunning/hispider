@@ -2549,20 +2549,28 @@
             {
                 var nodeid = -1;
                 var level = -1;
-                var xmlHttp = null; 
                 var oselect = null;
                 var index = 0;
                 var otext = null;
                 if(form && (oselect = form[oname]) && (index = oselect.selectedIndex) > 0 
                     && (nodeid = oselect.options[index].value) >= 0 
-                    && (otext = oselect.options[index].text) != '*'
-                    && (xmlHttp = CreateXMLHTTP()) != null)
+                    && (otext = oselect.options[index].text) != '*')
                 {
                     if(oname == 'childs') moveChildNodes(form, nodeid);
+                    level = form['level'].value;
                     ResetURLList();
-                    var argv = "op=urlnode_list&nodeid="+nodeid;
-                    if((level = form['level']) >= 0)
-                        argv += "&level="+level;
+                    return ListURLs(nodeid, level, 1);
+                }
+            }
+            function ListURLs(nodeid, level, page)
+            {
+                var xmlHttp = null; 
+                alert(nodeid+"|"+level+"|"+page);
+                if(nodeid >= 0 && (xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    ResetURLList();
+                    var argv = "op=urlnode_list&nodeid="+nodeid+"&page="+page;
+                    if(level >= 0) argv += "&level="+level;
                     xmlHttp.open('POST', '/', true);
                     xmlHttp.setRequestHeader("Content-Length", argv.length);
                     xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
@@ -2573,16 +2581,15 @@
                             if(xmlHttp.status == 200)
                             {
                                 //alert(xmlHttp.responseText);
-                                ShowNodeURLs(xmlHttp.responseText);
+                                ShowNodeURLs(xmlHttp.responseText, page);
                             }
                         }
                     }
                     xmlHttp.send(argv);
                 }
-                return true;
             }
 
-            function ShowNodeURLs(txt)
+            function ShowNodeURLs(txt, page)
             {
                 var form = document.forms['urlblockform'];
                 var urllist = null;
@@ -2595,16 +2602,17 @@
                     var nchilds = 0;
                     var urlnodeid = -1;
                     var ochilds = null;
+                    var i = 0, x = 1;
+                    nodeid = urllist['nodeid'];
                     if((ochilds = form['childs']))
                     {
-                        nodeid = urllist['nodeid'];
                         var pid = urllist['parent'];
                         var onode = form['nodeid'];
                         if(pid >= 0 && onode.options[onode.selectedIndex].text == '..')
                         {
                             ListURLNodes(pid, nodeid);
                         }
-                        var i = 0, x = 1;
+                        i = 0, x = 1;
                         ochilds.options.length = 1;
                         if(nodeid >= 0)ochilds.options[x++] = new Option('*', nodeid);
                         for(i in urllist['tnodes'])
@@ -2616,6 +2624,27 @@
                         }
                     }
                     var htmlstr = "<ul class='url-ul'>";
+                    var from = 0, to = 0;
+                    if(urllist['pages'] > 1)
+                    {
+                        var level = form['level'].value;
+                        from = page * 1 - 10;
+                        if(from < 1) from = 1;
+                        to = from * 1 + 20;
+                        if(to > urllist['pages']) to = urllist['pages'];
+                        htmlstr += "<li class='url-li'>";
+                        for(i = from; i < to; i++)
+                        {
+                            htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
+                            if(i == page) htmlstr += i;
+                            else 
+                            {
+                                htmlstr += "<a href='javascript:ListURLs(";
+                                htmlstr += nodeid +","+level+","+i+");'>"+i+"</a>";
+                            }
+                        }
+                        htmlstr += "</li>";
+                    }
                     for(x in urllist['urlnodes'])
                     {
                         urlitem = urllist['urlnodes'][x];
@@ -2629,7 +2658,7 @@
                         htmlstr += "["+urlitem['nchilds']+"]";
                         htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
                         htmlstr += "<select name='level' onchange=\"UpdateNodeURL(";
-                        htmlstr += nodeid+","+urlnodeid+", "+urlid+", this)\">";
+                        htmlstr += nodeid+","+urlnodeid+", "+urlid+", this, "+page+")\">";
                         htmlstr += "<option value='-1' selected>优先级</option>";
                         htmlstr += "<option value='0' ";
                         if(urlitem['level'] == 0) htmlstr += "selected=true";
@@ -2641,7 +2670,7 @@
                         htmlstr += "&nbsp;&nbsp;";
                         htmlstr += "<span class='edelete' title='Delete' ";
                         htmlstr += "onclick=\"DeleteNodeURL("+nodeid+", "+urlnodeid+","+urlid+",";
-                        htmlstr += "'"+urlitem['url']+"')\">✘</span>";
+                        htmlstr += "'"+urlitem['url']+"','"+page+"')\">✘</span>";
                         htmlstr += "</li>";
                     }
                     htmlstr += "</ul>";
@@ -2673,7 +2702,7 @@
                             if(xmlHttp.status == 200)
                             {
                                 //alert(argv);
-                                ShowNodeURLs(xmlHttp.responseText);
+                                ShowNodeURLs(xmlHttp.responseText, 1);
                             }
                         }
                     }
@@ -2681,7 +2710,7 @@
                 }
                 return true;
             }
-            function UpdateNodeURL(nodeid, urlnodeid, urlid, oselect)
+            function UpdateNodeURL(nodeid, urlnodeid, urlid, oselect, page)
             {
                 var xmlHttp = null; 
                 var index = (oselect) ? oselect.selectedIndex : 0;
@@ -2702,7 +2731,7 @@
                         {
                             if(xmlHttp.status == 200)
                             {
-                                ShowNodeURLs(xmlHttp.responseText);
+                                ShowNodeURLs(xmlHttp.responseText, page);
                             }
                         }
                     }
@@ -2710,7 +2739,7 @@
                 }
                 return true;
             }
-            function DeleteNodeURL(nodeid, urlnodeid, urlid, url)
+            function DeleteNodeURL(nodeid, urlnodeid, urlid, url, page)
             {
                 var xmlHttp = null; 
                 if(nodeid > 0 && urlnodeid > 0 
@@ -2728,7 +2757,7 @@
                         {
                             if(xmlHttp.status == 200)
                             {
-                                ShowNodeURLs(xmlHttp.responseText);
+                                ShowNodeURLs(xmlHttp.responseText, page);
                             }
                         }
                     }
