@@ -2565,12 +2565,12 @@
             function ListURLs(nodeid, level, page)
             {
                 var xmlHttp = null; 
-                alert(nodeid+"|"+level+"|"+page);
                 if(nodeid >= 0 && (xmlHttp = CreateXMLHTTP()) != null)
                 {
                     ResetURLList();
                     var argv = "op=urlnode_list&nodeid="+nodeid+"&page="+page;
                     if(level >= 0) argv += "&level="+level;
+                    alert(argv);
                     xmlHttp.open('POST', '/', true);
                     xmlHttp.setRequestHeader("Content-Length", argv.length);
                     xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
@@ -2603,9 +2603,9 @@
                     var urlnodeid = -1;
                     var ochilds = null;
                     var i = 0, x = 1;
-                    nodeid = urllist['nodeid'];
                     if((ochilds = form['childs']))
                     {
+                        nodeid = urllist['nodeid'];
                         var pid = urllist['parent'];
                         var onode = form['nodeid'];
                         if(pid >= 0 && onode.options[onode.selectedIndex].text == '..')
@@ -2627,6 +2627,7 @@
                     var from = 0, to = 0;
                     if(urllist['pages'] > 1)
                     {
+                        nodeid = urllist['nodeid'];
                         var level = form['level'].value;
                         from = page * 1 - 10;
                         if(from < 1) from = 1;
@@ -2639,8 +2640,8 @@
                             if(i == page) htmlstr += i;
                             else 
                             {
-                                htmlstr += "<a href='javascript:ListURLs(";
-                                htmlstr += nodeid +","+level+","+i+");'>"+i+"</a>";
+                                htmlstr += "<a href='javascript:;' onclick=\"ListURLs(";
+                                htmlstr += nodeid +",'"+level+"','"+i+"');\">"+i+"</a>";
                             }
                         }
                         htmlstr += "</li>";

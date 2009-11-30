@@ -1565,25 +1565,27 @@ int hibase_get_tnode_urlnodes(HIBASE *hibase, int tnodeid, URLNODE **urlnodes,
         MUTEX_LOCK(hibase->mutex);
         if((tnode = HIO_MAP(hibase->tnodeio, TNODE))
             && tnode[tnodeid].nurlnodes > 0 && (rootid = tnode[tnodeid].urlnodes_rootid) > 0
-            && (*total = tnode[tnodeid].nurlnodes) > 0 && from >= 0 && from < *total
-            && (x = mmtree_min(hibase->mmtree, rootid, &urlid, &id)) > 0)
+            && (*total = tnode[tnodeid].nurlnodes) > 0 && from >= 0 && from < *total)
         {
             to = from + count;
             if(to > *total) to = *total;
-            n = to - from;
-            if((n = (to - from)) > 0 && (p = *urlnodes = (URLNODE *)calloc(
-                            tnode[tnodeid].nurlnodes, sizeof(URLNODE))))
+            if((n = (to - from)) > 0 && (x = mmtree_min(hibase->mmtree, rootid, &urlid, &id)) > 0
+                && (p = *urlnodes = (URLNODE *)calloc(n, sizeof(URLNODE))))
             {
+            fprintf(stdout, "%s::%d from:%d count:%d total:%d to:%d\n", __FILE__, __LINE__, from, count, *total, to);
                 i = 0;
                 do
                 {
-                    if(i >= from && i < to && pread(hibase->urlnodeio.fd, p, 
-                                sizeof(URLNODE),(off_t)sizeof(URLNODE)*(off_t)id)>0)
+                    if(i >= to)break;
+                    if(i < from){++i;continue;}
+                    if(pread(hibase->urlnodeio.fd, p, sizeof(URLNODE),
+                            (off_t)sizeof(URLNODE)*(off_t)id) > 0)
                     {
                         ++p;
                     }
                     i++;
                 }while((x = mmtree_next(hibase->mmtree, rootid, x, &urlid, &id)) > 0);
+            fprintf(stdout, "%s::%d from:%d count:%d total:%d to:%d i:%d n:%d\n", __FILE__, __LINE__, from, count, *total, to, i, n);
             }
         }
         MUTEX_UNLOCK(hibase->mutex);
