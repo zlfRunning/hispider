@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 #include "evdns.h"
+/*
 static const char *opcodes[] = {
   "QUERY", "IQUERY", "STATUS", "(reserved)", "NOTIFY",
   "(unknown)", "(unknown)", "(unknown)", "(unknown)",
@@ -17,7 +18,7 @@ static const char *rcodes[] = {
   "(unknown)", "(unknown)", "(unknown)", "(unknown)", "(unknown)",
   "(unknown)", "(unknown)", "(unknown)", "(unknown)", "NOCHANGE"
 };
-
+*/
 int evdns_make_query(char *domain, int dnsclass, int type, 
         unsigned short id, int rd, unsigned char *buf)
 {

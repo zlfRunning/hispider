@@ -38,7 +38,7 @@ static void *argvmap = NULL;
 static int proxy_timeout = 2000000;
 static int histore_ntask = 0;
 static int histore_task_running = 0;
-static int working_mode = 1;
+//static int working_mode = 1;
 static char *e_argvs[] = 
 {
     "op", 
@@ -1782,7 +1782,7 @@ void histore_task_handler(void *arg)
         {
             DEBUG_LOGGER(histore_logger, "ready for decompress %d:%d ",
                     docheader->ncontent, (int)ndata);
-            if(zdecompress((Bytef *)zdata, (uLong )docheader->ncontent, 
+            if(zdecompress((Bytef *)zdata, (uLong )(docheader->ncontent), 
                         (Bytef *)content, (uLong *)&ndata) == 0)
             {
                 DEBUG_LOGGER(histore_logger, "compressed nzdata:%d -> ndata:%d", 
