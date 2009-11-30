@@ -471,7 +471,7 @@ int http_charset_convert(char *content_type, char *content_encoding, char *data,
             if((rawdata = (char *)calloc(1, nrawdata)))
             {
                 if((httpgzdecompress((Bytef *)data, len, 
-                    (Bytef *)rawdata, (uLong *)&nrawdata)) == 0)
+                    (Bytef *)rawdata, (uLong *)&(nrawdata))) == 0)
                 {
                     txtdata = rawdata;
                     ntxtdata = nrawdata;
@@ -485,7 +485,7 @@ int http_charset_convert(char *content_type, char *content_encoding, char *data,
             nrawdata =  len * 8 + Z_HEADER_SIZE;
             if((rawdata = (char *)calloc(1, nrawdata)))
             {
-                if((zdecompress((Bytef *)data, len, (Bytef *)rawdata, (uLong *)&nrawdata)) == 0)
+                if((zdecompress((Bytef *)data, len, (Bytef *)rawdata,(uLong*)&(nrawdata))) == 0)
                 {
                     txtdata = rawdata;
                     ntxtdata = nrawdata;
@@ -547,7 +547,7 @@ int http_charset_convert(char *content_type, char *content_encoding, char *data,
             if((zdata = (char *)calloc(1, nzdata)))
             {
                 if(zcompress((Bytef *)todata, ntodata, 
-                    (Bytef *)zdata, (uLong * )&(nzdata)) != 0)
+                    (Bytef *)zdata, (uLong *)&(nzdata)) != 0)
                 {
                     free(zdata);
                     zdata = NULL;

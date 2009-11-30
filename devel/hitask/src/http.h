@@ -432,7 +432,7 @@ static const HTTP_ELEMENT http_exts[]=
 	{50, ".tbz", 5, "application/x-bzip-compressed-tar"},
 	{51, ".tar.bz2", 8, "application/x-bzip-compressed-tar"}
 };
-
+/*
 static const char *ftypes[] = {
 	"UNKOWN",
 	"FIFO",
@@ -450,6 +450,7 @@ static const char *ftypes[] = {
 	"UNKOWN",
 	"WHT"
 };
+*/
 typedef struct _HTTP_KV
 {
     short nk;
