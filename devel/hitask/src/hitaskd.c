@@ -38,6 +38,7 @@ static void *argvmap = NULL;
 static int proxy_timeout = 2000000;
 static int histore_ntask = 0;
 static int histore_task_running = 0;
+static int http_page_num  = 200;
 //static int working_mode = 1;
 static char *e_argvs[] = 
 {
@@ -79,10 +80,12 @@ static char *e_argvs[] =
 #define E_ARGV_URLNODEID 17
     "level",
 #define E_ARGV_LEVEL     18
-    "speed"
+    "speed",
 #define E_ARGV_SPEED     19
+    "page"
+#define E_ARGV_PAGE      20
 };
-#define E_ARGV_NUM       20
+#define E_ARGV_NUM       21
 static char *e_ops[]=
 {
     "host_up",
@@ -870,28 +873,48 @@ err_end:
     conn->push_chunk(conn, HTTP_BAD_REQUEST, strlen(HTTP_BAD_REQUEST));
     return -1;
 }
-#define URLNODE_BLOCK_MAX 1024 * 1024 * 8
-#define VIEW_URLNODES(conn, pp, p, buf, node_id, urlnodes, i, count)                            \
+#define URLNODE_BLOCK_MAX 1024 * 1024 * 32
+#define VIEW_URLNODES(conn, pp, p, buf, node_id, tnode,  tnodes, ntnodes,                       \
+        urlnodes, nurlnodes, total, x)                                                          \
 do                                                                                              \
 {                                                                                               \
     if((p = pp = (char *)calloc(1, URLNODE_BLOCK_MAX)))                                         \
     {                                                                                           \
-        p += sprintf(p, "({'nodeid':'%d', 'nurlnodes':'%d', 'urlnodes':{", node_id, count);     \
-        for(i = 0; i < count; i++)                                                              \
+        hibase->get_tnode(hibase, node_id, &tnode);                                             \
+        p += sprintf(p, "({'nodeid':'%d', 'parent':'%d', 'name':'%s', 'ntnodes':'%d',"          \
+        "'nurlnodes':'%d','total':'%d',",node_id, tnode.parent, tnode.name,                     \
+                ntnodes, nurlnodes, total);                                                     \
+        if(tnodes && ntnodes > 0)                                                               \
         {                                                                                       \
-            buf[0] = '\0';                                                                      \
-            ltask->get_url(ltask, urlnodes[i].urlid, buf);                                      \
-            p += sprintf(p, "'%d':{'id':'%d', 'nodeid':'%d', 'level':'%d', "                    \
-                    "'nchilds':'%d', 'urlid':'%d', 'url':'%s'},", urlnodes[i].id,               \
-                    urlnodes[i].id, urlnodes[i].tnodeid, urlnodes[i].level,                     \
-                    urlnodes[i].nchilds, urlnodes[i].urlid, buf);                               \
+            p += sprintf(p, "'tnodes':{");                                                      \
+            for(x = 0; x < ntnodes; x++)                                                        \
+            {                                                                                   \
+                p += sprintf(p, "'%d':{'id':'%d','name':'%s','nchilds':'%d'},",                 \
+                    tnodes[x].id, tnodes[x].id, tnodes[x].name, tnodes[x].nchilds);             \
+            }                                                                                   \
+            --p;                                                                                \
+            p += sprintf(p, "},");                                                              \
         }                                                                                       \
-        if(count > 0)--p;                                                                       \
-        p += sprintf(p, "%s", "}})");                                                           \
-        count = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html;charset=%s\r\n"            \
+        if(urlnodes && nurlnodes > 0)                                                           \
+        {                                                                                       \
+            p += sprintf(p, "'urlnodes':{");                                                    \
+            for(x = 0; x < nurlnodes; x++)                                                      \
+            {                                                                                   \
+                buf[0] = '\0';                                                                  \
+                ltask->get_url(ltask, urlnodes[x].urlid, buf);                                  \
+                p += sprintf(p, "'%d':{'id':'%d', 'nodeid':'%d', 'level':'%d', "                \
+                        "'nchilds':'%d', 'urlid':'%d', 'url':'%s'},", urlnodes[x].id,           \
+                        urlnodes[x].id, urlnodes[x].tnodeid, urlnodes[x].level,                 \
+                        urlnodes[x].nchilds, urlnodes[x].urlid, buf);                           \
+            }                                                                                   \
+            --p;                                                                                \
+            p += sprintf(p, "}");                                                               \
+        }                                                                                       \
+        p += sprintf(p, "})");                                                                  \
+        x = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html;charset=%s\r\n"                \
                 "Content-Length:%ld\r\nConnection:close\r\n\r\n",                               \
                 http_default_charset, (long)(p - pp));                                          \
-        conn->push_chunk(conn, buf, count);                                                     \
+        conn->push_chunk(conn, buf, x);                                                         \
         conn->push_chunk(conn, pp, (p - pp));                                                   \
         free(pp); pp = NULL;                                                                    \
     }                                                                                           \
@@ -902,13 +925,15 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
 {
     int i = 0, id = 0, n = 0, op = -1, nodeid = -1, x = -1, fieldid = -1,
         parentid = -1, urlid = -1, hostid = -1, tableid = -1, type = -1, 
-        flag = -1, templateid = -1, urlnodeid = -1, level = -1;
+        flag = -1, templateid = -1, urlnodeid = -1, level = -1, count = 0, 
+        page = 1, from = 0, total = 0;
     char *p = NULL, *end = NULL, *name = NULL, *host = NULL, *url = NULL, *link = NULL, 
          *pattern = NULL, *map = NULL, *linkmap = NULL, *pp = NULL, 
          buf[HTTP_BUF_SIZE], block[HTTP_BUF_SIZE];
     HTTP_REQ httpRQ = {0}, *http_req = NULL;
     ITEMPLATE template = {0};
     URLNODE *urlnodes = NULL;
+    TNODE *tnodes = NULL, tnode = {0};
     double speed = 0.0;
     void *dp = NULL;
 
@@ -999,6 +1024,9 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                                 case E_ARGV_SPEED:
                                     speed = atof(p);
                                     break;
+                                case E_ARGV_PAGE:
+                                    page = atoi(p);
+                                    break;
                                 default:
                                     break;
                             }
@@ -1060,6 +1088,8 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                     template.flags |= TMP_IS_LINK; 
                 }
                 //if(pattern)fprintf(stdout, "%d::%s\n", __LINE__, pattern);
+                if(page <= 0) page = 1;
+                from = (page - 1) * http_page_num;
                 switch(op)
                 {
                     case E_OP_NODE_ADD :
@@ -1273,9 +1303,11 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         if(level > 0) flag = URL_IS_PRIORITY;
                         if(nodeid >= 0 && url && (urlid=ltask->add_url(ltask,-1,0,url, flag))>= 0
                             && (urlnodeid = hibase->add_urlnode(hibase, nodeid, 0, urlid,level))> 0
-                            && (n = hibase->get_tnode_urlnodes(hibase, nodeid, &urlnodes)) > 0)
+                            && (n = hibase->get_tnode_urlnodes(hibase, nodeid, &urlnodes, 
+                                    &total, from, http_page_num)) > 0)
                         {
-                            VIEW_URLNODES(conn, pp, p, buf, nodeid, urlnodes, i, n);
+                            hibase->get_tnode(hibase, nodeid, &tnode);
+                            VIEW_URLNODES(conn,pp,p,buf,nodeid,tnode,tnodes,count,urlnodes,n,total,i);
                             hibase->free_urlnodes(urlnodes);
                             goto end;
                         }
@@ -1290,9 +1322,11 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         if(nodeid >= 0 && urlnodeid > 0 && level >= 0 
                             && (hibase->update_urlnode(hibase, urlnodeid, level))> 0
                             && (ltask->set_url_level(ltask, urlid, NULL, level)) == 0
-                            && (n = hibase->get_tnode_urlnodes(hibase, nodeid, &urlnodes)) > 0)
+                            && (n = hibase->get_tnode_urlnodes(hibase, nodeid, &urlnodes,
+                                    &total, from, http_page_num)) > 0)
                         {
-                            VIEW_URLNODES(conn, pp, p, buf, nodeid, urlnodes, i, n);
+                            hibase->get_tnode(hibase, nodeid, &tnode);
+                            VIEW_URLNODES(conn,pp,p,buf,nodeid,tnode,tnodes,count,urlnodes,n,total,i);
                             hibase->free_urlnodes(urlnodes);
                             goto end;
                         }else goto err_end;
@@ -1300,9 +1334,11 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                     case E_OP_URLNODE_DELETE:
                         if(nodeid >= 0 && urlnodeid > 0 
                             && hibase->delete_urlnode(hibase, urlnodeid) > 0
-                            && (n = hibase->get_tnode_urlnodes(hibase, nodeid, &urlnodes)) > 0)
+                            && (n = hibase->get_tnode_urlnodes(hibase, nodeid, &urlnodes,
+                                    &total, from, http_page_num)) > 0)
                         {
-                            VIEW_URLNODES(conn, pp, p, buf, nodeid, urlnodes, i, n);
+                            hibase->get_tnode(hibase, nodeid, &tnode);
+                            VIEW_URLNODES(conn,pp,p,buf,nodeid,tnode,tnodes,count,urlnodes,n,total,i);
                             hibase->free_urlnodes(urlnodes);
                             goto end;
                         }else goto err_end;
@@ -1312,17 +1348,22 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                                     urlnodeid, &urlnodes)> 0)
                         {
                             nodeid = urlnodes[0].tnodeid;
-                            VIEW_URLNODES(conn, pp, p, buf, nodeid, urlnodes, i, n);
+                            hibase->get_tnode(hibase, nodeid, &tnode);
+                            VIEW_URLNODES(conn,pp,p,buf,nodeid,tnode,tnodes,count,urlnodes,n,total,i);
                             hibase->free_urlnodes(urlnodes);
                             goto end;
                         }else goto err_end;
                         break;
                     case E_OP_URLNODE_LIST:
-                        if(nodeid >= 0 && (n = hibase->get_tnode_urlnodes(hibase, 
-                                        nodeid, &urlnodes)) > 0)
+                        if(nodeid >= 0&&(count=hibase->get_tnode_childs(hibase,nodeid,&tnodes)) > 0)
                         {
-                            VIEW_URLNODES(conn, pp, p, buf, nodeid, urlnodes, i, n);
-                            hibase->free_urlnodes(urlnodes);
+                            n = hibase->get_tnode_urlnodes(hibase, nodeid, &urlnodes, 
+                                    &total, from, http_page_num);
+                            hibase->get_tnode(hibase, nodeid, &tnode);
+                            VIEW_URLNODES(conn,pp,p,buf,nodeid,tnode,tnodes,count,urlnodes,n,total,i);
+                            if(n > 0)hibase->free_urlnodes(urlnodes);
+                            if(tnodes)hibase->free_tnode_childs(tnodes);
+                            goto end;
                         }
                         break;
                     case E_OP_DNS_ADD:
@@ -1965,6 +2006,8 @@ int sbase_initialize(SBASE *sbase, char *conf)
             TRIETAB_ADD(argvmap, e_ops[i], n, dp);
         }
     }
+    /* page number */
+    http_page_num = iniparser_getint(dict, "HITASKD:http_page_num", 200);
     /* httpd_home */
     httpd_home = iniparser_getstr(dict, "HITASKD:httpd_home");
     /* link  task table */

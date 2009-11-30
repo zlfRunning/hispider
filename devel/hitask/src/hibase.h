@@ -223,6 +223,7 @@ typedef struct _HIBASE
     int     (*get_tnode_templates)(struct _HIBASE *, int id, ITEMPLATE **templates);
     void    (*free_templates)(ITEMPLATE *templates);
     int     (*get_tnode_childs)(struct _HIBASE *, int id, TNODE **tnodes);
+    void    (*free_tnode_childs)(TNODE *tnodes);
     int     (*view_tnode_childs)(struct _HIBASE *, int id, char *block);
     int     (*update_tnode)(struct _HIBASE *, int parentid, int id, char *name);
     int     (*delete_tnode)(struct _HIBASE *, int parentid, int id);
@@ -235,7 +236,8 @@ typedef struct _HIBASE
     int     (*delete_urlnode)(struct _HIBASE *, int urlnodeid);
     int     (*get_urlnode)(struct _HIBASE *, int urlnodeid, URLNODE *urlnode);
     int     (*get_urlnode_childs)(struct _HIBASE *, int urlnodeid, URLNODE **childs);
-    int     (*get_tnode_urlnodes)(struct _HIBASE *, int nodeid, URLNODE **urlnodes);
+    int     (*get_tnode_urlnodes)(struct _HIBASE *, int nodeid, URLNODE **urlnodes, 
+            int *total, int from, int count);
     void    (*free_urlnodes)(URLNODE *urlnodes);
     int     (*pop_urlnode)(struct _HIBASE *, URLNODE *urlnode);
     int     (*push_task_urlnodeid)(struct _HIBASE *, int urlnodeid);

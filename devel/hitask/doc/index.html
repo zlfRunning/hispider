@@ -473,7 +473,7 @@
                 }
                 return HiddenEditor();
             }
-            function ListChilds(pid, url, argv)
+            function ListChilds(parent, url, argv)
             {
                 var xmlHttp = CreateXMLHTTP();
                 if(xmlHttp != null)
@@ -489,12 +489,12 @@
                             {
                                 var tnode = eval(xmlHttp.responseText);
                                 //alert(xmlHttp.responseText);
-                                if(tnode['id'] == pid)
+                                if(tnode['id'] == parent)
                                 {
                                     var i = 0;
                                     for(i = 0; i < tnode['nchilds']; i++)
                                     {
-                                        AddNode(pid, tnode['childs'][i]['id'] * 1, 
+                                        AddNode(parent, tnode['childs'][i]['id'] * 1, 
                                         tnode['childs'][i]['name'], 
                                         tnode['childs'][i]['nchilds']);
                                     }
@@ -2180,7 +2180,8 @@
                     if(urlblock)
                     {
                         urlblock.style.display = 'inline';
-                        ListRootNodes();
+                        var form = document.forms['urlblockform'];
+                        ListNodeURLs(form, "nodeid");
                     }
                 }
                 else if(div == 'data')
@@ -2460,17 +2461,18 @@
                 if(form)
                 {
                     ResetDiv('url-list');
+                    form['childs'].options.length = 1;
                     form['level'].options[0].selected = true;
                     form['url'].focus();
                     form['url'].value = 'http://';
                 }
             }
-            function ListRootNodes()
+            function ListURLNodes(pid, nodeid)
             {
                 var form = document.forms['urlblockform'];
-                if(form)
+                if(form && pid >= 0)
                 {
-                    var argv = "op=node_childs&nodeid=0";
+                    var argv = "op=node_childs&nodeid="+pid;
                     var xmlHttp = null;
                     if(argv && (xmlHttp = CreateXMLHTTP()) != null)
                     {
@@ -2484,19 +2486,27 @@
                             {
                                 if(xmlHttp.status == 200)
                                 {
-                                    ResetURLList(); 
+                                    //ResetURLList(); 
                                     //alert(xmlHttp.responseText);
                                     var tnode = eval(xmlHttp.responseText);
                                     var oselect = form['nodeid'];
                                     if(oselect)
                                     {
                                         oselect.options.length = 1;
-                                        var i = 0, x = 1;
+                                        var i = 0, x = 1, tid = 0;
+                                        var tname = "";
+                                        if(tnode['parent'] > 0)
+                                        {
+                                            oselect.options[x++] = new Option('..', tnode['parent']);
+                                        }
                                         for(i = 0; i < tnode['nchilds']; i++)
                                         {
-                                            oselect.options[x] = new Option(
-                                                tnode['childs'][i]['name'],
-                                                tnode['childs'][i]['id']);
+                                            tid = tnode['childs'][i]['id'];
+                                            tname = tnode['childs'][i]['name'];
+                                            if(nodeid == tid)
+                                                oselect.options[x] = new Option(tname, tid, true);
+                                            else
+                                                oselect.options[x] = new Option(tname, tid);
                                             ++x;
                                         }
                                     }
@@ -2508,15 +2518,103 @@
                 }
                 return true;
             }
+            function moveChildNodes(form, nodeid)
+            {
+                var olist = null;
+                var ochilds = null;
+                if(form && (olist = form['nodeid']) && (ochilds = form['childs']))
+                {
+                    olist.options.length = 1;
+                    x = 1;
+                    for(i = 1; i < ochilds.options.length; i++)
+                    {
+                        tname = ochilds.options[i].text;
+                        tid = ochilds.options[i].value;
+                        if(tname == '*') 
+                        {
+                            tname = '..';
+                            form['pid'].value = tid;
+                        }
+                        if(nodeid == tid)
+                        {
+                            olist.options[x++] = new Option(tname, tid, true);
+                        }
+                        else 
+                            olist.options[x++] = new Option(tname, tid);
+                    }
+                    ochilds.options.length = 1;
+                }
+            }
+            function ListNodeURLs(form, oname)
+            {
+                var nodeid = -1;
+                var level = -1;
+                var xmlHttp = null; 
+                var oselect = null;
+                var index = 0;
+                var otext = null;
+                if(form && (oselect = form[oname]) && (index = oselect.selectedIndex) > 0 
+                    && (nodeid = oselect.options[index].value) >= 0 
+                    && (otext = oselect.options[index].text) != '*'
+                    && (xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    if(oname == 'childs') moveChildNodes(form, nodeid);
+                    ResetURLList();
+                    var argv = "op=urlnode_list&nodeid="+nodeid;
+                    if((level = form['level']) >= 0)
+                        argv += "&level="+level;
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                //alert(xmlHttp.responseText);
+                                ShowNodeURLs(xmlHttp.responseText);
+                            }
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+                return true;
+            }
+
             function ShowNodeURLs(txt)
             {
+                var form = document.forms['urlblockform'];
                 var urllist = null;
-                if(txt && (urllist = eval(txt)) != null)
+                if(txt && form && (urllist = eval(txt)) != null)
                 {
                     ResetURLList(); 
                     var urlitem = null;
                     var nodeid = -1;
+                    var tname = "";
+                    var nchilds = 0;
                     var urlnodeid = -1;
+                    var ochilds = null;
+                    if((ochilds = form['childs']))
+                    {
+                        nodeid = urllist['nodeid'];
+                        var pid = urllist['parent'];
+                        var onode = form['nodeid'];
+                        if(pid >= 0 && onode.options[onode.selectedIndex].text == '..')
+                        {
+                            ListURLNodes(pid, nodeid);
+                        }
+                        var i = 0, x = 1;
+                        ochilds.options.length = 1;
+                        if(nodeid >= 0)ochilds.options[x++] = new Option('*', nodeid);
+                        for(i in urllist['tnodes'])
+                        {
+                            nodeid = urllist['tnodes'][i]['id'];
+                            tname = urllist['tnodes'][i]['name'];
+                            nchilds = urllist['tnodes'][i]['nchilds'];
+                            ochilds.options[x++] = new Option(tname, nodeid);
+                        }
+                    }
                     var htmlstr = "<ul class='url-ul'>";
                     for(x in urllist['urlnodes'])
                     {
@@ -2636,36 +2734,6 @@
                     }
                     xmlHttp.send(argv);
                     ResetDiv('url-list');
-                }
-                return true;
-            }
-            function ListNodeURLs(form)
-            {
-                var nodeid = -1;
-                var level = -1;
-                var xmlHttp = null; 
-                ResetURLList();
-                if(form && (nodeid = form['nodeid'].value) > 0 
-                    && (xmlHttp = CreateXMLHTTP()) != null)
-                {
-                    var argv = "op=urlnode_list&nodeid="+nodeid;
-                    if((level = form['level']) >= 0)
-                        argv += "&level="+level;
-                    xmlHttp.open('POST', '/', true);
-                    xmlHttp.setRequestHeader("Content-Length", argv.length);
-                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-                    xmlHttp.onreadystatechange=function()
-                    {
-                        if(xmlHttp.readyState==4)
-                        {
-                            if(xmlHttp.status == 200)
-                            {
-                                //alert(xmlHttp.responseText);
-                                ShowNodeURLs(xmlHttp.responseText);
-                            }
-                        }
-                    }
-                    xmlHttp.send(argv);
                 }
                 return true;
             }
@@ -2916,7 +2984,7 @@
         <li class='tab-selected' id='tab0' onclick="selectView('taskinfo',event)" >下载任务</li>
         <li id='tab1' onclick="selectView('database',event)" >数据库配置</li>
         <li id='tab2' onclick="selectView('template', event)" >模版配置</li>
-        <li id='tab3' onclick="selectView('urlblock', event)" >URL种子</li>
+        <li id='tab3' onclick="selectView('urlblock', event)" >URL管理</li>
         <li id='tab4' onclick="selectView('data', event)" >数据管理</li>
         <li id='tab5' onclick="selectView('dns', event)" >DNS管理</li>
         <li id='tab6' onclick="selectView('proxy', event)" >代理设置</li>
@@ -3038,10 +3106,15 @@
     <form name='urlblockform' class='listform' action='javascript:void(0)' 
             onsubmit='return AddNodeURL(this)' >
     <input type=hidden name='op'value='url_add' >
-    <select name='nodeid' onchange='ListNodeURLs(this.form)'>
-    <option value='-1' selected>选择节点</option>
+    <input type=hidden name='pid'value='0' >
+    <select name='nodeid' onchange='ListNodeURLs(this.form, "nodeid")'>
+    <option value='-1'>选择节点</option>
+    <option value='0' selected>Root</option>
     </select>
     &nbsp;&nbsp;
+    <select name='childs' onchange='ListNodeURLs(this.form, "childs")'>
+    <option value='-1' selected>选择子节点</option>
+    </select>
     <input type=radio name='method' value=0 selected>GET
     <input type=radio name='method' value=1 >POST
     &nbsp;&nbsp;
