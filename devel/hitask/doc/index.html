@@ -2545,7 +2545,7 @@
                         if(tname == '*') 
                         {
                             tname = '..';
-                            form['pid'].value = tid;
+                            form['parentid'].value = tid;
                         }
                         if(nodeid == tid)
                         {
@@ -2628,7 +2628,7 @@
                         if(urllist['ntnodes'] > 0)
                         {
                             if(nodeid >= 0)ochilds.options[x++] = new Option('*', nodeid);
-                            var olistchilds = document.forms['urllist-add-form']['childs'];
+                            var olistchilds = document.forms['urllist-add-form']['nodeid'];
                             if(olistchilds) olistchilds.options.length = 1;
                             for(i in urllist['tnodes'])
                             {
@@ -2713,8 +2713,7 @@
                         {
                             htmlstr += "&nbsp;&nbsp;&nbsp;";
                             htmlstr += "<span class='eadd' title='Add' ";
-                            htmlstr += "onclick=\"XAddNodeURL(event, "+nodeid+", "+urlnodeid+",";
-                            htmlstr += urlid+")\">✚</span>";
+                            htmlstr += "onclick=\"XAddNodeURL(event, "+urlnodeid+")\">✚</span>";
                         }
                         htmlstr += "&nbsp;&nbsp;&nbsp;";
                         htmlstr += "<span class='edelete' title='Delete' ";
@@ -2730,9 +2729,15 @@
                 }
                 return true;
             }
+            function HiddenURLListForm()
+            {
+                var div = document.getElementById('urllist-form');
+                if(div) div.style.display = 'none';
+            }
             function AddNodeURL(form)
             {
                 var nodeid = -1;
+                var parentid = -1;
                 var level = -1;
                 var xmlHttp = null; 
                 if(form && (nodeid = form['nodeid'].value) > 0 
@@ -2741,6 +2746,8 @@
                 {
                     var argv = "op=urlnode_add&nodeid="+nodeid;
                         argv += "&url="+encodeURIComponent(url);
+                    if((parentid = form['parentid'].value) >= 0)
+                        argv += "&parentid="+parentid;
                     if((level = form['level'].value) >= 0)
                         argv += "&level="+level;
                     xmlHttp.open('POST', '/', true);
@@ -2758,10 +2765,11 @@
                         }
                     }
                     xmlHttp.send(argv);
+                    return HiddenURLListForm();
                 }
                 return true;
             }
-            function XAddNodeURL(e, nodeid, urlnodeid, urlid)
+            function XAddNodeURL(e, parentid)
             {
                 e = e || window.event;
                 var element = e.target || e.srcElement;
@@ -2772,11 +2780,9 @@
                 Xdiv.style.top = y + 10;
                 Xdiv.style.display = 'inline';
                 var form = document.forms["urllist-add-form"];
-                form['nodeid'].value = nodeid;
-                form['urlnodeid'].value = urlnodeid;
-                form['urlid'].value = urlid;
+                form['parentid'].value = parentid;
                 form['url'].focus();
-                form['url'].value = '';
+                form['url'].value = 'http://';
             }
 
             function UpdateNodeURL(nodeid, urlnodeid, urlid, oselect, page)
@@ -3204,7 +3210,7 @@
     <form name='urlblockform' class='listform' action='javascript:void(0)' 
             onsubmit='return AddNodeURL(this)' >
     <input type=hidden name='op'value='url_add' >
-    <input type=hidden name='pid'value='0' >
+    <input type=hidden name='parentid'value='0' >
     <select name='nodeid' onchange='ListNodeURLs(this.form, "nodeid")'>
     <option value='-1'>选择节点</option>
     <option value='0' selected>Root</option>
@@ -3213,14 +3219,19 @@
     <select name='childs' onchange='ListNodeURLs(this.form, "childs")'>
     <option value='-1' selected>选择子节点</option>
     </select>
-    <input type=radio name='method' value=0 selected>GET
-    <input type=radio name='method' value=1 >POST
+    &nbsp;&nbsp;
+    <select name='method'>
+    <option value='-1' selected>请求方法</option>
+    <option value='0' >GET</option>
+    <option value='1' >POST</option>
+    </select>
     &nbsp;&nbsp;
     <select name='level' >
     <option value='-1' selected>优先级</option>
     <option value='0' >普通</option>
     <option value='1' >紧急</option>
     </select>
+    &nbsp;&nbsp;
     <input type=text name=url size=64 value='http://' >
     &nbsp;&nbsp;
     <input type=submit name='submit' value='Add'>
@@ -3307,9 +3318,8 @@
             onsubmit="return AddNodeURL(this);"> 
             <span class='closetxt' onclick="CloseThis(this)" >关闭</span>
             &nbsp;&nbsp;
-            <input type=hidden name='nodeid' value='0' >
-            <input type=hidden name='urlnodeid' value='0' >
-            <input type=hidden name='urlid' value='0' >
+            <input type=hidden name='op' value='url_add' >
+            <input type=hidden name='parentid' value='0' >
             <select name='method'>
                 <option value='-1' selected>请求方法</option>
                 <option value='0' >GET</option>
@@ -3322,9 +3332,10 @@
                 <option value='1' >紧急</option>
             </select>
             &nbsp;&nbsp;
-            <select name='childs' >
+            <select name='nodeid' >
                 <option value='-1' selected>选择子节点</option>
             </select>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;

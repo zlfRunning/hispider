@@ -1302,15 +1302,19 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                     case E_OP_URLNODE_ADD:
                         if(level > 0) flag = URL_IS_PRIORITY;
                         if(parentid < 0) parentid = 0;
-                        if(nodeid >= 0 && url && (urlid=ltask->add_url(ltask,-1,0,url, flag))>= 0
-                            && (urlnodeid = hibase->add_urlnode(hibase, nodeid, parentid, urlid,level))> 0
-                            && (n = hibase->get_tnode_urlnodes(hibase, nodeid, &urlnodes, 
-                                    &total, from, http_page_num)) > 0)
+                        if(nodeid >= 0 && url && hibase->get_tnode(hibase, nodeid, &tnode) > 0)
                         {
-                            hibase->get_tnode(hibase, nodeid, &tnode);
-                            VIEW_URLNODES(conn,pp,p,buf,nodeid,tnode,tnodes,count,urlnodes,n,total,i,ret);
-                            hibase->free_urlnodes(urlnodes);
-                            goto end;
+                            if((urlid=ltask->add_url(ltask,-1,0,url, flag))>= 0)
+                                hibase->add_urlnode(hibase, nodeid, parentid, urlid,level);
+                            if((n = hibase->get_tnode_urlnodes(hibase, nodeid, &urlnodes, 
+                                            &total, from, http_page_num)) > 0)
+                            {
+                                count = hibase->get_tnode_childs(hibase, nodeid, &tnodes);
+                                hibase->get_tnode(hibase, nodeid, &tnode);
+                                VIEW_URLNODES(conn,pp,p,buf,nodeid,tnode,tnodes,count,urlnodes,n,total,i,ret);
+                                hibase->free_urlnodes(urlnodes);
+                                goto end;
+                            }else goto err_end;
                         }
                         else 
                         {
@@ -1326,6 +1330,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                             && (n = hibase->get_tnode_urlnodes(hibase, nodeid, &urlnodes,
                                     &total, from, http_page_num)) > 0)
                         {
+                            count = hibase->get_tnode_childs(hibase, nodeid, &tnodes);
                             hibase->get_tnode(hibase, nodeid, &tnode);
                             VIEW_URLNODES(conn,pp,p,buf,nodeid,tnode,tnodes,count,urlnodes,n,total,i,ret);
                             hibase->free_urlnodes(urlnodes);
@@ -1338,6 +1343,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                             && (n = hibase->get_tnode_urlnodes(hibase, nodeid, &urlnodes,
                                     &total, from, http_page_num)) > 0)
                         {
+                            count = hibase->get_tnode_childs(hibase, nodeid, &tnodes);
                             hibase->get_tnode(hibase, nodeid, &tnode);
                             VIEW_URLNODES(conn,pp,p,buf,nodeid,tnode,tnodes,count,urlnodes,n,total,i,ret);
                             hibase->free_urlnodes(urlnodes);
@@ -1349,6 +1355,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                                     urlnodeid, &urlnodes)> 0)
                         {
                             nodeid = urlnodes[0].tnodeid;
+                            n = hibase->get_tnode_urlnodes(hibase, nodeid, &urlnodes, &total, from, http_page_num);
                             hibase->get_tnode(hibase, nodeid, &tnode);
                             VIEW_URLNODES(conn,pp,p,buf,nodeid,tnode,tnodes,count,urlnodes,n,total,i,ret);
                             hibase->free_urlnodes(urlnodes);
