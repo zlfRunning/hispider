@@ -1075,7 +1075,7 @@ int ltask_pop_url(LTASK *task, int task_type, int url_id, char *url, int *itime,
             if(urlid >= 0 &&  pread(task->meta_fd, &meta, sizeof(LMETA), 
                         (off_t)urlid * (off_t)sizeof(LMETA)) > 0 
                     && meta.url_len > 0 && meta.url_len < HTTP_URL_MAX 
-                    && meta.status >= 0 && meta.retry_times < TASK_RETRY_TIMES) 
+                    && meta.retry_times < TASK_RETRY_TIMES) 
             {
                 if((task_type & (L_TASK_TYPE_FILE|L_TASK_TYPE_UPDATE)) || is_priority_url) 
                 {
@@ -1157,12 +1157,14 @@ int ltask_get_url(LTASK *task, int urlid, char *url)
     {
         MUTEX_LOCK(task->mutex);
         if(task->meta_fd > 0 && pread(task->meta_fd, &meta, sizeof(LMETA), 
-                (off_t)(urlid * sizeof(LMETA))) > 0 
-                && meta.url_len < HTTP_URL_MAX && meta.status >= 0 
-                && (n = pread(task->url_fd, url, meta.url_len, meta.url_off)) > 0)
+                (off_t)(urlid * sizeof(LMETA))) > 0 && meta.url_len < HTTP_URL_MAX)
         {
-            ret = meta.url_len;
-            url[n] = '\0';
+            //DEBUG_LOGGER(task->logger, "READING-URL:%d offset:%lld len:%d", urlid, meta.url_off, meta.url_len);
+            if((n = pread(task->url_fd, url, meta.url_len, meta.url_off)) > 0)
+            {
+                url[n] = '\0';
+            }
+            ret = meta.status;
         }
         MUTEX_UNLOCK(task->mutex);
 

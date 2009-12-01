@@ -94,10 +94,14 @@
                 height:30px;width:100%;border:1px solid #FFFFFF;}
             .url-ul{list-style:none;padding:0;margin:0;width:100%;}
             .url-li{background-color:#D0E9F7;cursor:pointer;}
+            .url-li-warn{background-color:#FF8000;cursor:pointer;}
             .url-li-selected{background-color:#F4FBFF;cursor:pointer;}
             .urlli-header{list-style:none;background-color:#2F5FA1;font-weight:bold;
                 font-size:14pt;color:#c0c0c0;}
             .url-li-page{color:#cccc70;font-weight:bold;font-size:13pt;}
+            #urllist-form{position:absolute;width:720px;height:150px;background-color:#ffffff;
+                border:1px solid #81BEF7;padding-top:10px;padding-left:6px;font-size:12pt;
+                color:#2F5FA1;overflow:auto;display:none;}
             #data{position:absolute;background-color:#F4FBFF;display:none;
                 border:1px solid #81BEF7;padding:0px;left:0px;top:46px;width:100%;height:100%;}
             #dns{position:absolute;background-color:#F4FBFF;display:none;
@@ -2619,17 +2623,21 @@
                         {
                             ListURLNodes(pid, nodeid);
                         }
-                        i = 0, x = 1;
+                        i = 0, x = 1, z = 1;
                         ochilds.options.length = 1;
                         if(urllist['ntnodes'] > 0)
                         {
                             if(nodeid >= 0)ochilds.options[x++] = new Option('*', nodeid);
+                            var olistchilds = document.forms['urllist-add-form']['childs'];
+                            if(olistchilds) olistchilds.options.length = 1;
                             for(i in urllist['tnodes'])
                             {
                                 nodeid = urllist['tnodes'][i]['id'];
                                 tname = urllist['tnodes'][i]['name'];
                                 nchilds = urllist['tnodes'][i]['nchilds'];
                                 ochilds.options[x++] = new Option(tname, nodeid);
+                                if(olistchilds) 
+                                    olistchilds.options[z++] = new Option(tname, nodeid);
                             }
                         }
                     }
@@ -2681,10 +2689,13 @@
                         nodeid = urlitem['nodeid'];
                         urlid = urlitem['urlid'];
                         urlnodeid = urlitem['id'];
-                        htmlstr += "<li class='url-li' onmouseout=\"outDiv(this, 'url-li')\" ";
+                        css = 'url-li';
+                        if(urlitem['status'] < 0) css = 'url-li-warn';
+                        htmlstr += "<li class='"+css+"' onmouseout=\"outDiv(this,'"+css+"')\" ";
                         htmlstr += " onmousemove=\"onDiv(this, 'url-li-selected')\" >";
                         htmlstr += i+":&nbsp;&nbsp;";
-                        htmlstr += "<a href='"+urlitem['url']+"'>"+urlitem['url']+"</a>";
+                        htmlstr += "<a target='_blank' href='"+urlitem['url']+"'>"
+                                +urlitem['url']+"</a>";
                         htmlstr += "&nbsp;&nbsp;";
                         htmlstr += "["+urlitem['nchilds']+"]";
                         htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
@@ -2698,7 +2709,14 @@
                         if(urlitem['level'] == 1) htmlstr += "selected=true";
                         htmlstr += ">紧急</option>";
                         htmlstr += "</select>";
-                        htmlstr += "&nbsp;&nbsp;";
+                        if(urllist['ntnodes'] > 0)
+                        {
+                            htmlstr += "&nbsp;&nbsp;&nbsp;";
+                            htmlstr += "<span class='eadd' title='Add' ";
+                            htmlstr += "onclick=\"XAddNodeURL(event, "+nodeid+", "+urlnodeid+",";
+                            htmlstr += urlid+")\">✚</span>";
+                        }
+                        htmlstr += "&nbsp;&nbsp;&nbsp;";
                         htmlstr += "<span class='edelete' title='Delete' ";
                         htmlstr += "onclick=\"DeleteNodeURL("+nodeid+", "+urlnodeid+","+urlid+",";
                         htmlstr += "'"+urlitem['url']+"','"+page+"')\">✘</span>";
@@ -2743,6 +2761,24 @@
                 }
                 return true;
             }
+            function XAddNodeURL(e, nodeid, urlnodeid, urlid)
+            {
+                e = e || window.event;
+                var element = e.target || e.srcElement;
+                var Xdiv =  document.getElementById("urllist-form");
+                var x = e.clientX + document.body.scrollLeft;
+                var y = e.clientY + document.body.scrollTop;
+                Xdiv.style.left = x;
+                Xdiv.style.top = y + 10;
+                Xdiv.style.display = 'inline';
+                var form = document.forms["urllist-add-form"];
+                form['nodeid'].value = nodeid;
+                form['urlnodeid'].value = urlnodeid;
+                form['urlid'].value = urlid;
+                form['url'].focus();
+                form['url'].value = '';
+            }
+
             function UpdateNodeURL(nodeid, urlnodeid, urlid, oselect, page)
             {
                 var xmlHttp = null; 
@@ -3266,5 +3302,47 @@
             <span class='closebutton' onclick="CloseThis(this)">x</span>
         </form>
     </div>
+    <div id='urllist-form'>
+        <form name="urllist-add-form" class='listform' action="javascript:void(0)" 
+            onsubmit="return AddNodeURL(this);"> 
+            <span class='closetxt' onclick="CloseThis(this)" >关闭</span>
+            &nbsp;&nbsp;
+            <input type=hidden name='nodeid' value='0' >
+            <input type=hidden name='urlnodeid' value='0' >
+            <input type=hidden name='urlid' value='0' >
+            <select name='method'>
+                <option value='-1' selected>请求方法</option>
+                <option value='0' >GET</option>
+                <option value='1' >POST</option>
+            </select>
+            &nbsp;&nbsp;
+            <select name='level' >
+                <option value='-1' selected>优先级</option>
+                <option value='0' >普通</option>
+                <option value='1' >紧急</option>
+            </select>
+            &nbsp;&nbsp;
+            <select name='childs' >
+                <option value='-1' selected>选择子节点</option>
+            </select>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+            <span class='closebutton' onclick="CloseThis(this)">x</span>
+            <hr>
+            &nbsp;&nbsp;
+            URL:<input type=text name=url size=64 value='http://' >
+            &nbsp;&nbsp;
+            <input type=submit name='submit' value='Add'>
+            <hr>
+            成批添加URL实例: http://club.china.com/data/threads/1011/[l-4876].html<br>
+                             http://club.china.com/data/threads/1011/[a-z].html
+        </form>
+    </div>
+
     </body>
 </html>
