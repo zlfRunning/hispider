@@ -235,6 +235,7 @@ typedef struct _HIBASE
     int     (*update_urlnode)(struct _HIBASE *, int urlnodeid, int level);
     int     (*delete_urlnode)(struct _HIBASE *, int urlnodeid);
     int     (*get_urlnode)(struct _HIBASE *, int urlnodeid, URLNODE *urlnode);
+    int     (*find_tnode_from_parents)(struct _HIBASE *, int parentid, int tnodeid);
     int     (*get_urlnode_childs)(struct _HIBASE *, int urlnodeid, URLNODE **childs);
     int     (*get_tnode_urlnodes)(struct _HIBASE *, int nodeid, URLNODE **urlnodes, 
             int *total, int from, int count);

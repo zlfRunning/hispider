@@ -90,11 +90,14 @@
             .closetxt{cursor:pointer;font-size:10pt;color:#cccccc;text-align:right;}
             #urlblock{position:absolute;background-color:#F4FBFF;display:none;
                 border:1px solid #81BEF7;padding:0px;left:0px;top:46px;width:100%;height:100%;}
-            .url-ul{list-style:none;padding:0;margin:0;width:100%;}
-            .url-li{background-color:#D0E9F7;cursor: pointer;}
-            .url-li-selected{background-color:#F4FBFF;cursor: pointer;}
             #url-header{position:relative;background-color:#2F5FA1;color:#cccccc;
                 height:30px;width:100%;border:1px solid #FFFFFF;}
+            .url-ul{list-style:none;padding:0;margin:0;width:100%;}
+            .url-li{background-color:#D0E9F7;cursor:pointer;}
+            .url-li-selected{background-color:#F4FBFF;cursor:pointer;}
+            .urlli-header{list-style:none;background-color:#2F5FA1;font-weight:bold;
+                font-size:14pt;color:#c0c0c0;}
+            .url-li-page{color:#cccc70;font-weight:bold;font-size:13pt;}
             #data{position:absolute;background-color:#F4FBFF;display:none;
                 border:1px solid #81BEF7;padding:0px;left:0px;top:46px;width:100%;height:100%;}
             #dns{position:absolute;background-color:#F4FBFF;display:none;
@@ -2180,8 +2183,12 @@
                     if(urlblock)
                     {
                         urlblock.style.display = 'inline';
-                        var form = document.forms['urlblockform'];
-                        ListNodeURLs(form, "nodeid");
+                        var urllist = document.getElementById('url-list');
+                        if(urllist.innerHTML == '')
+                        {
+                            var form = document.forms['urlblockform'];
+                            ListNodeURLs(form, "nodeid");
+                        }
                     }
                 }
                 else if(div == 'data')
@@ -2461,7 +2468,6 @@
                 if(form)
                 {
                     ResetDiv('url-list');
-                    form['childs'].options.length = 1;
                     form['level'].options[0].selected = true;
                     form['url'].focus();
                     form['url'].value = 'http://';
@@ -2495,9 +2501,11 @@
                                         oselect.options.length = 1;
                                         var i = 0, x = 1, tid = 0;
                                         var tname = "";
-                                        if(tnode['parent'] > 0)
+                                        if(nodeid > 0)
                                         {
-                                            oselect.options[x++] = new Option('..', tnode['parent']);
+                                            if(tnode['parent'] == 0) tname = 'Root';
+                                            else tname = '..';
+                                            oselect.options[x++]=new Option(tname, tnode['parent']);
                                         }
                                         for(i = 0; i < tnode['nchilds']; i++)
                                         {
@@ -2570,7 +2578,6 @@
                     ResetURLList();
                     var argv = "op=urlnode_list&nodeid="+nodeid+"&page="+page;
                     if(level >= 0) argv += "&level="+level;
-                    alert(argv);
                     xmlHttp.open('POST', '/', true);
                     xmlHttp.setRequestHeader("Content-Length", argv.length);
                     xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
@@ -2614,46 +2621,69 @@
                         }
                         i = 0, x = 1;
                         ochilds.options.length = 1;
-                        if(nodeid >= 0)ochilds.options[x++] = new Option('*', nodeid);
-                        for(i in urllist['tnodes'])
+                        if(urllist['ntnodes'] > 0)
                         {
-                            nodeid = urllist['tnodes'][i]['id'];
-                            tname = urllist['tnodes'][i]['name'];
-                            nchilds = urllist['tnodes'][i]['nchilds'];
-                            ochilds.options[x++] = new Option(tname, nodeid);
+                            if(nodeid >= 0)ochilds.options[x++] = new Option('*', nodeid);
+                            for(i in urllist['tnodes'])
+                            {
+                                nodeid = urllist['tnodes'][i]['id'];
+                                tname = urllist['tnodes'][i]['name'];
+                                nchilds = urllist['tnodes'][i]['nchilds'];
+                                ochilds.options[x++] = new Option(tname, nodeid);
+                            }
                         }
                     }
                     var htmlstr = "<ul class='url-ul'>";
                     var from = 0, to = 0;
+                    var phtmlstr = "";
                     if(urllist['pages'] > 1)
                     {
-                        nodeid = urllist['nodeid'];
                         var level = form['level'].value;
-                        from = page * 1 - 10;
+                        nodeid = urllist['nodeid'];
+                        from = parseInt(page) - 10;
                         if(from < 1) from = 1;
-                        to = from * 1 + 20;
-                        if(to > urllist['pages']) to = urllist['pages'];
-                        htmlstr += "<li class='url-li'>";
+                        to = from + 20;
+                        if(to > urllist['pages']) to = parseInt(urllist['pages']) + 1;
+                        phtmlstr += "<li class='urlli-header'> URL总数：";
+                        phtmlstr += urllist['total']+" 共"+urllist['pages']+"页";
+                        phtmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
+                        if(from > 20)
+                        {
+                            phtmlstr += "<a class='url-li-page' href='javascript:;' ";
+                            phtmlstr += " onclick=\"ListURLs("+nodeid+",'"+level+"','1');\">1</a>";
+                            phtmlstr += "&nbsp;&nbsp;...";
+                        }
                         for(i = from; i < to; i++)
                         {
-                            htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
-                            if(i == page) htmlstr += i;
+                            phtmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
+                            if(i == page) phtmlstr += i;
                             else 
                             {
-                                htmlstr += "<a href='javascript:;' onclick=\"ListURLs(";
-                                htmlstr += nodeid +",'"+level+"','"+i+"');\">"+i+"</a>";
+                                phtmlstr += "<a class='url-li-page' href='javascript:;' ";
+                                phtmlstr += "onclick=\"ListURLs("+nodeid+",'"+level+"','"+i+"');\">"+i+"</a>";
                             }
                         }
-                        htmlstr += "</li>";
+                        if(to < (urllist['pages'] - 20))
+                        {
+                            i = urllist['pages'];
+                            phtmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;...&nbsp;&nbsp;";
+                            phtmlstr += "<a class='url-li-page' href='javascript:;' ";
+                            phtmlstr += "onclick=\"ListURLs("+nodeid +",'"+level+"','"+i+"');\">"+i+"</a>";
+                        }
+                        phtmlstr += "</li>";
                     }
+                    if(phtmlstr != "")htmlstr += phtmlstr + "<hr>";
+                    i = 0;
                     for(x in urllist['urlnodes'])
                     {
+                        i++;
                         urlitem = urllist['urlnodes'][x];
                         nodeid = urlitem['nodeid'];
                         urlid = urlitem['urlid'];
                         urlnodeid = urlitem['id'];
                         htmlstr += "<li class='url-li' onmouseout=\"outDiv(this, 'url-li')\" ";
                         htmlstr += " onmousemove=\"onDiv(this, 'url-li-selected')\" >";
+                        htmlstr += i+":&nbsp;&nbsp;";
                         htmlstr += "<a href='"+urlitem['url']+"'>"+urlitem['url']+"</a>";
                         htmlstr += "&nbsp;&nbsp;";
                         htmlstr += "["+urlitem['nchilds']+"]";
@@ -2674,6 +2704,8 @@
                         htmlstr += "'"+urlitem['url']+"','"+page+"')\">✘</span>";
                         htmlstr += "</li>";
                     }
+                    if(urllist['pages'] > 1) htmlstr += "<hr>";
+                    if(phtmlstr != "")htmlstr += phtmlstr;
                     htmlstr += "</ul>";
                     var div = document.getElementById('url-list');
                     if(div) div.innerHTML = htmlstr;

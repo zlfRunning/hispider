@@ -38,7 +38,7 @@ static void *argvmap = NULL;
 static int proxy_timeout = 2000000;
 static int histore_ntask = 0;
 static int histore_task_running = 0;
-static int http_page_num  = 200;
+static int http_page_num  = 100;
 //static int working_mode = 1;
 static char *e_argvs[] = 
 {
@@ -882,8 +882,8 @@ do                                                                              
     {                                                                                           \
         hibase->get_tnode(hibase, node_id, &tnode);                                             \
         p += sprintf(p, "({'nodeid':'%d', 'parent':'%d', 'name':'%s', 'ntnodes':'%d',"          \
-            "'nurlnodes':'%d','pages':'%d',",node_id, tnode.parent, tnode.name,                 \
-            ntnodes, nurlnodes, (total/http_page_num)+((total%http_page_num)>0));               \
+            "'nurlnodes':'%d', 'total':'%d', 'pages':'%d',",node_id, tnode.parent, tnode.name,  \
+            ntnodes, nurlnodes, total, (total/http_page_num)+((total%http_page_num)>0));        \
         if(tnodes && ntnodes > 0)                                                               \
         {                                                                                       \
             p += sprintf(p, "'tnodes':{");                                                      \
@@ -1301,8 +1301,9 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         break;
                     case E_OP_URLNODE_ADD:
                         if(level > 0) flag = URL_IS_PRIORITY;
+                        if(parentid < 0) parentid = 0;
                         if(nodeid >= 0 && url && (urlid=ltask->add_url(ltask,-1,0,url, flag))>= 0
-                            && (urlnodeid = hibase->add_urlnode(hibase, nodeid, 0, urlid,level))> 0
+                            && (urlnodeid = hibase->add_urlnode(hibase, nodeid, parentid, urlid,level))> 0
                             && (n = hibase->get_tnode_urlnodes(hibase, nodeid, &urlnodes, 
                                     &total, from, http_page_num)) > 0)
                         {
@@ -1355,14 +1356,14 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         }else goto err_end;
                         break;
                     case E_OP_URLNODE_LIST:
-                        if(nodeid >= 0&&(count=hibase->get_tnode_childs(hibase,nodeid,&tnodes)) > 0)
+                        if(nodeid >= 0)
                         {
-                            n = hibase->get_tnode_urlnodes(hibase, nodeid, &urlnodes, 
-                                    &total, from, http_page_num);
+                            n = hibase->get_tnode_urlnodes(hibase, nodeid, &urlnodes, &total, from, http_page_num);
+                            count = hibase->get_tnode_childs(hibase, nodeid, &tnodes);
                             hibase->get_tnode(hibase, nodeid, &tnode);
                             VIEW_URLNODES(conn,pp,p,buf,nodeid,tnode,tnodes,count,urlnodes,n,total,i);
-                            if(n > 0)hibase->free_urlnodes(urlnodes);
                             if(tnodes)hibase->free_tnode_childs(tnodes);
+                            if(urlnodes)hibase->free_urlnodes(urlnodes);
                             goto end;
                         }
                         break;
@@ -1674,16 +1675,19 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                             }
                             if(templates[i].linkmap.flag & REG_IS_POST) urlflag |=  URL_IS_POST;
                             if(pp>newurl && *pp == '\0'&& (nodeid=templates[i].linkmap.nodeid)>0 
-                                    && (urlid = ltask->add_url(ltask,  urlnode->urlid, 
-                                            0, newurl, urlflag))>= 0)
+                             &&(urlid=ltask->add_url(ltask,urlnode->urlid,0,newurl,urlflag))>= 0)
                             {
                                 DEBUG_LOGGER(histore_logger, "extract link-url:%s", newurl);
                                 //nodeid = templates[i].linkmap.nodeid;
-                                parentid = urlnode->id;
                                 if(nodeid == urlnode->tnodeid) parentid = urlnode->parentid;
-                                id = hibase->add_urlnode(hibase,nodeid,parentid,urlid,level);
-                                DEBUG_LOGGER(histore_logger,"new-URLNODE id:%d url:%s level:%d", 
-                                        id, newurl, level);
+                                else 
+                                {
+                                    if((parentid = hibase->find_tnode_from_parents(hibase, 
+                                            urlnode->parentid, nodeid)) <= 0)
+                                    parentid = urlnode->id;
+                                }
+                                id = hibase->add_urlnode(hibase, nodeid, parentid, urlid,level);
+                                DEBUG_LOGGER(histore_logger,"new-URLNODE id:%d urlid:%d tnodeid:%d urlnode->parentid:%d url:%s level:%d", id, urlid, nodeid, parentid, newurl, level);
                             }
                             else
                             {
@@ -1739,16 +1743,18 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                                                     ltask, urlnode->urlid, 0,newurl,urlflag))>= 0)
                                     {   
                                         //fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
-                                        parentid = urlnode->id;
                                         if(nodeid == urlnode->tnodeid) parentid = urlnode->parentid;
+                                        else 
+                                        {
+                                            if((parentid = hibase->find_tnode_from_parents(hibase, 
+                                                urlnode->parentid, nodeid)) <= 0)
+                                            parentid = urlnode->id;
+                                        }
                                         level = 0;
                                         //fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
                                         if(templates[i].map[x].flag & REG_IS_LIST) level = 1;
                                         id=hibase->add_urlnode(hibase,nodeid,parentid,urlid,level);
-                                        DEBUG_LOGGER(histore_logger,"new-urlnode:%s id:%d x:%d "
-                                                "nodeid:%d parent:%d urlid:%d level:%d", 
-                                                newurl, id, x, templates[i].map[x].nodeid, 
-                                                urlnode->urlid, urlid, urlnode->level);
+                                        DEBUG_LOGGER(histore_logger,"new-urlnode:%s id:%d x:%d tnodeid:%d urlnode->parentid:%d urlid:%d level:%d", newurl, id, x, nodeid, parentid, urlid, urlnode->level);
                                     }
                                     else
                                     {
@@ -2007,7 +2013,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
         }
     }
     /* page number */
-    http_page_num = iniparser_getint(dict, "HITASKD:http_page_num", 200);
+    http_page_num = iniparser_getint(dict, "HITASKD:http_page_num", 100);
     /* httpd_home */
     httpd_home = iniparser_getstr(dict, "HITASKD:httpd_home");
     /* link  task table */

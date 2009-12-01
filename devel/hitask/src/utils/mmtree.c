@@ -338,7 +338,7 @@ int mmtree_insert(void *x, int *prootid, int key, int data, int *old)
                 if(key == node->key)
                 {
                     id = nodeid;
-                    *old = node->data;
+                    if(old) *old = node->data;
                     goto end;
                 }
                 else if(key > node->key)
@@ -453,10 +453,9 @@ int mmtree_min(void *x, int rootid, int *key, int *data)
 {
     int id = -1;
 
-    if(x && rootid > 0 && key && data)
+    if(x && rootid > 0)
     {
         MUTEX_LOCK(MMT(x)->mutex);
-        *key = 0; *data = 0;
         if(MMT(x)->map && MMT(x)->state && rootid <  MMT(x)->state->total)
         {
             id = rootid;
@@ -466,8 +465,8 @@ int mmtree_min(void *x, int rootid, int *key, int *data)
             }
             if(id > 0 && MMT(x)->state->total)
             {
-                *key = MMT(x)->map[id].key;
-                *data = MMT(x)->map[id].data;
+                if(key) *key = MMT(x)->map[id].key;
+                if(data) *data = MMT(x)->map[id].data;
             }
         }
         MUTEX_UNLOCK(MMT(x)->mutex);
@@ -480,10 +479,9 @@ int mmtree_max(void *x, int rootid, int *key, int *data)
 {
     int id = -1;
 
-    if(x && rootid > 0 && key && data)
+    if(x && rootid > 0)
     {
         MUTEX_LOCK(MMT(x)->mutex);
-        *key = 0; *data = 0;
         if(MMT(x)->map && MMT(x)->state && rootid <  MMT(x)->state->total)
         {
             id = rootid;
@@ -493,8 +491,8 @@ int mmtree_max(void *x, int rootid, int *key, int *data)
             }
             if(id > 0 && MMT(x)->state->total)
             {
-                *key = MMT(x)->map[id].key;
-                *data = MMT(x)->map[id].data;
+                if(key) *key = MMT(x)->map[id].key;
+                if(data) *data = MMT(x)->map[id].data;
             }
         }
         MUTEX_UNLOCK(MMT(x)->mutex);
@@ -507,9 +505,8 @@ int mmtree_next(void *x, int rootid, int tnodeid, int *key, int *data)
 {
     int id = -1, parentid = 0;
 
-    if(x && tnodeid > 0 && key && data)
+    if(x && tnodeid > 0)
     {
-        *key = 0; *data = 0;
         MUTEX_LOCK(MMT(x)->mutex);
         if(MMT(x)->map && MMT(x)->state && tnodeid <  MMT(x)->state->total)
         {
@@ -543,8 +540,8 @@ int mmtree_next(void *x, int rootid, int tnodeid, int *key, int *data)
 end:
             if(id > 0 && id < MMT(x)->state->total)
             {
-                *key = MMT(x)->map[id].key;
-                *data = MMT(x)->map[id].data;
+                if(key) *key = MMT(x)->map[id].key;
+                if(data) *data = MMT(x)->map[id].data;
             }
             //fprintf(stdout, "%s::%d rootid:%d tnodeid:%d id:%d\n",__FILE__, __LINE__, rootid, tnodeid, id);
         }
@@ -558,9 +555,8 @@ int mmtree_prev(void *x, int rootid, int tnodeid, int *key, int *data)
 {
     int id = -1, parentid = 0;
 
-    if(x && tnodeid > 0 && key && data)
+    if(x && tnodeid > 0)
     {
-        *key = 0; *data = 0;
         MUTEX_LOCK(MMT(x)->mutex);
         if(MMT(x)->map && MMT(x)->state && tnodeid <  MMT(x)->state->total)
         {
@@ -594,8 +590,8 @@ int mmtree_prev(void *x, int rootid, int tnodeid, int *key, int *data)
 end:
             if(id > 0 && id < MMT(x)->state->total)
             {
-                *key = MMT(x)->map[id].key;
-                *data = MMT(x)->map[id].data;
+                if(key)*key = MMT(x)->map[id].key;
+                if(data)*data = MMT(x)->map[id].data;
             }
             //fprintf(stdout, "%s::%d rootid:%d tnodeid:%d id:%d\n",__FILE__, __LINE__, rootid, tnodeid, id);
         }
@@ -791,7 +787,7 @@ void mmtree_remove_tree(void *x, int rootid)
     {
         MUTEX_LOCK(MMT(x)->mutex);
         mmtree_remove_tnode(x, rootid);
-        fprintf(stdout, "%s::%d rootid:%d start:%p state:%p map:%p current:%d left:%d total:%d qleft:%d qfirst:%d qlast:%d\n", __FILE__, __LINE__, rootid, MMT(x)->start, MMT(x)->state, MMT(x)->map, MMT(x)->state->current, MMT(x)->state->left, MMT(x)->state->total, MMT(x)->state->qleft, MMT(x)->state->qfirst, MMT(x)->state->qlast);
+        //fprintf(stdout, "%s::%d rootid:%d start:%p state:%p map:%p current:%d left:%d total:%d qleft:%d qfirst:%d qlast:%d\n", __FILE__, __LINE__, rootid, MMT(x)->start, MMT(x)->state, MMT(x)->map, MMT(x)->state->current, MMT(x)->state->left, MMT(x)->state->total, MMT(x)->state->qleft, MMT(x)->state->qfirst, MMT(x)->state->qlast);
  
         MUTEX_UNLOCK(MMT(x)->mutex);
     }
@@ -842,22 +838,32 @@ int main(int argc, char **argv)
         //mmtree_view_tree(mmtree, 1, stdout);
         */
         int list[] = {123, 234, 345, 567, 98, 7, 45, 0, 240, 3, 5, 2, 1, 6, 8, 30, 23, 21, 43, 370};
-        data = -1;
-        rootid = mmtree_new_tree(mmtree, 60, data);
-        for(j = 0; j < 20; j++)
+        int key = 0, count = 0;
+        rootid = mmtree_new_tree(mmtree, 0, data);
+        for(j = 1; j < 1000000; j++)
         {
-            old = 0;
-            id = mmtree_insert(mmtree, &rootid, list[j], data, &old);
-            fprintf(stdout, "tree:%d key:%d id:%d old:%d\n", rootid, list[j], id, old);
+            old = -1;
+            data = j;
+            key = rand()%j;
+            id = mmtree_insert(mmtree, &rootid, key, data, &old);
+            if(id > 0 && old < 0) 
+            {
+                //fprintf(stdout, "j:%d id:%d key:%d rootid:%d\n", j, id, key, rootid);
+                count++;
+            }
+            //fprintf(stdout, "tree:%d key:%d id:%d old:%d\n", rootid, list[j], id, old);
         }
-        mmtree_view_tree(mmtree, rootid, stdout);
-        id = mmtree_min(mmtree, rootid, &key, &data);
-        fprintf(stdout, "tree:%d min:%d key:%d data:%d\n", rootid, id, key, data);
-        while((next = mmtree_next(mmtree, rootid, id, &key, &data)) > 0)
+        //mmtree_view_tree(mmtree, rootid, stdout);
+        id = next = mmtree_min(mmtree, rootid, &key, &data);
+        //fprintf(stdout, "tree:%d min:%d key:%d data:%d\n", rootid, id, key, data);
+        do
         {
             fprintf(stdout, "tree:%d id:%d next:%d key:%d data:%d\n", rootid, id, next, key, data);
             id = next;
         }
+        while((next = mmtree_next(mmtree, rootid, id, &key, &data)) > 0);
+        fprintf(stdout, "count:%d\n", count);
+        return 0;
         fprintf(stdout, "Removing rootid:%d key:%d data:%d\n", rootid, key, data);
         mmtree_remove(mmtree, &rootid, rootid, &key, &data);
         fprintf(stdout, "Removed rootid:%d key:%d data:%d\n", rootid, key, data);
