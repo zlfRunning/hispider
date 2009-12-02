@@ -803,8 +803,11 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
                     {
                         p = buf;
                         p += sprintf(p, "HTTP/1.0 200 OK\r\nContent-Length:%lld\r\n"
-                                "Content-Type: text/html;charset=%s\r\nLast-Modified:", 
+                                "Content-Type: text/html;charset=%s\r\n",
                                 (long long int)(st.st_size), http_default_charset); 
+                        if((n = http_req.headers[HEAD_GEN_CONNECTION]) > 0)
+                            p += sprintf(p, "Connection: %s\r\n", http_req.hlines + n);
+                        p += sprintf(p, "Last-Modified:");
                         p += GMTstrdate(st.st_mtime, p);
                         p += sprintf(p, "%s", "\r\n");//date end
                         p += sprintf(p, "%s", "\r\n");
