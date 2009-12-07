@@ -118,6 +118,16 @@ typedef struct _PRES
     int start;
     int end;
 }PRES;
+/* url pattern list */
+#define PURL_TYPE_CHAR 0
+#define PURL_TYPE_INT  1
+#define PURL_NUM_MAX 256
+typedef struct _PURL
+{
+    int type;
+    char *from;
+    char *to;
+}PURL;
 #define TMP_IS_PUBLIC       0x01
 #define TMP_IS_GLOBAL       0x02
 #define TMP_IS_IGNORECASE   0x04

@@ -931,14 +931,15 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
     int i = 0, id = 0, n = 0, op = -1, nodeid = -1, x = -1, fieldid = -1,
         parentid = -1, urlid = -1, hostid = -1, tableid = -1, type = -1, 
         flag = -1, templateid = -1, urlnodeid = -1, level = -1, count = 0, 
-        page = 1, from = 0, total = 0, ret = 0;
+        page = 1, from = 0, total = 0, ret = 0, npurl = 0;
     char *p = NULL, *end = NULL, *name = NULL, *host = NULL, *url = NULL, *link = NULL, 
          *pattern = NULL, *map = NULL, *linkmap = NULL, *pp = NULL, 
          buf[HTTP_BUF_SIZE], block[HTTP_BUF_SIZE];
     HTTP_REQ httpRQ = {0}, *http_req = NULL;
+    TNODE *tnodes = NULL, tnode = {0};
     ITEMPLATE template = {0};
     URLNODE *urlnodes = NULL;
-    TNODE *tnodes = NULL, tnode = {0};
+    PURL purls[PURL_NUM_MAX];
     double speed = 0.0;
     void *dp = NULL;
 
@@ -1091,6 +1092,48 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                     ++p;
                     template.linkmap.flag = atoi(p);
                     template.flags |= TMP_IS_LINK; 
+                }
+                if(op == E_OP_URLNODE_ADD && url)
+                {
+                    npurl = 0;
+                    p = url;
+                    while(*p != '\0')
+                    {
+                        if(*p == '[' && npurl < PURL_NUM_MAX)
+                        {
+                            memset(&(purls[npurl]), 0, sizeof(PURL));
+                            ++p;
+                            if(*p >= '0' && *p < '9')
+                            {
+                                purls[npurl].from = p;
+                                purls[npurl].type = PURL_TYPE_INT; 
+                                while((*p >= '0' && *p <= '9') || *p == '-')
+                                {
+                                    if(*p == '-') purls[npurl].to = ++p;
+                                    else ++p;
+                                }
+                                if(*p == ']')
+                                {
+                                    npurl++;
+                                    ++p;
+                                }
+                            }
+                            else if((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z'))
+                            {
+                                purls[npurl].from = p++;
+                                purls[npurl].type = PURL_TYPE_CHAR; 
+                                if(*p != '-')continue;
+                                if((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z'))
+                                {
+                                    purls[npurl].to = p++;
+                                    if(*p != ']') continue;
+                                    else {npurl++;++p;}
+                                }
+                            }
+                            else ++p;
+                        }
+                        else ++p;
+                    }
                 }
                 //if(pattern)fprintf(stdout, "%d::%s\n", __LINE__, pattern);
                 if(page <= 0) page = 1;
@@ -1317,8 +1360,19 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         if(parentid < 0) parentid = 0;
                         if(nodeid >= 0 && url && hibase->get_tnode(hibase, nodeid, &tnode) > 0)
                         {
-                            if((urlid=ltask->add_url(ltask,-1,0,url, flag))>= 0)
-                                hibase->add_urlnode(hibase, nodeid, parentid, urlid,level);
+                            if(npurl > 0)
+                            {
+                                p = url;
+                                for(i = 0; i < npurl; i++)
+                                {
+
+                                }
+                            }
+                            else
+                            {
+                                if((urlid=ltask->add_url(ltask,-1,0,url, flag))>= 0)
+                                    hibase->add_urlnode(hibase, nodeid, parentid, urlid,level);
+                            }
                             if((n = hibase->get_tnode_urlnodes(hibase, nodeid, &urlnodes, 
                                             &total, from, http_page_num)) > 0)
                             {
