@@ -154,10 +154,12 @@ static char *e_ops[]=
 #define E_OP_PROXY_DELETE       31
     "proxy_list",
 #define E_OP_PROXY_LIST         32
-    "speed_limit"
+    "speed_limit",
 #define E_OP_SPEED_LIMIT        33
+    "node_brother"
+#define E_OP_NODE_BROTHER       34
 };
-#define E_OP_NUM 34
+#define E_OP_NUM 35
 
 /* dns packet reader */
 int adns_packet_reader(CONN *conn, CB_DATA *buffer)
@@ -1142,6 +1144,14 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                                 conn->push_chunk(conn, block, n);
                                 goto end;
                             }else goto err_end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_NODE_BROTHER :
+                        if(nodeid >= 0 && hibase->get_tnode(hibase, nodeid, &tnode) > 0
+                                && (n = hibase->view_tnode_childs(hibase, tnode.parent, block)) > 0)
+                        {
+                            conn->push_chunk(conn, block, n);
+                            goto end;
                         }else goto err_end;
                         break;
                     case E_OP_TASK_VIEW:

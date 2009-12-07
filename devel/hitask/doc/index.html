@@ -2477,12 +2477,13 @@
                     form['url'].value = 'http://';
                 }
             }
-            function ListURLNodes(pid, nodeid)
+            function ListPNodes(nodeid)
             {
                 var form = document.forms['urlblockform'];
-                if(form && pid >= 0)
+                if(form && nodeid > 0)
                 {
-                    var argv = "op=node_childs&nodeid="+pid;
+                    var argv = "op=node_brother&nodeid="+nodeid;
+                    //alert(argv);
                     var xmlHttp = null;
                     if(argv && (xmlHttp = CreateXMLHTTP()) != null)
                     {
@@ -2504,13 +2505,9 @@
                                     {
                                         oselect.options.length = 1;
                                         var i = 0, x = 1, tid = 0;
-                                        var tname = "";
-                                        if(nodeid > 0)
-                                        {
-                                            if(tnode['parent'] == 0) tname = 'Root';
-                                            else tname = '..';
-                                            oselect.options[x++]=new Option(tname, tnode['parent']);
-                                        }
+                                        var tname = "..";
+                                        if(tnode['id'] > 0)
+                                            oselect.options[x++]=new Option(tname, tnode['id']);
                                         for(i = 0; i < tnode['nchilds']; i++)
                                         {
                                             tid = tnode['childs'][i]['id'];
@@ -2542,17 +2539,18 @@
                     {
                         tname = ochilds.options[i].text;
                         tid = ochilds.options[i].value;
-                        if(tname == '*') 
+                        if(tid > 0)
                         {
-                            tname = '..';
-                            form['parentid'].value = tid;
+                            if(tname == '*') tname = '..';
+                            if(nodeid == tid)
+                            {
+                                olist.options[x++] = new Option(tname, tid, true);
+                            }
+                            else 
+                            {
+                                olist.options[x++] = new Option(tname, tid);
+                            }
                         }
-                        if(nodeid == tid)
-                        {
-                            olist.options[x++] = new Option(tname, tid, true);
-                        }
-                        else 
-                            olist.options[x++] = new Option(tname, tid);
                     }
                     ochilds.options.length = 1;
                 }
@@ -2619,15 +2617,16 @@
                         nodeid = urllist['nodeid'];
                         var pid = urllist['parent'];
                         var onode = form['nodeid'];
-                        if(pid >= 0 && onode.options[onode.selectedIndex].text == '..')
+                        //alert(pid+":"+nodeid+":"+onode.value);
+                        if(onode.options[onode.selectedIndex].text == '..')
                         {
-                            ListURLNodes(pid, nodeid);
+                            ListPNodes(nodeid);
                         }
                         i = 0, x = 1, z = 1;
                         ochilds.options.length = 1;
                         if(urllist['ntnodes'] > 0)
                         {
-                            if(nodeid >= 0)ochilds.options[x++] = new Option('*', nodeid);
+                            if(nodeid > 0)ochilds.options[x++] = new Option('*', nodeid);
                             var olistchilds = document.forms['urllist-add-form']['nodeid'];
                             if(olistchilds) olistchilds.options.length = 1;
                             for(i in urllist['tnodes'])
