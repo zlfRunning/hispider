@@ -2581,16 +2581,51 @@
                     if(oname == 'childs') moveChildNodes(form, nodeid);
                     level = form['level'].value;
                     ResetURLList();
-                    return ListURLs(nodeid, level, 1);
+                    return ListURLs('list', nodeid, level, 1);
                 }
             }
-            function ListURLs(nodeid, level, page)
+            function ViewChildsURL(urlnodeid, level, page)
+            {
+                var xmlHttp = null; 
+                if(urlnodeid >= 0 && (xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    ResetURLList();
+                    var argv = "op=urlnode_childs&urlnodeid="+urlnodeid+"&page="+page;
+                    if(level >= 0) argv += "&level="+level;
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                //alert(xmlHttp.responseText);
+                                ShowNodeURLs(xmlHttp.responseText, page);
+                            }
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+            }
+            
+            function ListURLs(type, nodeid, level, page)
             {
                 var xmlHttp = null; 
                 if(nodeid >= 0 && (xmlHttp = CreateXMLHTTP()) != null)
                 {
                     ResetURLList();
-                    var argv = "op=urlnode_list&nodeid="+nodeid+"&page="+page;
+                    var argv = "";
+                    if(type == 'list')
+                    {
+                        argv = "op=urlnode_list&nodeid="+nodeid;
+                    }
+                    else
+                    {
+                        argv = "op=urlnode_childs&urlnodeid="+nodeid;
+                    }
+                    argv += "&page="+page;
                     if(level >= 0) argv += "&level="+level;
                     xmlHttp.open('POST', '/', true);
                     xmlHttp.setRequestHeader("Content-Length", argv.length);
@@ -2677,7 +2712,7 @@
                     xmlHttp.send(argv);
                 }
             }
-
+            /* Show Node URLs */
             function ShowNodeURLs(txt, page)
             {
                 var form = document.forms['urlblockform'];
@@ -2725,9 +2760,12 @@
                     var htmlstr = "<ul class='url-ul'>";
                     var from = 0, to = 0;
                     var phtmlstr = "";
+                    var level = 0;
+                    var url = "";
+                    var type = "list";
                     if(urllist['pages'] > 1)
                     {
-                        var level = form['level'].value;
+                        level = form['level'].value;
                         nodeid = urllist['nodeid'];
                         from = parseInt(page) - 10;
                         if(from < 1) from = 1;
@@ -2736,10 +2774,13 @@
                         phtmlstr += "<li class='urlli-header'> URL总数：";
                         phtmlstr += urllist['total']+" 共"+urllist['pages']+"页";
                         phtmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
+                        if(urllist['is_childs']) type = "childs";
+                        else type = "list";
                         if(from > 20)
                         {
                             phtmlstr += "<a class='url-li-page' href='javascript:;' ";
-                            phtmlstr += " onclick=\"ListURLs("+nodeid+",'"+level+"','1');\">1</a>";
+                            phtmlstr += " onclick=\"ListURLs('"+type+"', "+nodeid+",'"
+                                +level+"','1');\">1</a>";
                             phtmlstr += "&nbsp;&nbsp;...";
                         }
                         for(i = from; i < to; i++)
@@ -2749,7 +2790,8 @@
                             else 
                             {
                                 phtmlstr += "<a class='url-li-page' href='javascript:;' ";
-                                phtmlstr += "onclick=\"ListURLs("+nodeid+",'"+level+"','"+i+"');\">"+i+"</a>";
+                                phtmlstr += "onclick=\"ListURLs('"+type+"', "+nodeid+",'"
+                                    +level+"','"+i+"');\">"+i+"</a>";
                             }
                         }
                         if(to < (urllist['pages'] - 20))
@@ -2757,7 +2799,8 @@
                             i = urllist['pages'];
                             phtmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;...&nbsp;&nbsp;";
                             phtmlstr += "<a class='url-li-page' href='javascript:;' ";
-                            phtmlstr += "onclick=\"ListURLs("+nodeid +",'"+level+"','"+i+"');\">"+i+"</a>";
+                            phtmlstr += "onclick=\"ListURLs('"+type+"', "+nodeid +",'"
+                                +level+"','"+i+"');\">"+i+"</a>";
                         }
                         phtmlstr += "</li>";
                     }
@@ -2769,32 +2812,39 @@
                         urlitem = urllist['urlnodes'][x];
                         nodeid = urlitem['nodeid'];
                         urlid = urlitem['urlid'];
+                        level = urlitem['level'];
                         urlnodeid = urlitem['id'];
                         recordid = urlitem['recordid'];
+                        nchilds = urlitem['nchilds'];
+                        url = urlitem['url'];
                         css = 'url-li';
                         if(urlitem['status'] < 0) css = 'url-li-warn';
                         htmlstr += "<li class='"+css+"' onmouseout=\"outDiv(this,'"+css+"')\" ";
                         htmlstr += " onmousemove=\"onDiv(this, 'url-li-selected')\" >";
                         htmlstr += i+":&nbsp;&nbsp;";
-                        htmlstr += "<a target='_blank' href='"+urlitem['url']+"'>"
-                                +urlitem['url']+"</a>";
+                        htmlstr += "<a target='_blank' href='"+url+"'>"+url+"</a>";
                         htmlstr += "&nbsp;&nbsp;";
-                        htmlstr += "["+urlitem['nchilds']+"]";
+                        if(nchilds > 0)
+                        {
+                            htmlstr += "[<span class='eview' "
+                            htmlstr += " onclick=\"ViewChildsURL("+urlnodeid+",0,1)\">";
+                            htmlstr += nchilds+"</span>]";
+                        }
                         htmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
                         htmlstr += "<select name='level' onchange=\"UpdateNodeURL(";
                         htmlstr += nodeid+","+urlnodeid+", "+urlid+", this, "+page+")\">";
                         htmlstr += "<option value='-1' selected>优先级</option>";
                         htmlstr += "<option value='0' ";
-                        if(urlitem['level'] == 0) htmlstr += "selected=true";
+                        if(level == 0) htmlstr += "selected=true";
                         htmlstr += ">普通</option>";
                         htmlstr += "<option value='1'";
-                        if(urlitem['level'] == 1) htmlstr += "selected=true";
+                        if(level == 1) htmlstr += "selected=true";
                         htmlstr += ">紧急</option>";
                         htmlstr += "</select>";
                         if(recordid > 0)
                         {
                             htmlstr += "&nbsp;&nbsp;&nbsp;";
-                            htmlstr += "<span class='eview' title='view' ";
+                            htmlstr += "<span class='eview' title='View' ";
                             htmlstr += "onclick=\"ViewRecord("+recordid+")\">☜ </span>";
                         }
                         if(urllist['ntnodes'] > 0)
@@ -2806,7 +2856,7 @@
                         htmlstr += "&nbsp;&nbsp;&nbsp;";
                         htmlstr += "<span class='edelete' title='Delete' ";
                         htmlstr += "onclick=\"DeleteNodeURL("+nodeid+", "+urlnodeid+","+urlid+",";
-                        htmlstr += "'"+urlitem['url']+"','"+page+"')\">✘</span>";
+                        htmlstr += "'"+url+"','"+page+"')\">✘</span>";
                         htmlstr += "</li>";
                     }
                     if(urllist['pages'] > 1) htmlstr += "<hr>";

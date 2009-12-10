@@ -1564,9 +1564,10 @@ int hibase_find_tnode_from_parents(HIBASE *hibase, int parentid, int tnodeid)
 }
 
 /* get urlnode childs */
-int hibase_get_urlnode_childs(HIBASE *hibase, int urlnodeid, URLNODE **childs)
+int hibase_get_urlnode_childs(HIBASE *hibase, int urlnodeid, URLNODE **childs, 
+        int *total, int from, int count)
 {
-    int n = -1, x = 0, urlid = 0, rootid = 0, id = 0;
+    int n = -1, x = 0, i = 0, urlid = 0, rootid = 0, id = 0, to = 0;
     URLNODE urlnode = {0}, *p = NULL;
 
     if(hibase && childs && ID_IS_VALID2(hibase, urlnodeio, urlnodeid))
@@ -1575,20 +1576,32 @@ int hibase_get_urlnode_childs(HIBASE *hibase, int urlnodeid, URLNODE **childs)
         DEBUG_LOGGER(hibase->logger, "Ready for reading urlnode:%d childs", urlnodeid)
         if(pread(hibase->urlnodeio.fd, &urlnode, sizeof(URLNODE), 
                     (off_t)sizeof(URLNODE) * (off_t)urlnodeid) > 0
-            && urlnode.nchilds > 0 && (rootid = urlnode.childs_rootid) > 0
-            && (x = mmtree_min(hibase->mmtree, rootid, &urlid, &id)) > 0
-            && (p = *childs = (URLNODE *)calloc(urlnode.nchilds, sizeof(URLNODE))))
+            && (*total = urlnode.nchilds) > 0 && from >= 0 && from < *total 
+            && (rootid = urlnode.childs_rootid) > 0)
         {
-            n = 0;
-            do
+            DEBUG_LOGGER(hibase->logger, "Ready for reading urlnode[%d]->childs[%d] from:%d ", urlnodeid, urlnode.nchilds, from);
+            to = from + count;
+            if(to > *total) to = *total;
+            if((n = (to - from)) > 0 && (x = mmtree_min(hibase->mmtree, rootid, &urlid, &id)) > 0
+                && (p = *childs = (URLNODE *)calloc(n, sizeof(URLNODE))))
             {
-                if(pread(hibase->urlnodeio.fd, p, sizeof(URLNODE), 
-                            (off_t)sizeof(URLNODE) * (off_t)id) > 0)
+                DEBUG_LOGGER(hibase->logger, "from:%d count:%d total:%d to:%d", from, count, *total, to);
+                i = 0;
+                do
                 {
-                    ++p;
-                    ++n;
-                }
-            }while((x = mmtree_next(hibase->mmtree, rootid, x, &urlid, &id)) > 0);
+                    DEBUG_LOGGER(hibase->logger, "x:%d id:%d urlid:%d", x, id, urlid);
+                    if(id < 0 || i >= to)break;
+                    if(i < from){++i;continue;}
+                    if(id > 0 && pread(hibase->urlnodeio.fd, p, sizeof(URLNODE),
+                            (off_t)sizeof(URLNODE)*(off_t)id) > 0)
+                    { 
+                        DEBUG_LOGGER(hibase->logger, "i:%d level:%d parent:%d tnodeid:%d, urlid:%d nchilds:%d, childs_rootid:%d tnode_mmid:%d mmid:%d", i, p->level, p->parentid, p->tnodeid, p->urlid, p->nchilds, p->childs_rootid, p->tnode_mmid, p->mmid);
+                        ++p;
+                    }
+                    i++;
+                }while((x = mmtree_next(hibase->mmtree, rootid, x, &urlid, &id)) > 0);
+                DEBUG_LOGGER(hibase->logger, "from:%d count:%d total:%d to:%d i:%d n:%d", from, count, *total, to, i, n);
+            }
         }
         DEBUG_LOGGER(hibase->logger, "Over for reading urlnode:%d childs", urlnodeid)
         MUTEX_UNLOCK(hibase->mutex);
@@ -2120,7 +2133,7 @@ int main(int argc, char **argv)
         URLNODE *urlnodes = NULL;
         for(i = 0; i < 100; i++)
         {
-            if((n = hibase_get_urlnode_childs(hibase, i, &urlnodes)) > 0)
+            if((n = hibase_get_urlnode_childs(hibase, i, &urlnodes, &total, from, 100)) > 0)
             {
                 for(i = 0; i < n; i++)
                 {
