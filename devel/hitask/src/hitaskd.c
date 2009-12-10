@@ -914,7 +914,7 @@ do                                                                              
                 p += sprintf(p, "'%d':{'id':'%d', 'nodeid':'%d', 'level':'%d', 'nchilds':'%d'," \
                         " 'urlid':'%d', 'recordid':'%d', 'url':'%s', 'status':'%d'},",          \
                         urlnodes[x].id, urlnodes[x].id, urlnodes[x].tnodeid, urlnodes[x].level, \
-                        urlnodes[x].nchilds, urlnodes[x].recordid, urlnodes[x].urlid, buf, ret);\
+                        urlnodes[x].nchilds, urlnodes[x].urlid, urlnodes[x].recordid, buf, ret);\
             }                                                                                   \
             --p;                                                                                \
             p += sprintf(p, "}");                                                               \
@@ -1502,8 +1502,8 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         {
                             p = buf;
                             p += sprintf(p, "HTTP/1.0 200\r\nContent-Type:text/html;charset=%s\r\n"
-                                "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", 
-                                http_default_charset, n, id);
+                                "Content-Length:%d\r\nConnection:close\r\n\r\n", 
+                                http_default_charset, n);
                             conn->push_chunk(conn, buf, p - buf);
                             conn->push_chunk(conn, pp, n);
                             hibase->free_record((void *)pp);
@@ -1805,7 +1805,10 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
                         else start_offset = -1;
                         //public record 
                         if(templates[i].flags & TMP_IS_PUBLIC)
-                                recordid = urlnodeid;
+                        {
+                            recordid = urlnodeid;
+                            DEBUG_LOGGER(histore_logger, "public-record:%d", recordid);
+                        }
                         if(templates[i].flags & TMP_IS_LINK)
                         {
                             //link
@@ -1841,6 +1844,7 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
                                 if((id = templates[i].map[x].fieldid) >= 0 
                                         && id < FIELD_NUM_MAX )
                                 {
+                                    DEBUG_LOGGER(histore_logger, "link-field[%d]-record:%d", id, recordid);
                                     records[id].start = eblock - block;
                                     eblock += sprintf(eblock, "%s", newurl);
                                     records[id].end = eblock - block;
@@ -1911,7 +1915,11 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
                                         //fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
                                         if(templates[i].map[x].flag & REG_IS_LIST) level = 1;
                                         id=hibase->add_urlnode(hibase,nodeid,parentid,urlid,level);
-                                        if(templates[i].map[x].flag & REG_IS_UNIQE) recordid = id;
+                                        if(templates[i].map[x].flag & REG_IS_UNIQE) 
+                                        {
+                                            recordid = id;
+                                            DEBUG_LOGGER(histore_logger, "uniqe[%d]-record:%d", id, recordid);
+                                        }
                                         DEBUG_LOGGER(histore_logger,"new-urlnode:%s id:%d x:%d tnodeid:%d urlnode->parentid:%d urlid:%d level:%d", newurl, id, x, nodeid, parentid, urlid, urlnode->level);
                                         if((id = templates[i].map[x].fieldid) >= 0 
                                                 && id < FIELD_NUM_MAX )
@@ -1919,6 +1927,7 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
                                             records[id].start = eblock - block;
                                             eblock += sprintf(eblock, "%s", newurl);
                                             records[id].end = eblock - block;
+                                            DEBUG_LOGGER(histore_logger, "field[%d]-record:%d", id, recordid);
                                         }
                                     }
                                     else
@@ -1946,7 +1955,8 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
                         }
                         if((n = (eblock - block)) > 0 && recordid >= 0)
                         {
-                           hibase->update_record(hibase, urlid, recordid, records, 
+                            //fprintf(stdout, "%s::%d url:%s recid:%d urlnodeid:%d %s\r\n", __FILE__, __LINE__, newurl, recordid, urlnodeid, block);
+                           hibase->update_record(hibase, urlnodeid, recordid, records, 
                                    templates[i].tableid, block, n); 
                         }
                         if(block) free(block);

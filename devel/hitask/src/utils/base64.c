@@ -14,7 +14,7 @@ static const char base64val[128] = {
 };
 #define IS_ASCII(c) (((unsigned char) c) <= 0177 ? 1 : 0)
 #define BASE64VAL(c)    (IS_ASCII(c) ? base64val[(int) (c)] : -1)
-void base64_encode(char *out, const unsigned char *in, int inlen)
+int base64_encode(char *out, const unsigned char *in, int inlen)
 {
     const unsigned char *inp = in;
     char *outp = out;
@@ -44,6 +44,7 @@ void base64_encode(char *out, const unsigned char *in, int inlen)
         *outp++ = '=';
     }
     *outp = '\0';
+    return outp - out;
 }
 
 int base64_decode(unsigned char *out, const char *in, int inlen)

@@ -107,6 +107,8 @@
             #record-res{position:relative;height:520px;overflow:auto;}
             #record-header{position:relative;background-color:#2F5FA1;height:30px;
                 font-size:14pt;color:red;font-weight:bold;}
+            .record-title{position:relative;background-color:#2F5FA1;height:20px;
+                font-size:14pt;color:#cccccc;font-weight:bold;width:100%;text-align:center}
             #data{position:absolute;background-color:#F4FBFF;display:none;
                 border:1px solid #81BEF7;padding:0px;left:0px;top:46px;width:100%;height:100%;}
             #dns{position:absolute;background-color:#F4FBFF;display:none;
@@ -2612,12 +2614,10 @@
                 var nrecords = 0;
                 var res = null;
                 var records = null;
-                if(txt && (res = eval(txt)) != null)
+                var x = 0;
+                if(txt && (res = eval(txt)) != null && (records = res['records']) 
+                    && (nrecords = res['nrecords']) > 0)
                 {
-                    alert(res['records']);
-                    if((records = res['records']) && (nrecords = res['nrecords']) > 0)
-                {
-                    alert(nrecords);
                     var str = "<div id='record-header' onmousedown='";
                         str += "divmove(event, this)'>";
                         str += "<span class='closebutton' onclick='divremove(";
@@ -2628,8 +2628,9 @@
                         str += "<div id='record-res' >";
                     for(x in records)
                     {
-                        str += "<span>"+records['name']+":&nbsp;&nbsp;";
-                        str += "<textarea cols=76 rows=1>"+URIComponentDecode(records['data'])
+                        str += "<span class='record-title'>"+records[x]['name']+"</span><hr>";
+                        str += "<span >"
+                        str += "<textarea cols=90 rows=5 >"+base64strdecode(records[x]['data'])
                             +"</textarea><br>";    
                         str += "</span><hr>";
                     }
@@ -2642,7 +2643,7 @@
                     element = document.createElement('div');
                     element.innerHTML = str;
                     element.id = 'record-view';
-                    var divwidth = 700;
+                    var divwidth = 750;
                     var obody = document.getElementById('mainframe');
                     var xleft = parseInt(obody.offsetWidth) - divwidth;
                     var x = obody.offsetLeft +(xleft/2);
@@ -2651,7 +2652,6 @@
                     element.style.top = y+'px';
                     element.style.width = divwidth + 'px';
                     document.body.appendChild(element);
-                }
                 }
             }
             function ViewRecord(recordid)
@@ -2669,6 +2669,7 @@
                         {
                             if(xmlHttp.status == 200)
                             {
+                                //alert(xmlHttp.responseText);
                                 ViewRecords(xmlHttp.responseText);
                             }
                         }

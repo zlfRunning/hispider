@@ -1794,7 +1794,7 @@ int hibase_update_record(HIBASE *hibase, int parentid, int urlnodeid, PRES *pres
                     else 
                         record.nrecords++;
                     record.records[i].length = pres[i].end - pres[i].start;
-                    record.records[i].offset = st.st_size + (off_t)record.records[i].length;
+                    record.records[i].offset = st.st_size + (off_t)pres[i].start;
                     record.length += record.records[i].length;
                 }
             }
@@ -1822,8 +1822,7 @@ err:
 /* view record */
 int hibase_view_record(HIBASE *hibase, int recordid, int urlnodeid, char **block)
 {
-    char *p = NULL, *pp = NULL, buf[HI_BUF_SIZE], *data = NULL;
-    unsigned char *s = NULL, *es = NULL;
+    char *p = NULL, *pp = NULL, buf[HI_BUF_SIZE], *data = NULL, *s = NULL;
     int n = -1, i = 0, id = -1, tabid = 0;
     IRECORD record = {0};
     ITABLE *tab = NULL;
@@ -1838,39 +1837,36 @@ int hibase_view_record(HIBASE *hibase, int recordid, int urlnodeid, char **block
             id = urlnode.recordid;
         else goto err;
         if(pread(hibase->recordio.fd, &record,sizeof(IRECORD),(off_t)id*(off_t)sizeof(IRECORD))>0 
-                && record.length > 0 && record.nrecords > 0 && (tabid = record.tableid >= 0)
+                && record.length > 0 && record.nrecords > 0 && (tabid = record.tableid) >= 0
+                && (n = BASE64_LEN(record.length) + FIELD_NUM_MAX * FIELD_NAME_MAX * 2) > 0
                 && tabid < hibase->tableio.total && (tab = (ITABLE *)(hibase->tableio.map))
-                && tab != (void *)-1 && (p = *block = (char *)calloc(1, record.length * 3)))
+                && tab != (void *)-1 && (p =*block=(char *)calloc(1, n)))
         {
-            p += sprintf(p, "({'id':'%d', 'nrecords':'%d', records:{", id, record.nrecords);
+            p += sprintf(p, "({'id':'%d', 'nrecords':'%d', 'records':{", id, record.nrecords);
             pp = p;
             for(i = 0; i < FIELD_NUM_MAX; i++)
             {
                 if(record.records[i].length > 0)
                 {
-                    if(record.records[i].length > HI_BUF_SIZE)
+                    if(record.records[i].length >= HI_BUF_SIZE)
                     {
-                        data = (char *)calloc(1, record.records[i].length);
-                        s = (unsigned char *)data;
+                        s = data = (char *)calloc(1, record.records[i].length + 1);
                     }
                     else 
-                        s = (unsigned char *)buf;
-                    es = s + record.records[i].length;
+                        s = buf;
+                    if(buf == s) memset(s, 0, HI_BUF_SIZE);
                     p += sprintf(p, "'%d':{'name':'%s', 'data':'", i, tab[tabid].fields[i].name);
-                    if(pread(hibase->db_fd,s,record.records[i].length,record.records[i].offset)>0)
+                    if(s && pread(hibase->db_fd, s, record.records[i].length, 
+                                record.records[i].offset)>0)
                     {
-                        while(s && s < es)
-                        {
-                            if(*s > 0x8f) p += sprintf(p, "%%%02X", *s++);
-                            else *p++ = *s++;
-                        }
+                        p += base64_encode(p, (unsigned char *)s, record.records[i].length);
                     }
-                    p += sprintf(p, "'},");
+                    p += sprintf(p, "%s", "'},");
                     if(data){free(data); data = NULL;}
                 }
             }
             if(p != pp) --p;
-            p += sprintf(p, "})");
+            p += sprintf(p, "}})");
             n = p - *block;
         }
 err:
