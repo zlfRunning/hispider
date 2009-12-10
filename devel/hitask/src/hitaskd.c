@@ -82,10 +82,12 @@ static char *e_argvs[] =
 #define E_ARGV_LEVEL     18
     "speed",
 #define E_ARGV_SPEED     19
-    "page"
+    "page",
 #define E_ARGV_PAGE      20
+    "recordid"
+#define E_ARGV_RECORDID  21
 };
-#define E_ARGV_NUM       21
+#define E_ARGV_NUM       22
 static char *e_ops[]=
 {
     "host_up",
@@ -156,10 +158,12 @@ static char *e_ops[]=
 #define E_OP_PROXY_LIST         32
     "speed_limit",
 #define E_OP_SPEED_LIMIT        33
-    "node_brother"
+    "node_brother",
 #define E_OP_NODE_BROTHER       34
+    "record_view"
+#define E_OP_RECORD_VIEW        35
 };
-#define E_OP_NUM 35
+#define E_OP_NUM 36
 
 /* dns packet reader */
 int adns_packet_reader(CONN *conn, CB_DATA *buffer)
@@ -907,10 +911,10 @@ do                                                                              
             {                                                                                   \
                 memset(buf, 0, HTTP_URL_MAX);                                                   \
                 ret = ltask->get_url(ltask, urlnodes[x].urlid, buf);                            \
-                p += sprintf(p, "'%d':{'id':'%d', 'nodeid':'%d', 'level':'%d', "                \
-                        "'nchilds':'%d', 'urlid':'%d', 'url':'%s', 'status':'%d'},",            \
+                p += sprintf(p, "'%d':{'id':'%d', 'nodeid':'%d', 'level':'%d', 'nchilds':'%d'," \
+                        " 'urlid':'%d', 'recordid':'%d', 'url':'%s', 'status':'%d'},",          \
                         urlnodes[x].id, urlnodes[x].id, urlnodes[x].tnodeid, urlnodes[x].level, \
-                        urlnodes[x].nchilds, urlnodes[x].urlid, buf, ret);                      \
+                        urlnodes[x].nchilds, urlnodes[x].recordid, urlnodes[x].urlid, buf, ret);\
             }                                                                                   \
             --p;                                                                                \
             p += sprintf(p, "}");                                                               \
@@ -928,10 +932,10 @@ do                                                                              
 /*  data handler */
 int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk)
 {
-    int i = 0, id = 0, n = 0, op = -1, nodeid = -1, x = -1, fieldid = -1,
-        parentid = -1, urlid = -1, hostid = -1, tableid = -1, type = -1, 
-        flag = -1, templateid = -1, urlnodeid = -1, level = -1, count = 0, 
-        page = 1, from = 0, total = 0, ret = 0, is_purl = 0;
+    int i = 0, id = 0, n = 0, op = -1, nodeid = -1, x = -1, fieldid = -1, parentid = -1, 
+        urlid = -1, hostid = -1, tableid = -1, type = -1,  flag = -1, templateid = -1, 
+        urlnodeid = -1, recordid = -1, level = -1, count = 0, page = 1, from = 0, 
+        total = 0, ret = 0, is_purl = 0;
     char *p = NULL, *end = NULL, *name = NULL, *host = NULL, *url = NULL, *link = NULL, 
          *pattern = NULL, *map = NULL, *linkmap = NULL, *pp = NULL, 
          format[HTTP_URL_MAX], buf[HTTP_BUF_SIZE], block[HTTP_BUF_SIZE];
@@ -1024,6 +1028,9 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                                     break;
                                 case E_ARGV_URLNODEID:
                                     urlnodeid = atoi(p);
+                                    break;
+                                case E_ARGV_RECORDID:
+                                    recordid = atoi(p);
                                     break;
                                 case E_ARGV_LEVEL:
                                     level = atoi(p);
@@ -1487,7 +1494,21 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                             if(tnodes)hibase->free_tnode_childs(tnodes);
                             if(urlnodes)hibase->free_urlnodes(urlnodes);
                             goto end;
-                        }
+                        }else goto err_end;
+                        break;
+                    case E_OP_RECORD_VIEW:
+                        if((recordid > 0 || urlnodeid > 0) && (n = hibase->view_record(hibase, 
+                                        recordid, urlnodeid, &pp)) > 0)
+                        {
+                            p = buf;
+                            p += sprintf(p, "HTTP/1.0 200\r\nContent-Type:text/html;charset=%s\r\n"
+                                "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", 
+                                http_default_charset, n, id);
+                            conn->push_chunk(conn, buf, p - buf);
+                            conn->push_chunk(conn, pp, n);
+                            hibase->free_record((void *)pp);
+                            goto end;
+                        }else goto err_end;
                         break;
                     case E_OP_DNS_ADD:
                         if(host && ltask->add_dns(ltask, host) >= 0 
@@ -1746,17 +1767,18 @@ int histore_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *
 }
 
 /* histore pcre match */
-void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URLNODE *urlnode,
-        LDOCHEADER *docheader, char *content, int ncontent, char *url, char *type)
+void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TNODE *tnode, 
+        URLNODE *urlnode, LDOCHEADER *docheader, char *content, int ncontent, char *url, char *type)
 {
     char *p = NULL, *e = NULL, *pp = NULL, *epp = NULL, *s = NULL, *es = NULL, *end = NULL, 
-         *host = NULL, *path = NULL, *last = NULL, newurl[HTTP_URL_MAX];
+         *host = NULL, *path = NULL, *last = NULL, *block = NULL, *eblock = NULL,
+         newurl[HTTP_URL_MAX];
     int i = -1, j = 0, flag = 0, start_offset = 0, erroffset = 0, res[FIELD_NUM_MAX * 2], 
-        nres = 0, n = 0, count = 0, x = 0, urlid = 0, nodeid = 0, id = 0,
+        nres = 0, n = 0, count = 0, x = 0, urlid = 0 , nodeid = 0, id = 0, recordid = 0, 
         parentid = 0, start = 0, over = 0, length = 0, level = 0, urlflag = 0;
+    PRES records[FIELD_NUM_MAX], *pres = NULL;
     const char *error = NULL;
     pcre *reg = NULL;
-    PRES *pres = NULL;
 
     if(templates && ntemplates > 0 && tnode && urlnode && docheader && content 
             && ncontent > 0 && url && type)
@@ -1773,11 +1795,17 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                 while(start_offset >= 0)
                 {
                     if((count = pcre_exec(reg, NULL, content, ncontent, 
-                                    start_offset, 0, res, nres)) > 0 )
+                                    start_offset, 0, res, nres)) > 0 
+                        && (eblock = block = (char *)calloc(1, ncontent)))
                     {
+                        recordid = -1;
+                        memset(records, 0, sizeof(PRES) * FIELD_NUM_MAX);
                         if((templates[i].flags & TMP_IS_GLOBAL)) 
                             start_offset = pres[count - 1].end;
                         else start_offset = -1;
+                        //public record 
+                        if(templates[i].flags & TMP_IS_PUBLIC)
+                                recordid = urlnodeid;
                         if(templates[i].flags & TMP_IS_LINK)
                         {
                             //link
@@ -1805,11 +1833,18 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                                 else 
                                 {
                                     if((parentid = hibase->find_tnode_from_parents(hibase, 
-                                            urlnode->parentid, nodeid)) <= 0)
-                                    parentid = urlnode->id;
+                                                    urlnode->parentid, nodeid)) <= 0)
+                                        parentid = urlnode->id;
                                 }
                                 id = hibase->add_urlnode(hibase, nodeid, parentid, urlid,level);
                                 DEBUG_LOGGER(histore_logger,"new-URLNODE id:%d urlid:%d tnodeid:%d urlnode->parentid:%d url:%s level:%d", id, urlid, nodeid, parentid, newurl, level);
+                                if((id = templates[i].map[x].fieldid) >= 0 
+                                        && id < FIELD_NUM_MAX )
+                                {
+                                    records[id].start = eblock - block;
+                                    eblock += sprintf(eblock, "%s", newurl);
+                                    records[id].end = eblock - block;
+                                }
                             }
                             else
                             {
@@ -1869,14 +1904,22 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                                         else 
                                         {
                                             if((parentid = hibase->find_tnode_from_parents(hibase, 
-                                                urlnode->parentid, nodeid)) <= 0)
-                                            parentid = urlnode->id;
+                                                            urlnode->parentid, nodeid)) <= 0)
+                                                parentid = urlnode->id;
                                         }
                                         level = 0;
                                         //fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
                                         if(templates[i].map[x].flag & REG_IS_LIST) level = 1;
                                         id=hibase->add_urlnode(hibase,nodeid,parentid,urlid,level);
+                                        if(templates[i].map[x].flag & REG_IS_UNIQE) recordid = id;
                                         DEBUG_LOGGER(histore_logger,"new-urlnode:%s id:%d x:%d tnodeid:%d urlnode->parentid:%d urlid:%d level:%d", newurl, id, x, nodeid, parentid, urlid, urlnode->level);
+                                        if((id = templates[i].map[x].fieldid) >= 0 
+                                                && id < FIELD_NUM_MAX )
+                                        {
+                                            records[id].start = eblock - block;
+                                            eblock += sprintf(eblock, "%s", newurl);
+                                            records[id].end = eblock - block;
+                                        }
                                     }
                                     else
                                     {
@@ -1887,20 +1930,34 @@ void histore_data_matche(ITEMPLATE *templates, int ntemplates, TNODE *tnode, URL
                                 }
                                 else
                                 {
+                                    if((id = templates[i].map[x].fieldid) >= 0 
+                                            && id < FIELD_NUM_MAX )
+                                    {
+                                        records[id].start = eblock - block;
+                                        memcpy(eblock, content + start, length);
+                                        eblock += length;
+                                        records[id].end = eblock - block;
+                                    }
                                     //DEBUG_LOGGER(histore_logger, "%s::%d [%d][%d] %d-%d length:%d\n",
                                     //        __FILE__, __LINE__, i, j, start, over, length);
                                 }
                             }
                             //fprintf(stdout, "\n");
                         }
+                        if((n = (eblock - block)) > 0 && recordid >= 0)
+                        {
+                           hibase->update_record(hibase, urlid, recordid, records, 
+                                   templates[i].tableid, block, n); 
+                        }
+                        if(block) free(block);
                     }
                     else
                     {
                         start_offset = -1;
                         if(n == PCRE_ERROR_NOMATCH)
                         {
-                            FATAL_LOGGER(histore_logger, 
-                                    "No match result pattern[%s] url[%s]", templates[i].pattern, url);
+                            FATAL_LOGGER(histore_logger, "No match result pattern[%s] url[%s]", 
+                                    templates[i].pattern, url);
                         }
                     }
                 }
@@ -1972,7 +2029,7 @@ void histore_task_handler(void *arg)
                                 "content_len:%d nurl:%d ntype:%d ncentent:%d", urlnode.urlid, 
                                 urlnode.tnodeid, len, docheader->nurl, docheader->ntype, 
                                 docheader->ncontent);
-                        histore_data_matche(templates, count, &tnode, &urlnode,
+                        histore_data_matche(urlnodeid, templates, count, &tnode, &urlnode,
                                 docheader, content, ndata, url, type);
                         if(templates)hibase->free_templates(templates);
                         templates = NULL;

@@ -24,6 +24,7 @@ extern "C" {
 #define URI_INCRE_NUM           10000
 #define URLMAP_INCRE_NUM        10000
 #define URLNODE_INCRE_NUM       10000
+#define RECORD_INCRE_NUM        10000
 #define TNODE_CHILDS_MAX        10000
 #define TAB_STATUS_ERR          -1
 #define TAB_STATUS_INIT         0
@@ -97,6 +98,7 @@ typedef struct _URLNODE
     int childs_rootid;
     int tnode_mmid;
     int mmid;
+    int recordid;
 }URLNODE;
 #define REG_IS_URL               0x01
 #define REG_IS_FILE              0x02
@@ -131,6 +133,21 @@ typedef struct _PURL
     char *sfrom;
     char *sto;
 }PURL;
+/* record */
+typedef struct _IREC
+{
+    off_t offset;
+    int length;
+}IREC;
+typedef struct _IRECORD
+{
+    int urlid;
+    int parentid;
+    int length;
+    int nrecords;
+    int tableid;
+    IREC records[FIELD_NUM_MAX];
+}IRECORD;
 #define TMP_IS_PUBLIC       0x01
 #define TMP_IS_GLOBAL       0x02
 #define TMP_IS_IGNORECASE   0x04
@@ -162,6 +179,9 @@ typedef struct _ISTATE
     int urlnodeio_total;
     int urlnode_task_current;
     int uri_total;
+    int recordio_current;
+    int recordio_left;
+    int recordio_total;
 }ISTATE;
 /* hibase io/map */
 typedef struct _HIO
@@ -194,6 +214,8 @@ typedef struct _HIBASE
     HIO     templateio;
     void    *qtemplate;
     int     uri_fd;
+    HIO     recordio;
+    int     db_fd;
     void    *mmtree;
     HIO     urlnodeio;
     void    *qurlnode;
@@ -256,6 +278,11 @@ typedef struct _HIBASE
     int     (*pop_urlnode)(struct _HIBASE *, URLNODE *urlnode);
     int     (*push_task_urlnodeid)(struct _HIBASE *, int urlnodeid);
     int     (*pop_task_urlnodeid)(struct _HIBASE *);
+    int     (*update_record)(struct _HIBASE *, int parentid, int urlid, 
+            PRES *pres, int tableid, char *block, int nblock);
+    int     (*get_record)(struct _HIBASE *, int recordid, int urlid);
+    int     (*view_record)(struct _HIBASE *, int recordid, int urlnodeid, char **block);
+    void    (*free_record)(void *block);
     void 	(*clean)(struct _HIBASE **);	
 }HIBASE;
 /* hibase initialize */

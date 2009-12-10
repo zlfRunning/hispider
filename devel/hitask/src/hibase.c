@@ -26,6 +26,8 @@
 #define  HIBASE_QWAIT_NAME          "hibase.qwait"
 #define  HIBASE_ISTATE_NAME         "hibase.istate"
 #define  HIBASE_LOG_NAME            "hibase.log"
+#define  HIBASE_RECORD_NAME         "hibase.record"
+#define  HIBASE_DB_NAME             "hibase.db"
 #define INCRE_STATE(hibase, io, name) (hibase->istate->io##_##name = ++(hibase->io.name))
 #define DECRE_STATE(hibase, io, name) (hibase->istate->io##_##name = --(hibase->io.name))
 #define UPDATE_STATE(hibase, io)                                        \
@@ -237,6 +239,15 @@ int hibase_set_basedir(HIBASE *hibase, char *dir)
         }
         sprintf(path, "%s%s", hibase->basedir, HIBASE_MMTREE_NAME);
         hibase->mmtree = mmtree_init(path);
+        sprintf(path, "%s%s", hibase->basedir, HIBASE_RECORD_NAME);
+        p = path;
+        HIO_INIT(hibase->recordio, p, st, IRECORD, 0, RECORD_INCRE_NUM);
+        RESUME_STATE(hibase, recordio);
+        sprintf(path, "%s%s", hibase->basedir, HIBASE_DB_NAME);
+        if((hibase->db_fd = open(path, O_CREAT|O_RDWR, 0644))  <= 0)
+        {
+            _EXIT_("open %s failed, %s\n", path, strerror(errno));
+        }
     }
     return -1;
 }
@@ -1734,6 +1745,146 @@ int hibase_pop_task_urlnodeid(HIBASE *hibase)
     return urlnodeid;
 }
 
+/* update record */
+int hibase_update_record(HIBASE *hibase, int parentid, int urlnodeid, PRES *pres, 
+        int tableid, char *block, int nblock)
+{
+    int id = -1, i = 0, n = 0;
+    struct stat st = {0};
+    IRECORD record = {0};
+    URLNODE urlnode = {0};
+    off_t offset  = 0;
+
+    if(hibase && ID_IS_VALID(hibase, urlnodeio, urlnodeid) && pres && block && nblock > 0)
+    {
+        MUTEX_LOCK(hibase->mutex);
+        offset = (off_t)urlnodeid * (off_t)sizeof(URLNODE);
+        if(pread(hibase->urlnodeio.fd, &urlnode, sizeof(URLNODE), offset) <= 0) goto err;
+        if((id = urlnode.recordid) <= 0)
+        {
+
+            if(hibase->recordio.left == 0)
+            {
+                HIO_INCRE(hibase->recordio, IRECORD, RECORD_INCRE_NUM);
+                UPDATE_STATE(hibase, recordio);
+            }
+            else
+            {
+                id = ++(hibase->recordio.current);
+                UPDATE_STATE(hibase, recordio);
+            }
+        }
+        else
+        {
+            offset = (off_t)id * (off_t)sizeof(IRECORD); 
+            if(pread(hibase->recordio.fd, &record, sizeof(IRECORD), offset) < 0) goto err;
+        }
+        //write block
+        if(fstat(hibase->db_fd, &st) == 0 && pwrite(hibase->db_fd, block, nblock, st.st_size) > 0)
+        {
+            //rebuild record
+            n = 0;
+            for(i = 0; i < FIELD_NUM_MAX; i++)
+            {
+                if(pres[i].end > 0)
+                {
+                    n++;
+                    if(record.records[i].length > 0)
+                        record.length -= record.records[i].length;
+                    else 
+                        record.nrecords++;
+                    record.records[i].length = pres[i].end - pres[i].start;
+                    record.records[i].offset = st.st_size + (off_t)record.records[i].length;
+                    record.length += record.records[i].length;
+                }
+            }
+            if(n > 0)
+            {
+                record.parentid = parentid;
+                record.tableid = tableid;
+                offset = (off_t)id * (off_t)sizeof(IRECORD);
+                pwrite(hibase->recordio.fd, &record, sizeof(IRECORD), offset);
+            }
+            //wirte back uri
+            if(urlnode.recordid <= 0)
+            {
+                urlnode.recordid = id;
+                pwrite(hibase->urlnodeio.fd, &urlnode, sizeof(URLNODE), 
+                        (off_t)urlnodeid * (off_t)sizeof(URLNODE));
+            }
+        }
+err:
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return id;
+}
+
+/* view record */
+int hibase_view_record(HIBASE *hibase, int recordid, int urlnodeid, char **block)
+{
+    char *p = NULL, *pp = NULL, buf[HI_BUF_SIZE], *data = NULL;
+    unsigned char *s = NULL, *es = NULL;
+    int n = -1, i = 0, id = -1, tabid = 0;
+    IRECORD record = {0};
+    ITABLE *tab = NULL;
+    URLNODE urlnode = {0};
+
+    if(hibase && block && (recordid > 0 || urlnodeid > 0))
+    {
+        MUTEX_LOCK(hibase->mutex);
+        if(recordid >= 0) id = recordid;
+        else if(urlnodeid >= 0 && pread(hibase->urlnodeio.fd, &urlnode, sizeof(URLNODE), 
+                    (off_t)urlnodeid * (off_t)sizeof(URLNODE)) && urlnode.recordid > 0) 
+            id = urlnode.recordid;
+        else goto err;
+        if(pread(hibase->recordio.fd, &record,sizeof(IRECORD),(off_t)id*(off_t)sizeof(IRECORD))>0 
+                && record.length > 0 && record.nrecords > 0 && (tabid = record.tableid >= 0)
+                && tabid < hibase->tableio.total && (tab = (ITABLE *)(hibase->tableio.map))
+                && tab != (void *)-1 && (p = *block = (char *)calloc(1, record.length * 3)))
+        {
+            p += sprintf(p, "({'id':'%d', 'nrecords':'%d', records:{", id, record.nrecords);
+            pp = p;
+            for(i = 0; i < FIELD_NUM_MAX; i++)
+            {
+                if(record.records[i].length > 0)
+                {
+                    if(record.records[i].length > HI_BUF_SIZE)
+                    {
+                        data = (char *)calloc(1, record.records[i].length);
+                        s = (unsigned char *)data;
+                    }
+                    else 
+                        s = (unsigned char *)buf;
+                    es = s + record.records[i].length;
+                    p += sprintf(p, "'%d':{'name':'%s', 'data':'", i, tab[tabid].fields[i].name);
+                    if(pread(hibase->db_fd,s,record.records[i].length,record.records[i].offset)>0)
+                    {
+                        while(s && s < es)
+                        {
+                            if(*s > 0x8f) p += sprintf(p, "%%%02X", *s++);
+                            else *p++ = *s++;
+                        }
+                    }
+                    p += sprintf(p, "'},");
+                    if(data){free(data); data = NULL;}
+                }
+            }
+            if(p != pp) --p;
+            p += sprintf(p, "})");
+            n = p - *block;
+        }
+err:
+        MUTEX_UNLOCK(hibase->mutex);
+    }
+    return n;
+}
+
+/* free record */
+void hibase_free_record(void *record)
+{
+    if(record) free(record);
+}
+
 /* clean */
 void hibase_clean(HIBASE **phibase)
 {
@@ -1746,7 +1897,9 @@ void hibase_clean(HIBASE **phibase)
         HIO_CLEAN((*phibase)->templateio);
         HIO_CLEAN((*phibase)->tnodeio);
         HIO_CLEAN((*phibase)->urlnodeio);
+        HIO_CLEAN((*phibase)->recordio);
         if((*phibase)->uri_fd > 0) close((*phibase)->uri_fd);
+        if((*phibase)->db_fd > 0) close((*phibase)->db_fd);
         //HIO_CLEAN((*phibase)->uriio);
         FQUEUE_CLEAN((*phibase)->qtnode);
         FQUEUE_CLEAN((*phibase)->qtemplate);
@@ -1818,6 +1971,9 @@ HIBASE * hibase_init()
         hibase->pop_urlnode         = hibase_pop_urlnode;
         hibase->push_task_urlnodeid = hibase_push_task_urlnodeid;
         hibase->pop_task_urlnodeid  = hibase_pop_task_urlnodeid;
+        hibase->update_record       = hibase_update_record;
+        hibase->view_record         = hibase_view_record;
+        hibase->free_record         = hibase_free_record;
         hibase->clean               = hibase_clean;
     }
     return hibase;

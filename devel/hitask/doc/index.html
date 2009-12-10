@@ -102,6 +102,11 @@
             #urllist-form{position:absolute;width:720px;height:150px;background-color:#ffffff;
                 border:1px solid #81BEF7;padding-top:10px;padding-left:6px;font-size:12pt;
                 color:#2F5FA1;overflow:auto;display:none;}
+            #record-view{position:absolute;background-color:#D0E9F7; border:2px solid #000000;
+                padding:0px;height:550px;font-size:12pt;color:#2F5FA1;}
+            #record-res{position:relative;height:520px;overflow:auto;}
+            #record-header{position:relative;background-color:#2F5FA1;height:30px;
+                font-size:14pt;color:red;font-weight:bold;}
             #data{position:absolute;background-color:#F4FBFF;display:none;
                 border:1px solid #81BEF7;padding:0px;left:0px;top:46px;width:100%;height:100%;}
             #dns{position:absolute;background-color:#F4FBFF;display:none;
@@ -128,6 +133,7 @@
             .eadd{color:#5FB404;font-size:13pt;font-weight:bolder;cursor:pointer;}
             .eupdate{color:#FF8000;font-size:13pt;font-weight:bolder;cursor:pointer;}
             .edelete{color:#B4045F;font-size:13pt;font-weight:bolder;cursor:pointer;}
+            .eview{color:#0000ff;font-size:13pt;font-weight:bolder;cursor:pointer;}
             .icon{display:inline;color:#FF8000;font-size:13pt;text-align:center;cursor:pointer;}
             .nchilds{display:inline;color:red;font-size:12pt;}
         </style>
@@ -2601,6 +2607,75 @@
                     xmlHttp.send(argv);
                 }
             }
+            function ViewRecords(txt)
+            {
+                var nrecords = 0;
+                var res = null;
+                var records = null;
+                if(txt && (res = eval(txt)) != null)
+                {
+                    alert(res['records']);
+                    if((records = res['records']) && (nrecords = res['nrecords']) > 0)
+                {
+                    alert(nrecords);
+                    var str = "<div id='record-header' onmousedown='";
+                        str += "divmove(event, this)'>";
+                        str += "<span class='closebutton' onclick='divremove(";
+                        str += "this.parentNode.parentNode)' >X</span>&nbsp;&nbsp;";
+                        str += "<span class='closetxt' onclick='divremove(";
+                        str += "this.parentNode.parentNode)' >关闭</span>";
+                        str += "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;结果:"+nrecords+"</div>";
+                        str += "<div id='record-res' >";
+                    for(x in records)
+                    {
+                        str += "<span>"+records['name']+":&nbsp;&nbsp;";
+                        str += "<textarea cols=76 rows=1>"+URIComponentDecode(records['data'])
+                            +"</textarea><br>";    
+                        str += "</span><hr>";
+                    }
+                    str += "</div>";
+                    var element = null;
+                    if((element = document.getElementById('record-view')))
+                    {
+                        document.body.removeChild(element);
+                    }
+                    element = document.createElement('div');
+                    element.innerHTML = str;
+                    element.id = 'record-view';
+                    var divwidth = 700;
+                    var obody = document.getElementById('mainframe');
+                    var xleft = parseInt(obody.offsetWidth) - divwidth;
+                    var x = obody.offsetLeft +(xleft/2);
+                    var y = 20 + document.body.scrollTop;
+                    element.style.left = x+'px';
+                    element.style.top = y+'px';
+                    element.style.width = divwidth + 'px';
+                    document.body.appendChild(element);
+                }
+                }
+            }
+            function ViewRecord(recordid)
+            {
+                var xmlHttp = null; 
+                if(recordid > 0 && (xmlHttp = CreateXMLHTTP()) != null)
+                {
+                    var argv = "op=record_view&recordid="+recordid;
+                    xmlHttp.open('POST', '/', true);
+                    xmlHttp.setRequestHeader("Content-Length", argv.length);
+                    xmlHttp.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                    xmlHttp.onreadystatechange=function()
+                    {
+                        if(xmlHttp.readyState==4)
+                        {
+                            if(xmlHttp.status == 200)
+                            {
+                                ViewRecords(xmlHttp.responseText);
+                            }
+                        }
+                    }
+                    xmlHttp.send(argv);
+                }
+            }
 
             function ShowNodeURLs(txt, page)
             {
@@ -2614,6 +2689,7 @@
                     var tname = "";
                     var nchilds = 0;
                     var urlnodeid = -1;
+                    var recordid = -1;
                     var ochilds = null;
                     var i = 0, x = 1;
                     if((ochilds = form['childs']))
@@ -2693,6 +2769,7 @@
                         nodeid = urlitem['nodeid'];
                         urlid = urlitem['urlid'];
                         urlnodeid = urlitem['id'];
+                        recordid = urlitem['recordid'];
                         css = 'url-li';
                         if(urlitem['status'] < 0) css = 'url-li-warn';
                         htmlstr += "<li class='"+css+"' onmouseout=\"outDiv(this,'"+css+"')\" ";
@@ -2713,6 +2790,12 @@
                         if(urlitem['level'] == 1) htmlstr += "selected=true";
                         htmlstr += ">紧急</option>";
                         htmlstr += "</select>";
+                        if(recordid > 0)
+                        {
+                            htmlstr += "&nbsp;&nbsp;&nbsp;";
+                            htmlstr += "<span class='eview' title='view' ";
+                            htmlstr += "onclick=\"ViewRecord("+recordid+")\">☜ </span>";
+                        }
                         if(urllist['ntnodes'] > 0)
                         {
                             htmlstr += "&nbsp;&nbsp;&nbsp;";
