@@ -1793,7 +1793,7 @@
                             }
                             if(url)
                             {
-                                str += "URL:<input type=text size=64 value='"+url+"'><br>";
+                                str += "URL:<input type=text size=48 value='"+url+"'><br>";
                             }
                             str += "</span><hr>";
                         }
@@ -1838,7 +1838,7 @@
                             }
                             if(url)
                             {
-                                block += "URL:<input type=text size=64 value='"+url+"'><br>";
+                                block += "URL:<input type=text size=48 value='"+url+"'><br>";
                             }
                             block += "</span><hr>";
                         }
@@ -2665,7 +2665,7 @@
                     {
                         str += "<span class='record-title'>"+records[x]['name']+"</span><hr>";
                         str += "<span >"
-                        str += "<textarea cols=90 rows=5 >"+base64strdecode(records[x]['data'])
+                        str += "<textarea cols=90 rows=4 >"+base64strdecode(records[x]['data'])
                             +"</textarea><br>";    
                         str += "</span><hr>";
                     }
@@ -2763,18 +2763,18 @@
                     var level = 0;
                     var url = "";
                     var type = "list";
+                    level = form['level'].value;
+                    nodeid = urllist['nodeid'];
+                    from = parseInt(page) - 10;
+                    if(from < 1) from = 1;
+                    to = from + 20;
+                    if(to > urllist['pages']) to = parseInt(urllist['pages']) + 1;
+                    phtmlstr += "<li class='urlli-header'> URL总数："+urllist['total'];
                     if(urllist['pages'] > 1)
                     {
-                        level = form['level'].value;
-                        nodeid = urllist['nodeid'];
-                        from = parseInt(page) - 10;
-                        if(from < 1) from = 1;
-                        to = from + 20;
-                        if(to > urllist['pages']) to = parseInt(urllist['pages']) + 1;
-                        phtmlstr += "<li class='urlli-header'> URL总数：";
-                        phtmlstr += urllist['total']+" 共"+urllist['pages']+"页";
+                        phtmlstr += " 共"+urllist['pages']+"页";
                         phtmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
-                        if(urllist['is_childs']) type = "childs";
+                        if(urllist['is_childs'] > 0) type = "childs";
                         else type = "list";
                         if(from > 20)
                         {
@@ -2802,9 +2802,10 @@
                             phtmlstr += "onclick=\"ListURLs('"+type+"', "+nodeid +",'"
                                 +level+"','"+i+"');\">"+i+"</a>";
                         }
-                        phtmlstr += "</li>";
                     }
+                    phtmlstr += "</li>";
                     if(phtmlstr != "")htmlstr += phtmlstr + "<hr>";
+                    //alert(phtmlstr);
                     i = 0;
                     for(x in urllist['urlnodes'])
                     {
@@ -3317,7 +3318,7 @@
                 <input type='button' value='Config Template' onclick="ConfigTemplate(this.form)">
                 <hr>
                 <div class='template-bar'>用于拼接隐藏的链接和Ajax内容块地址</div>
-                URL规则:<input type=text name='link' value='' size=64>
+                URL规则:<input type=text name='link' value='' size=48>
                 &nbsp;&nbsp;&nbsp;&nbsp;
                 <input type='button' value='Test Template & Link' onclick="TestTemplate(this.form)">
                 &nbsp;&nbsp;&nbsp;&nbsp;
@@ -3371,7 +3372,7 @@
     <option value='1' >紧急</option>
     </select>
     &nbsp;&nbsp;
-    <input type=text name=url size=64 value='http://' >
+    <input type=text name=url size=48 value='http://' >
     &nbsp;&nbsp;
     <input type=submit name='submit' value='Add'>
     </form>
@@ -3383,7 +3384,7 @@
     <div id='dns-header'>
     <form name='dns-add-form' class='listform' action='javascript:void(0)' 
             onsubmit='return AddDNS(this)'>
-    添加DNS:<input type=text name='host' size=64 value='' >
+    添加DNS:<input type=text name='host' size=48 value='' >
     <input type=submit value='ok'>
     </form>
     </div>
@@ -3392,7 +3393,7 @@
     <div id='proxy'>
     <div id='proxy-header'>
     <form name='proxy-add-form' action='javascript:void(0)' onsubmit='return AddProxy(this)'>
-    添加代理:<input type=text name='host' size=64 value='' >
+    添加代理:<input type=text name='host' size=48 value='' >
     <input type=submit value='ok'>
     </form>
     </div>
@@ -3485,7 +3486,7 @@
             <span class='closebutton' onclick="CloseThis(this)">x</span>
             <hr>
             &nbsp;&nbsp;
-            URL:<input type=text name=url size=64 value='http://' >
+            URL:<input type=text name=url size=48 value='http://' >
             &nbsp;&nbsp;
             <input type=submit name='submit' value='Add'><br>
             <hr>

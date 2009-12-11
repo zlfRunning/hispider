@@ -22,9 +22,13 @@
 #include "tm.h"
 #include "url.h"
 #include "zstream.h"
+#include "base64.h"
+#include "htmlbase64.h"
 #define PROXY_TIMEOUT 1000000
 static char *http_default_charset = "UTF-8";
 static char *httpd_home = NULL;
+static char *httpd_index_html_code = "";
+static int  nhttpd_index_html_code = 0;
 static SBASE *sbase = NULL;
 static SERVICE *hitaskd = NULL, *histore = NULL, *adns = NULL;
 static dictionary *dict = NULL;
@@ -784,7 +788,19 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
         }
         if(http_req.reqid == HTTP_GET)
         {
-            if(httpd_home)
+            if(httpd_index_html_code && nhttpd_index_html_code > 0)
+            {
+                p = buf;
+                p += sprintf(p, "HTTP/1.0 200 OK\r\nContent-Length:%d\r\n"
+                        "Content-Type: text/html;charset=%s\r\n",
+                        nhttpd_index_html_code, http_default_charset);
+                if((n = http_req.headers[HEAD_GEN_CONNECTION]) > 0)
+                    p += sprintf(p, "Connection: %s\r\n", http_req.hlines + n);
+                p += sprintf(p, "\r\n");
+                conn->push_chunk(conn, buf, (p - buf));
+                return conn->push_chunk(conn, httpd_index_html_code, nhttpd_index_html_code);
+            }
+            else if(httpd_home)
             {
                 p = file;
                 if(http_req.path[0] != '/')
@@ -2209,6 +2225,13 @@ int sbase_initialize(SBASE *sbase, char *conf)
     http_page_num = iniparser_getint(dict, "HITASKD:http_page_num", 100);
     /* httpd_home */
     httpd_home = iniparser_getstr(dict, "HITASKD:httpd_home");
+    /* decode html base64 */
+    if(html_code_base64 && (n = strlen(html_code_base64)) > 0 
+            && (httpd_index_html_code = (char *)calloc(1, n+1)))
+    {
+        nhttpd_index_html_code = base64_decode((unsigned char *)httpd_index_html_code, 
+                (char *)html_code_base64, n);
+    }
     /* link  task table */
     if((ltask = ltask_init()))
     {
