@@ -1564,7 +1564,7 @@ int hibase_find_tnode_from_parents(HIBASE *hibase, int parentid, int tnodeid)
 }
 
 /* get urlnode childs */
-int hibase_get_urlnode_childs(HIBASE *hibase, int urlnodeid, URLNODE **childs, 
+int hibase_get_urlnode_childs(HIBASE *hibase, int *ppid, int urlnodeid, URLNODE **childs, 
         int *total, int from, int count)
 {
     int n = -1, x = 0, i = 0, urlid = 0, rootid = 0, id = 0, to = 0;
@@ -1579,6 +1579,7 @@ int hibase_get_urlnode_childs(HIBASE *hibase, int urlnodeid, URLNODE **childs,
             && (*total = urlnode.nchilds) > 0 && from >= 0 && from < *total 
             && (rootid = urlnode.childs_rootid) > 0)
         {
+            *ppid = urlnode.parentid;
             DEBUG_LOGGER(hibase->logger, "Ready for reading urlnode[%d]->childs[%d] from:%d ", urlnodeid, urlnode.nchilds, from);
             to = from + count;
             if(to > *total) to = *total;
@@ -1762,10 +1763,11 @@ int hibase_pop_task_urlnodeid(HIBASE *hibase)
 int hibase_update_record(HIBASE *hibase, int parentid, int urlnodeid, PRES *pres, 
         int tableid, char *block, int nblock)
 {
-    int id = -1, i = 0, n = 0;
+    int id = -1, i = 0, n = 0, pid = 0;
+    URLNODE urlnode = {0}, parent = {0};
+    IRECORD record = {0}, precord = {0};
+    TNODE *tnode = NULL;
     struct stat st = {0};
-    IRECORD record = {0};
-    URLNODE urlnode = {0};
     off_t offset  = 0;
 
     if(hibase && ID_IS_VALID(hibase, urlnodeio, urlnodeid) && pres && block && nblock > 0)
@@ -1775,7 +1777,6 @@ int hibase_update_record(HIBASE *hibase, int parentid, int urlnodeid, PRES *pres
         if(pread(hibase->urlnodeio.fd, &urlnode, sizeof(URLNODE), offset) <= 0) goto err;
         if((id = urlnode.recordid) <= 0)
         {
-
             if(hibase->recordio.left == 0)
             {
                 HIO_INCRE(hibase->recordio, IRECORD, RECORD_INCRE_NUM);
@@ -1809,6 +1810,35 @@ int hibase_update_record(HIBASE *hibase, int parentid, int urlnodeid, PRES *pres
                     record.records[i].length = pres[i].end - pres[i].start;
                     record.records[i].offset = st.st_size + (off_t)pres[i].start;
                     record.length += record.records[i].length;
+                }
+            }
+            //parent data
+            if(urlnode.tnodeid > 0 && urlnode.tnodeid < hibase->tnodeio.total
+                    && (tnode = HIO_MAP(hibase->tnodeio, TNODE)) 
+                    && tnode[urlnode.tnodeid].nchilds <=  0)
+            {
+                pid = parentid;
+                while(pid > 0)
+                {
+                    memset(&parent, 0, sizeof(URLNODE));
+                    memset(&precord, 0, sizeof(IRECORD));
+                    offset = (off_t)pid * (off_t)sizeof(URLNODE);
+                    if(pread(hibase->urlnodeio.fd, &parent, sizeof(URLNODE), offset) <= 0) break;
+                    pid = parent.parentid;
+                    offset = (off_t)parent.recordid * (off_t)sizeof(URLNODE);
+                    if(parent.recordid > 0 && pread(hibase->recordio.fd, 
+                                &precord, sizeof(IRECORD), offset)>0 && precord.length > 0)
+                    {
+                        for(i = 0; i < FIELD_NUM_MAX; i++)
+                        {
+                            if(precord.records[i].length > 0 && record.records[i].length <= 0)
+                            {
+                                record.records[i].length = precord.records[i].length;
+                                record.records[i].offset = precord.records[i].offset;
+                                record.length += precord.records[i].length;
+                            }
+                        }
+                    }
                 }
             }
             if(n > 0)
