@@ -1,0 +1,59 @@
+#!/bin/sh
+#
+# HITASKD:
+#
+# chkconfig:	2345 90 70
+# description:  HITASKD
+#
+#
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+#[ -r /etc/sysconfig/hitaskd ] && . /etc/sysconfig/hitaskd
+HITASKDARGS=" -c /usr/local/etc/hitaskd.ini > /tmp/hitaskd.log 2>&1 "
+
+start() 
+{
+        echo -n $"Starting hitaskd: "
+        daemon /usr/local/bin/hitaskd $HITASKDARGS
+
+	touch /var/lock/subsys/hitaskd
+        echo
+}
+
+stop() 
+{
+        echo -n $"Shutting down hitaskd: "
+	killproc hitaskd
+
+	rm -f  /var/lock/subsys/hitaskd
+        echo
+}
+
+[ -f /usr/local/bin/hitaskd ] || exit 0
+
+# See how we were called.
+case "$1" in
+  start)
+	start
+        ;;
+  stop)
+	stop
+        ;;
+  restart|reload)
+	stop
+	start
+	;;
+  condrestart)
+	[ -e /var/lock/subsys/hitaskd ] && (stop; start)
+	;;
+  status)
+  	status hidd
+	;;
+  *)
+        echo $"Usage: $0 {start|stop|restart|reload|condrestart}"
+        exit 1
+esac
+
+exit 0
