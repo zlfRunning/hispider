@@ -2762,6 +2762,7 @@
                     var phtmlstr = "";
                     var level = 0;
                     var url = "";
+                    var ppid = 0;
                     var type = "list";
                     level = form['level'].value;
                     nodeid = urllist['nodeid'];
@@ -2769,13 +2770,19 @@
                     if(from < 1) from = 1;
                     to = from + 20;
                     if(to > urllist['pages']) to = parseInt(urllist['pages']) + 1;
-                    phtmlstr += "<li class='urlli-header'> URL总数："+urllist['total'];
+                    phtmlstr += "<li class='urlli-header'> ";
+                    if(urllist['is_childs'] > 0) type = "childs";
+                    else type = "list";
+                    if((ppid = urllist['ppid']) > 0) 
+                    {
+                        phtmlstr += "[<a href='javascript:;' class='eadd' onclick=\"ListURLs('"
+                            +type+"',"+ppid+", "+level+", 1);\">上一层</a>]&nbsp;&nbsp;";
+                    }
+                    phtmlstr += "URL总数："+urllist['total'];
                     if(urllist['pages'] > 1)
                     {
                         phtmlstr += " 共"+urllist['pages']+"页";
                         phtmlstr += "&nbsp;&nbsp;&nbsp;&nbsp;";
-                        if(urllist['is_childs'] > 0) type = "childs";
-                        else type = "list";
                         if(from > 20)
                         {
                             phtmlstr += "<a class='url-li-page' href='javascript:;' ";

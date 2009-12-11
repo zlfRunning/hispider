@@ -1828,8 +1828,6 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
                             recordid = urlnodeid;
                             DEBUG_LOGGER(histore_logger, "public-record:%d", recordid);
                         }
-                        /*
-                        */
                         if(templates[i].flags & TMP_IS_LINK)
                         {
                             //link
