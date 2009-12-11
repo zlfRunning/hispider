@@ -11,7 +11,7 @@
 . /etc/rc.d/init.d/functions
 
 #[ -r /etc/sysconfig/hitaskd ] && . /etc/sysconfig/hitaskd
-HITASKDARGS=" -c /usr/local/etc/hitaskd.ini > /tmp/hitaskd.log 2>&1 "
+HITASKDARGS=" -d -c /usr/local/etc/hitaskd.ini > /tmp/hitaskd.log 2>&1 "
 
 start() 
 {

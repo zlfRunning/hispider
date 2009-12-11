@@ -1,37 +1,37 @@
 #!/bin/sh
 #
-# HITASKD:
+# HITASK:
 #
 # chkconfig:	2345 90 70
-# description:  HITASKD
+# description:  HITASK
 #
 #
 
 # Source function library.
 . /etc/rc.d/init.d/functions
 
-#[ -r /etc/sysconfig/hitaskd ] && . /etc/sysconfig/hitaskd
-HITASKDARGS=" -c /usr/local/etc/hitaskd.ini > /tmp/hitaskd.log 2>&1 "
+#[ -r /etc/sysconfig/hitask ] && . /etc/sysconfig/hitask
+HITASKARGS=" -d -c /usr/local/etc/hitask.ini > /tmp/hitask.log 2>&1 "
 
 start() 
 {
-        echo -n $"Starting hitaskd: "
-        daemon /usr/local/bin/hitaskd $HITASKDARGS
+        echo -n $"Starting hitask: "
+        daemon /usr/local/bin/hitask $HITASKARGS
 
-	touch /var/lock/subsys/hitaskd
+	touch /var/lock/subsys/hitask
         echo
 }
 
 stop() 
 {
-        echo -n $"Shutting down hitaskd: "
-	killproc hitaskd
+        echo -n $"Shutting down hitask: "
+	killproc hitask
 
-	rm -f  /var/lock/subsys/hitaskd
+	rm -f  /var/lock/subsys/hitask
         echo
 }
 
-[ -f /usr/local/bin/hitaskd ] || exit 0
+[ -f /usr/local/bin/hitask ] || exit 0
 
 # See how we were called.
 case "$1" in
@@ -46,7 +46,7 @@ case "$1" in
 	start
 	;;
   condrestart)
-	[ -e /var/lock/subsys/hitaskd ] && (stop; start)
+	[ -e /var/lock/subsys/hitask ] && (stop; start)
 	;;
   status)
   	status hidd
