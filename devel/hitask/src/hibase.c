@@ -1338,9 +1338,19 @@ int hibase_add_urlnode(HIBASE *hibase, int tnodeid, int parentid, int urlid, int
             && ID_IS_VALID2(hibase, urlnodeio, parentid) && urlid >= 0) 
     {
         MUTEX_LOCK(hibase->mutex);
+        //rebuild parent
+        /*
+        while(pid > 0 && pread(hibase->urlnodeio.fd, &parent, sizeof(URLNODE), 
+                    (off_t)sizeof(URLNODE) * (off_t) pid) > 0)
+        {
+            pid = parent.parentid;
+            if(parent.tnodeid == tnodeid) break;
+        }
+        if(pid == 0) pid = parentid;
+        */
         offset = (off_t)sizeof(URLNODE) * (off_t) parentid;
         if(pread(hibase->urlnodeio.fd, &parent, sizeof(URLNODE), offset) > 0
-            && (tnode = HIO_MAP(hibase->tnodeio, TNODE))) 
+                    && (tnode = HIO_MAP(hibase->tnodeio, TNODE)))
         {
             //fprintf(stdout, "%s::%d urlid:%d parent_root:%d tnode_root:%d\n", __FILE__, __LINE__, urlid, parent.childs_rootid, tnode[tnodeid].urlnodes_rootid);
             //check urlid exists 
@@ -1812,12 +1822,34 @@ int hibase_update_record(HIBASE *hibase, int parentid, int urlnodeid, PRES *pres
                     record.length += record.records[i].length;
                 }
             }
+            //fix list's parent
+            memset(&parent, 0, sizeof(URLNODE));
+            pid = parentid;
+            if(pid > 0 && pread(hibase->urlnodeio.fd, &parent, sizeof(URLNODE), 
+                    (off_t)pid * (off_t)sizeof(URLNODE)) > 0 
+                    && parent.tnodeid == urlnode.tnodeid)
+            {
+                offset = (off_t)parent.recordid * (off_t)sizeof(URLNODE);
+                if(parent.recordid > 0 && pread(hibase->recordio.fd, 
+                            &precord, sizeof(IRECORD), offset)>0 && precord.length > 0)
+                {
+                    for(i = 0; i < FIELD_NUM_MAX; i++)
+                    {
+                        if(precord.records[i].length > 0 && record.records[i].length <= 0)
+                        {
+                            record.records[i].length = precord.records[i].length;
+                            record.records[i].offset = precord.records[i].offset;
+                            record.length += precord.records[i].length;
+                        }
+                    }
+                }
+                pid = urlnode.parentid;
+            }
             //parent data
             if(urlnode.tnodeid > 0 && urlnode.tnodeid < hibase->tnodeio.total
                     && (tnode = HIO_MAP(hibase->tnodeio, TNODE)) 
                     && tnode[urlnode.tnodeid].nchilds <=  0)
             {
-                pid = parentid;
                 while(pid > 0)
                 {
                     memset(&parent, 0, sizeof(URLNODE));
