@@ -1802,15 +1802,18 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
                     {
                         recordid = -1;
                         memset(records, 0, sizeof(PRES) * FIELD_NUM_MAX);
+                        DEBUG_LOGGER(histore_logger, "Matched url:%s flags:%d res count:%d nfields:%d", url, templates[i].flags, count, templates[i].nfields);
                         if((templates[i].flags & TMP_IS_GLOBAL)) 
                             start_offset = pres[count - 1].end;
                         else start_offset = -1;
                         //public record 
-                        if(templates[i].flags & TMP_IS_PUBLIC)
+                        if(!(templates[i].flags & (TMP_IS_GLOBAL|TMP_IS_LINK)))
                         {
                             recordid = urlnodeid;
                             DEBUG_LOGGER(histore_logger, "public-record:%d", recordid);
                         }
+                        /*
+                        */
                         if(templates[i].flags & TMP_IS_LINK)
                         {
                             //link
@@ -1872,8 +1875,7 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
                                 //fprintf(stdout, "%s::%d %.*s\n", __FILE__,__LINE__,
                                 //length, content+start);
                                 //handling data
-                                //DEBUG_LOGGER(histore_logger, "Matched count:%d nfields:%d flag:%d",
-                                //count, templates[i].nfields, templates[i].map[x].flag);
+                                DEBUG_LOGGER(histore_logger, "Matched url:%s flag:%d res count:%d nfields:%d flag:%d", url, templates[i].flags, count, templates[i].nfields, templates[i].map[x].flag);
                                 nodeid = templates[i].map[x].nodeid;
                                 if((templates[i].map[x].flag & REG_IS_URL) && nodeid > 0 
                                         && length > 0 && length < HTTP_URL_MAX 
