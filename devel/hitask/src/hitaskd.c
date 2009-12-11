@@ -1935,7 +1935,7 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
                                         //fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
                                         if(templates[i].map[x].flag & REG_IS_LIST) level = 1;
                                         id=hibase->add_urlnode(hibase,nodeid,parentid,urlid,level);
-                                        if(templates[i].map[x].flag & REG_IS_UNIQE) 
+                                        if(templates[i].map[x].nodeid > 0) 
                                         {
                                             recordid = id;
                                             DEBUG_LOGGER(histore_logger, "uniqe[%d]-record:%d", id, recordid);
