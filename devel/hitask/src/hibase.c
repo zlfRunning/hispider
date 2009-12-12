@@ -1856,7 +1856,7 @@ int hibase_update_record(HIBASE *hibase, int parentid, int urlnodeid, PRES *pres
                     offset = (off_t)pid * (off_t)sizeof(URLNODE);
                     if(pread(hibase->urlnodeio.fd, &parent, sizeof(URLNODE), offset) <= 0) break;
                     pid = parent.parentid;
-                    offset = (off_t)parent.recordid * (off_t)sizeof(URLNODE);
+                    offset = (off_t)parent.recordid * (off_t)sizeof(IRECORD);
                     if(parent.recordid > 0 && pread(hibase->recordio.fd, 
                                 &precord, sizeof(IRECORD), offset)>0 && precord.length > 0)
                     {
