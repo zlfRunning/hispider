@@ -467,7 +467,7 @@ int http_charset_convert(char *content_type, char *content_encoding, char *data,
         *out = NULL;
         if(strncasecmp(content_encoding, "gzip", 4) == 0)
         {
-            nrawdata =  len * 8 + Z_HEADER_SIZE;
+            nrawdata =  len * 16 + Z_HEADER_SIZE;
             if((rawdata = (char *)calloc(1, nrawdata)))
             {
                 if((httpgzdecompress((Bytef *)data, len, 
@@ -482,13 +482,14 @@ int http_charset_convert(char *content_type, char *content_encoding, char *data,
         }
         else if(strncasecmp(content_encoding, "deflate", 7) == 0)
         {
-            nrawdata =  len * 8 + Z_HEADER_SIZE;
+            nrawdata =  len * 16 + Z_HEADER_SIZE;
             if((rawdata = (char *)calloc(1, nrawdata)))
             {
                 if((zdecompress((Bytef *)data, len, (Bytef *)rawdata,(uLong*)&(nrawdata))) == 0)
                 {
                     txtdata = rawdata;
                     ntxtdata = nrawdata;
+                    //fprintf(stdout, "%s::%d ndata:%d\r\n", __FILE__, __LINE__, nrawdata);
                 }
                 else goto err_end;
             }
@@ -531,6 +532,7 @@ int http_charset_convert(char *content_type, char *content_encoding, char *data,
                         noutbuf -= n;
                         todata = outbuf;
                         ntodata = noutbuf;
+                        //fprintf(stdout, "%s::%d ndata:%d\r\n", __FILE__, __LINE__, ntodata);
                     }
                 }
                 iconv_close(cd);
@@ -539,6 +541,7 @@ int http_charset_convert(char *content_type, char *content_encoding, char *data,
             {
                 todata = txtdata;
                 ntodata = ntxtdata;
+                //fprintf(stdout, "nbuf:%d outbuf:\r\n", ntxtdata);
             }
         }else goto err_end;
         if(is_need_compress && todata && ntodata > 0)

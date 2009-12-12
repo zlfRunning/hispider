@@ -348,6 +348,7 @@ int http_proxy_packet_handler(CONN *conn, CB_DATA *packet)
     if(conn && packet && packet->ndata > 0 && (p = packet->data) 
             && (end = packet->data + packet->ndata))
     {
+        //fprintf(stdout, "%s::%d packet:%s\n", __FILE__, __LINE__, p);
         if(http_response_parse(p, end, &http_resp) == -1) goto err_end;
         conn->save_cache(conn, &http_resp, sizeof(HTTP_RESPONSE));
         if(http_resp.respid == RESP_MOVEDPERMANENTLY 
@@ -369,16 +370,18 @@ int http_proxy_packet_handler(CONN *conn, CB_DATA *packet)
             goto err_end;
         }
         if((n = http_resp.headers[HEAD_ENT_CONTENT_TYPE])
-            && (p = http_resp.hlines + n) && strncasecmp(p, "text", 4) == 0)
+            && (p = (http_resp.hlines + n)) && strncasecmp(p, "text", 4) == 0)
         {
             if((n = http_resp.headers[HEAD_ENT_CONTENT_LENGTH]) > 0 
-                && (p = http_resp.hlines + n) && (n = atoi(p)))
+                && (p = (http_resp.hlines + n)))
             {
-                len = n;
+                len = atoi(p);
+                //fprintf(stdout, "%s::%d recv-length:%d %s\n", __FILE__, __LINE__, len, p);
             }
             else
             {
                 len = 1024 * 1024 * 16;
+                //fprintf(stdout, "%s::%d recv-length:%d\n", __FILE__, __LINE__, len);
             }
             return conn->recv_chunk(conn, len);
         }
@@ -419,7 +422,7 @@ int http_proxy_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA
         else 
             content_encoding = "";
         if((n = http_resp->headers[HEAD_ENT_CONTENT_TYPE]) > 0 
-                && (content_type = http_resp->hlines + n)
+                && (content_type = (http_resp->hlines + n))
                 && (nout = http_charset_convert(content_type, content_encoding, 
                 chunk->data, chunk->ndata, http_default_charset, is_need_compress, &out)) > 0)
         {
@@ -448,7 +451,8 @@ int http_proxy_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA
             p += sprintf(p, "%s text/html;charset=%s\r\n", http_headers[HEAD_ENT_CONTENT_TYPE].e, 
                         http_default_charset);
             p += sprintf(p, "%s %d\r\n", http_headers[HEAD_ENT_CONTENT_LENGTH].e, nout);
-            p += sprintf(p, "%s", "\r\n");
+            p += sprintf(p, "\r\n");
+            //fprintf(stdout, "%s::%d out-length:%d %s\n", __FILE__, __LINE__, nout, buf);
             //conn->push_exchange(conn, buf, (p - buf));
             //conn->push_exchange(conn, out, nout);
             if(conn->session.parent
@@ -601,7 +605,7 @@ int http_proxy_handler(CONN *conn,  HTTP_REQ *http_req)
                 }
             }
             p += sprintf(p, "%s", "\r\n");
-            fprintf(stdout, "%s", buf);
+            //fprintf(stdout, "%s", buf);
             conn->push_exchange(conn, buf, (p - buf));
         }
         else if(http_req->reqid == HTTP_POST)
@@ -700,7 +704,7 @@ int hitaskd_newtask(CONN *conn)
         DEBUG_LOGGER(hitaskd_logger, "newtask()::%d on connection[%s:%d] local[%s:%d] via %d",
                 conn->s_id, conn->remote_ip, conn->remote_port, 
                 conn->local_ip, conn->local_port, conn->fd);
-        if((urlid = ltask->get_urltask(ltask, -1, -1, -1, -1, buf, &n)) >= 0 && n > 0) 
+        if((urlid = ltask->get_urltask(ltask, -1, -1, conn->s_id, -1, buf, &n)) >= 0 && n > 0) 
         {
             DEBUG_LOGGER(hitaskd_logger, "Ready for download-urlid:%d buffer_len:%d "
                     " to download-node[%s:%d] local[%s:%d] via %d", urlid, n, conn->remote_ip, 
@@ -782,6 +786,7 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
         //proxy special
         if(strncasecmp(http_req.path, "/proxy/", 7) == 0)
         {
+            fprintf(stdout, "proxy:%s", packet->data);
             strcpy(http_req.path, http_req.path + 7);
             conn->save_cache(conn, &http_req, sizeof(HTTP_REQ));
             return http_proxy_handler(conn, &http_req);
@@ -1859,7 +1864,7 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
                                         parentid = urlnode->id;
                                 }
                                 id = hibase->add_urlnode(hibase, nodeid, parentid, urlid,level);
-                                DEBUG_LOGGER(histore_logger,"new-URLNODE id:%d urlid:%d tnodeid:%d urlnode->parentid:%d url:%s level:%d", id, urlid, nodeid, parentid, newurl, level);
+                                DEBUG_LOGGER(histore_logger,"new-URLNODE id:%d urlid:%d tnodeid:%d urlnode->parentid:%d url:%s level:%d url-parent:%s", id, urlid, nodeid, parentid, newurl, level, url);
                                 if((id = templates[i].map[x].fieldid) >= 0 
                                         && id < FIELD_NUM_MAX )
                                 {
@@ -1938,7 +1943,7 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
                                             recurlnodeid = id;
                                             DEBUG_LOGGER(histore_logger, "uniqe[%d]-record:%d", id, recurlnodeid);
                                         }
-                                        DEBUG_LOGGER(histore_logger,"new-urlnode:%s id:%d x:%d tnodeid:%d urlnode->parentid:%d urlid:%d level:%d", newurl, id, x, nodeid, parentid, urlid, urlnode->level);
+                                        DEBUG_LOGGER(histore_logger,"new-urlnode:%s id:%d x:%d tnodeid:%d urlnode->parentid:%d urlid:%d level:%d url-parent:%s", newurl, id, x, nodeid, parentid, urlid, urlnode->level, url);
                                         if((id = templates[i].map[x].fieldid) >= 0 
                                                 && id < FIELD_NUM_MAX )
                                         {

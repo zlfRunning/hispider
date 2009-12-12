@@ -1012,6 +1012,33 @@ int ltask_pop_url(LTASK *task, int task_type, int url_id, char *url, int *itime,
     {
         MUTEX_LOCK(task->mutex);
         if(url_id >= 0) urlid = url_id;
+        else if(task_type == L_TASK_TYPE_PRIORITY)
+        {
+            if(FQUEUE_POP(task->qpriority, LNODE, &node) == 0)
+            {
+                if(node.type == Q_TYPE_HOST && node.id >= 0)
+                {
+                    host_node = (LHOST *)(task->hostio.map + node.id * sizeof(LHOST));
+                    urlid = host_node->url_current_id;
+                    if(host_node->url_left > 1)
+                    {
+                        tnode = &node;
+                        FQUEUE_PUSH(task->qpriority, LNODE, tnode);
+                    }
+                }
+                else if(node.type == Q_TYPE_URL && node.id >= 0)
+                {
+                    is_priority_url = 1;
+                    urlid = node.id;
+                }
+                else 
+                {
+                    DEBUG_LOGGER(task->logger, "Unknown task type:%d", node.type);
+                    goto end;
+                }
+            }
+            else goto end;
+        }
         else if(task_type == L_TASK_TYPE_FILE)
         {
             if(FQTOTAL(task->qfile) > 0)

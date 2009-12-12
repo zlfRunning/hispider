@@ -82,6 +82,7 @@
 #define L_TASK_TYPE_NORMAL      0x00
 #define L_TASK_TYPE_UPDATE      0x01
 #define L_TASK_TYPE_FILE        0x02
+#define L_TASK_TYPE_PRIORITY    0x04
 #define USER_AGENT              "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10.5; zh-CN; rv:1.9.0.1) Gecko/2008070206 Firefox/3.0.1"
 #define ACCEPT_TYPE             "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 #define ACCEPT_LANGUAGE         "zh-cn,zh;q=0.5"
