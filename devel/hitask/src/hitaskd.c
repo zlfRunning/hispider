@@ -1793,7 +1793,7 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
          newurl[HTTP_URL_MAX];
     int i = -1, j = 0, flag = 0, start_offset = 0, erroffset = 0, res[FIELD_NUM_MAX * 2], 
         nres = 0, n = 0, count = 0, x = 0, urlid = 0 , nodeid = 0, id = 0, recordid = 0, 
-        parentid = 0, start = 0, over = 0, length = 0, level = 0, urlflag = 0;
+        parentid = 0, start = 0, over = 0, length = 0, level = 0, urlflag = 0, recurlnodeid = 0;
     PRES records[FIELD_NUM_MAX], *pres = NULL;
     const char *error = NULL;
     pcre *reg = NULL;
@@ -1816,7 +1816,7 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
                                     start_offset, 0, res, nres)) > 0 
                         && (eblock = block = (char *)calloc(1, ncontent)))
                     {
-                        recordid = -1;
+                        recurlnodeid = -1;
                         memset(records, 0, sizeof(PRES) * FIELD_NUM_MAX);
                         DEBUG_LOGGER(histore_logger, "Matched url:%s flags:%d res count:%d nfields:%d", url, templates[i].flags, count, templates[i].nfields);
                         if((templates[i].flags & TMP_IS_GLOBAL)) 
@@ -1825,8 +1825,8 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
                         //public record 
                         if(!(templates[i].flags & (TMP_IS_GLOBAL|TMP_IS_LINK)))
                         {
-                            recordid = urlnodeid;
-                            DEBUG_LOGGER(histore_logger, "public-record:%d", recordid);
+                            recurlnodeid = urlnodeid;
+                            DEBUG_LOGGER(histore_logger, "public-record:%d", recurlnodeid);
                         }
                         if(templates[i].flags & TMP_IS_LINK)
                         {
@@ -1863,7 +1863,7 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
                                 if((id = templates[i].map[x].fieldid) >= 0 
                                         && id < FIELD_NUM_MAX )
                                 {
-                                    DEBUG_LOGGER(histore_logger, "link-field[%d]-record:%d", id, recordid);
+                                    DEBUG_LOGGER(histore_logger, "link-field[%d]-record:%d", id, recurlnodeid);
                                     records[id].start = eblock - block;
                                     eblock += sprintf(eblock, "%s", newurl);
                                     records[id].end = eblock - block;
@@ -1935,8 +1935,8 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
                                         id=hibase->add_urlnode(hibase,nodeid,parentid,urlid,level);
                                         if(templates[i].map[x].nodeid > 0) 
                                         {
-                                            recordid = id;
-                                            DEBUG_LOGGER(histore_logger, "uniqe[%d]-record:%d", id, recordid);
+                                            recurlnodeid = id;
+                                            DEBUG_LOGGER(histore_logger, "uniqe[%d]-record:%d", id, recurlnodeid);
                                         }
                                         DEBUG_LOGGER(histore_logger,"new-urlnode:%s id:%d x:%d tnodeid:%d urlnode->parentid:%d urlid:%d level:%d", newurl, id, x, nodeid, parentid, urlid, urlnode->level);
                                         if((id = templates[i].map[x].fieldid) >= 0 
@@ -1945,7 +1945,7 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
                                             records[id].start = eblock - block;
                                             eblock += sprintf(eblock, "%s", newurl);
                                             records[id].end = eblock - block;
-                                            DEBUG_LOGGER(histore_logger, "field[%d]-record:%d", id, recordid);
+                                            DEBUG_LOGGER(histore_logger, "field[%d]-record:%d", id, recurlnodeid);
                                         }
                                     }
                                     else
@@ -1971,11 +1971,11 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
                             }
                             //fprintf(stdout, "\n");
                         }
-                        if((n = (eblock - block)) > 0 && recordid >= 0)
+                        if((n = (eblock - block)) > 0 && recurlnodeid > 0)
                         {
-                            //fprintf(stdout, "%s::%d url:%s recid:%d urlnodeid:%d %s\r\n", __FILE__, __LINE__, newurl, recordid, urlnodeid, block);
-                           hibase->update_record(hibase, urlnodeid, recordid, records, 
-                                   templates[i].tableid, block, n); 
+                           recordid = hibase->update_record(hibase, urlnodeid, recurlnodeid, 
+                                   records, templates[i].tableid, block, n); 
+                            DEBUG_LOGGER(histore_logger, "record[%d]-newurl:%s recurlnodeid:%d parent-urlnodeid:%d from url:%s block:%s", recordid, newurl, recurlnodeid, urlnodeid, url, block);
                         }
                         if(block) free(block);
                     }

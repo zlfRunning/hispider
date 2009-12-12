@@ -1276,7 +1276,7 @@ int hibase_get_uris(HIBASE *hibase, int urlid, int **urlnodeids)
             && pread(hibase->uri_fd, &uri, sizeof(URI), offset) > 0 && uri.rootid > 0 
             && uri.count > 0 && (*urlnodeids = (int *)calloc(uri.count, sizeof(int))))
         {
-            DEBUG_LOGGER(hibase->logger, "Ready for read uris");
+            //DEBUG_LOGGER(hibase->logger, "Ready for read uris");
             urlnodeid = 0;
             if((x = mmtree_min(hibase->mmtree, uri.rootid, &urlnodeid, &id)) > 0)
             {
@@ -1792,11 +1792,8 @@ int hibase_update_record(HIBASE *hibase, int parentid, int urlnodeid, PRES *pres
                 HIO_INCRE(hibase->recordio, IRECORD, RECORD_INCRE_NUM);
                 UPDATE_STATE(hibase, recordio);
             }
-            else
-            {
-                id = ++(hibase->recordio.current);
-                UPDATE_STATE(hibase, recordio);
-            }
+            id = ++(hibase->recordio.current);
+            UPDATE_STATE(hibase, recordio);
         }
         else
         {
@@ -1807,6 +1804,7 @@ int hibase_update_record(HIBASE *hibase, int parentid, int urlnodeid, PRES *pres
         if(fstat(hibase->db_fd, &st) == 0 && pwrite(hibase->db_fd, block, nblock, st.st_size) > 0)
         {
             //rebuild record
+            DEBUG_LOGGER(hibase->logger, "update record[%d]->records parentid:%d tableid:%d nblock:%d block:%s", id, parentid, tableid, nblock, block)
             n = 0;
             for(i = 0; i < FIELD_NUM_MAX; i++)
             {
@@ -1822,16 +1820,17 @@ int hibase_update_record(HIBASE *hibase, int parentid, int urlnodeid, PRES *pres
                     record.length += record.records[i].length;
                 }
             }
-            //fix list's parent
+            //fix listpage's parent
             memset(&parent, 0, sizeof(URLNODE));
             pid = parentid;
             if(pid > 0 && pread(hibase->urlnodeio.fd, &parent, sizeof(URLNODE), 
-                    (off_t)pid * (off_t)sizeof(URLNODE)) > 0 
+                    (off_t)pid * (off_t)sizeof(URLNODE)) > 0 && parent.recordid > 0
                     && parent.tnodeid == urlnode.tnodeid)
             {
-                offset = (off_t)parent.recordid * (off_t)sizeof(URLNODE);
-                if(parent.recordid > 0 && pread(hibase->recordio.fd, 
-                            &precord, sizeof(IRECORD), offset)>0 && precord.length > 0)
+                DEBUG_LOGGER(hibase->logger, "fixing urlnode[%d]->recordid[%d]->parent[%d] to urlnode[%d] parent->tnodeid:%d tnodeid:%d", id, urlnodeid,  parent.recordid, pid, parent.tnodeid, urlnode.tnodeid)
+                    offset = (off_t)parent.recordid * (off_t)sizeof(IRECORD);
+                if(pread(hibase->recordio.fd, &precord, sizeof(IRECORD), offset) > 0 
+                        && precord.length > 0)
                 {
                     for(i = 0; i < FIELD_NUM_MAX; i++)
                     {
@@ -1875,7 +1874,7 @@ int hibase_update_record(HIBASE *hibase, int parentid, int urlnodeid, PRES *pres
             }
             if(n > 0)
             {
-                record.parentid = parentid;
+                record.parentid = pid;
                 record.tableid = tableid;
                 offset = (off_t)id * (off_t)sizeof(IRECORD);
                 pwrite(hibase->recordio.fd, &record, sizeof(IRECORD), offset);
