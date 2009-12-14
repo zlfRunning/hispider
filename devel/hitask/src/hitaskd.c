@@ -623,7 +623,7 @@ int http_proxy_handler(CONN *conn,  HTTP_REQ *http_req)
                 }
             }
             p += sprintf(p, "%s", "\r\n");
-            fprintf(stdout, "%s", buf);
+            //fprintf(stdout, "%s", buf);
             conn->push_exchange(conn, buf, (p - buf));
             if((n = http_req->headers[HEAD_ENT_CONTENT_LENGTH]) > 0 
                     && (n = atol(http_req->hlines + n)) > 0)
@@ -786,7 +786,7 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
         //proxy special
         if(strncasecmp(http_req.path, "/proxy/", 7) == 0)
         {
-            fprintf(stdout, "proxy:%s", packet->data);
+            //fprintf(stdout, "proxy:%s", packet->data);
             strcpy(http_req.path, http_req.path + 7);
             conn->save_cache(conn, &http_req, sizeof(HTTP_REQ));
             return http_proxy_handler(conn, &http_req);
@@ -1438,7 +1438,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                                             p = buf + n;
                                             p += sprintf(p, "%c", (char )i);
                                             p += sprintf(p, "%s", purl.sto);
-                                            fprintf(stdout, "%s::%d %s\n", __FILE__, __LINE__, buf);
+                                            //fprintf(stdout, "%s::%d %s\n", __FILE__, __LINE__, buf);
                                             if((urlid=ltask->add_url(ltask,-1,0, buf, flag))>= 0)
                                                 hibase->add_urlnode(hibase, nodeid, parentid, urlid,level);
                                         }
