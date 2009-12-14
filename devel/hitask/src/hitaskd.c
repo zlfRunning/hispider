@@ -2137,7 +2137,7 @@ void histore_heartbeat_handler(void *arg)
 /* Initialize from ini file */
 int sbase_initialize(SBASE *sbase, char *conf)
 {
-    char *s = NULL, *p = NULL, *basedir = NULL;
+    char *s = NULL, *p = NULL, *basedir = NULL, *cacert_file = NULL, *privkey_file = NULL;
     //*start = NULL;
     //*ep = NULL, *whitelist = NULL, *whost = NULL, 
     //*host = NULL, *path = NULL;
@@ -2228,6 +2228,14 @@ int sbase_initialize(SBASE *sbase, char *conf)
     http_page_num = iniparser_getint(dict, "HITASKD:http_page_num", 100);
     /* httpd_home */
     httpd_home = iniparser_getstr(dict, "HITASKD:httpd_home");
+    cacert_file = iniparser_getstr(dict, "HITASKD:cacert_file");
+    privkey_file = iniparser_getstr(dict, "HITASKD:privkey_file");
+    if(cacert_file && privkey_file && iniparser_getint(dict, "HITASKD:is_use_ssl", 0)) 
+    {
+        hitaskd->is_use_SSL = 1;
+        hitaskd->cacert_file = cacert_file;
+        hitaskd->privkey_file = privkey_file;
+    }
     /* decode html base64 */
     if(html_code_base64 && (n = strlen(html_code_base64)) > 0 
             && (httpd_index_html_code = (char *)calloc(1, n+1)))
