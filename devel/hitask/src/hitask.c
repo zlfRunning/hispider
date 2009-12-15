@@ -56,18 +56,24 @@ static int ntask = 0;
 static int task_type = 0;
 static char *hitaskd_ip = NULL;
 static int  hitaskd_port = 0;
+static int  hitaskd_use_SSL = 0;
 static char *histore_ip = NULL;
 static int histore_port = 0;
+static int histore_use_SSL = 0;
 static void *taskqueue = NULL;
 static void *logger = NULL;
 static long long int doc_total = 0ll;
 static long long int gzdoc_total = 0ll;
 static long long int zdoc_total = 0ll;
 /* data handler */
+int hitask_packet_reader(CONN *conn, CB_DATA *buffer);
+int hitask_packet_handler(CONN *conn, CB_DATA *packet);
 int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk);
 int hitask_error_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk);
 int hitask_timeout_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *chunk);
 int hitask_trans_handler(CONN *conn, int tid);
+int hitask_oob_handler(CONN *conn, CB_DATA *oob);
+int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url);
 
 /* http download error */
 int http_download_error(int c_id, int err)
@@ -118,180 +124,6 @@ int hitask_packet_reader(CONN *conn, CB_DATA *buffer)
     return -1;
 }
 
-/* http_request */
-int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
-{
-    char *p = NULL, *e = NULL, *s = NULL, *es = NULL, *pp = NULL, *epp = NULL,
-        *last = NULL, *end = NULL , *ip = NULL, *sip = NULL, *pip = NULL, *host = NULL, 
-         *path = NULL, newurl[HTTP_URL_MAX], newhost[HTTP_HOST_MAX];
-    // *cookie = NULL, *refer = NULL;
-    int urlid = 0, n = 0, port = 0, pport = 0, userid = -1, uuid = -1, 
-        sport = 0, is_use_proxy = 0;
-    CONN *conn = NULL;
-    struct hostent *hp = NULL;
-
-    if(c_id >= 0 && c_id < ntask && http_resp)
-    {
-        if((conn = tasklist[c_id].c_conn))
-        {
-            FATAL_LOGGER(logger, "REPEAT-TASK[%d] to connection[%s:%d] "
-                    "local[%s:%d] via %d url:%s", c_id, conn->remote_ip, conn->remote_port,
-                    conn->local_ip, conn->local_port, conn->fd, url);
-            return -1;
-        }
-        if(url)
-        {
-            s = tasklist[c_id].url;
-            es = s + strlen(s);
-            p = url;
-            e = p + strlen(p);
-            pp = newurl;
-            epp = newurl + HTTP_URL_MAX;
-            memset(newurl, 0, HTTP_URL_MAX);
-            CPURL(s, es, p, e, pp, epp, end, host, path, last);
-            if(host == NULL || path == NULL) 
-            {
-                ERROR_LOGGER(logger, "Invalid url:%s on TASK[%d] to location:%s", 
-                        tasklist[c_id].url, c_id, url);
-                goto restart_task;
-            }
-            tasklist[c_id].is_redirect = 1;
-            strcpy(tasklist[c_id].location, newurl);
-            p = host;
-            pp = newhost;
-            epp = newhost + HTTP_HOST_MAX;
-            memset(newhost, 0, HTTP_HOST_MAX);
-            while(*p != '\0' && *p != '/' && *p != ':' && pp < epp) *pp++ = *p++;
-            sport = port = 80;
-            if(*p == ':')
-            {
-                ++p;
-                port = sport = atoi(p);
-                while(*p >= '0' && *p <= '9') ++p;
-            }
-            if(tasklist[c_id].c_conn) 
-            {
-                tasklist[c_id].c_conn->over_cstate(tasklist[c_id].c_conn);
-                tasklist[c_id].c_conn->close(tasklist[c_id].c_conn);
-                tasklist[c_id].c_conn = NULL;
-            }
-            DEBUG_LOGGER(logger, "Redirect %s on TASK[%d] to %s host[%s] newhost[%s:%d]", 
-                    tasklist[c_id].url, c_id, newurl, host, newhost, port);
-            host = newhost;
-            if(strcasecmp(host, tasklist[c_id].host) == 0)
-            {
-                ip = tasklist[c_id].ip;
-            }
-            else ip = "255.255.255.255";
-        }
-        else
-        {
-            host = ((n = http_resp->headers[HEAD_REQ_HOST]) > 0) 
-                ? (http_resp->hlines + n): NULL; 
-            sip = ip = ((n = http_resp->headers[HEAD_RESP_SERVER]) > 0)
-                ? (http_resp->hlines + n): NULL;
-            sport = port = ((n = http_resp->headers[HEAD_REQ_TE]) > 0)
-                ? atoi(http_resp->hlines + n) : 0;
-            path = ((n = http_resp->headers[HEAD_RESP_LOCATION]) > 0)
-                ? (http_resp->hlines + n): NULL;
-            if(host && path)
-            {
-                if(port > 0 && port != 80)
-                    sprintf(tasklist[c_id].url, "http://%s:%d%s", host, sport, path);
-                else
-                    sprintf(tasklist[c_id].url, "http://%s%s", host, path);
-            }
-            DEBUG_LOGGER(logger, "TASK[%d] host:%s ip:%s port:%d path:%s urlid:%d", 
-                    c_id, host, ip, port, path, urlid);
-        }
-        pip = ((n = http_resp->headers[HEAD_REQ_USER_AGENT]) > 0)
-            ? (http_resp->hlines + n): NULL;
-        pport = ((n = http_resp->headers[HEAD_GEN_VIA]) > 0)
-            ? atoi(http_resp->hlines + n) : 0;
-        urlid = tasklist[c_id].urlid = ((n = http_resp->headers[HEAD_REQ_FROM]) > 0)
-            ? atoi(http_resp->hlines + n) : 0;
-        userid = tasklist[c_id].userid = ((n = http_resp->headers[HEAD_GEN_USERID]) > 0)
-            ? atoi(http_resp->hlines + n) : -1;
-        uuid = tasklist[c_id].uuid = ((n = http_resp->headers[HEAD_GEN_UUID]) > 0)
-            ? atoi(http_resp->hlines + n) : -1;
-        if(pip && pport > 0) 
-        {
-            ip = pip;
-            port = pport;
-            is_use_proxy = 1; 
-        }
-        if(host == NULL || ip == NULL || path == NULL || port == 0 || urlid < 0) 
-        {
-            goto restart_task;
-        }
-        if(is_use_proxy == 0 && strcmp(ip, "255.255.255.255") == 0)
-        {
-            if((hp = gethostbyname(host)))
-            {
-                tasklist[c_id].is_new_host = 1;
-                strcpy(tasklist[c_id].host, host);
-                sprintf(tasklist[c_id].ip, "%s", 
-                        inet_ntoa(*((struct in_addr *)(hp->h_addr))));
-                ip = tasklist[c_id].ip;
-            }
-            else
-            {
-                DEBUG_LOGGER(logger, "Resolving name[%s] failed, %s", host, strerror(h_errno));
-                goto restart_task;
-            }
-        }
-        if((conn = tasklist[c_id].c_conn = service->newconn(service, -1, -1, ip, port, NULL)))
-        {
-            p = tasklist[c_id].request;
-            //GET/POST path
-            if(is_use_proxy || sport != 80)
-            {
-                if(*path == '/')
-                    p += sprintf(p, "GET http://%s:%d%s HTTP/1.0\r\n", host, sport, path);
-                else
-                    p += sprintf(p, "GET http://%s:%d/%s HTTP/1.0\r\n", host, sport, path);
-            }
-            else 
-            {
-                if(*path == '/')
-                    p += sprintf(p, "GET %s HTTP/1.0\r\n", path);
-                else
-                    p += sprintf(p, "GET /%s HTTP/1.0\r\n", path);
-            }
-            //general
-            p += sprintf(p, "Host: %s\r\nUser-Agent: %s\r\nAccept: %s\r\n"
-                    "Accept-Language: %s\r\nAccept-Encoding: %s\r\n"
-                    "Accept-Charset: %s\r\nConnection: close\r\n", host, 
-                    USER_AGENT, ACCEPT_TYPE, ACCEPT_LANGUAGE, 
-                    ACCEPT_ENCODING, ACCEPT_CHARSET);
-            if((n = http_resp->headers[HEAD_REQ_COOKIE]) > 0)
-                p += sprintf(p, "Cookie: %s\r\n", http_resp->hlines + n);
-            if((n = http_resp->headers[HEAD_REQ_REFERER]) > 0)
-                p += sprintf(p, "Referer: %s\r\n", http_resp->hlines + n);
-            if((n = http_resp->headers[HEAD_ENT_LAST_MODIFIED]) > 0)
-                p += sprintf(p, "If-Modified-Since: %s\r\n", http_resp->hlines + n);
-            //end
-            p += sprintf(p, "%s", "\r\n");
-            tasklist[c_id].nrequest = p - tasklist[c_id].request;
-            tasklist[c_id].userid = userid;
-            tasklist[c_id].uuid = uuid;
-            tasklist[c_id].c_conn->c_id = c_id;
-            tasklist[c_id].c_conn->start_cstate(tasklist[c_id].c_conn);
-            DEBUG_LOGGER(logger, "starting TASK[%d] connection[%p] to remote[%s:%d] "
-                    " via local[%s:%d] fd[%d]", c_id, conn, conn->remote_ip, 
-                    conn->remote_port, conn->local_ip, conn->local_port, conn->fd);
-            return service->newtransaction(service, tasklist[c_id].c_conn, c_id);
-        }
-        else
-        {
-            ERROR_LOGGER(logger, "Connect TASK[%d] to [%s][%s:%d] failed, %s\n", 
-                    c_id, host, ip, port, strerror(errno));
-        }
-restart_task:
-        return http_download_error(c_id, ERR_HOST_IP);
-    }
-    return -1;
-}
 
 /* download */
 int hitask_packet_handler(CONN *conn, CB_DATA *packet)
@@ -797,13 +629,197 @@ int hitask_oob_handler(CONN *conn, CB_DATA *oob)
     return -1;
 }
 
+/* http_request */
+int http_request(int c_id, HTTP_RESPONSE *http_resp, char *url)
+{
+    char *p = NULL, *e = NULL, *s = NULL, *es = NULL, *pp = NULL, *epp = NULL,
+        *last = NULL, *end = NULL , *ip = NULL, *sip = NULL, *pip = NULL, *host = NULL, 
+         *path = NULL, newurl[HTTP_URL_MAX], newhost[HTTP_HOST_MAX];
+    // *cookie = NULL, *refer = NULL;
+    int urlid = 0, n = 0, port = 0, pport = 0, userid = -1, uuid = -1, 
+        sport = 0, is_use_proxy = 0;
+    CONN *conn = NULL;
+    struct hostent *hp = NULL;
+
+    if(c_id >= 0 && c_id < ntask && http_resp)
+    {
+        if((conn = tasklist[c_id].c_conn))
+        {
+            FATAL_LOGGER(logger, "REPEAT-TASK[%d] to connection[%s:%d] "
+                    "local[%s:%d] via %d url:%s", c_id, conn->remote_ip, conn->remote_port,
+                    conn->local_ip, conn->local_port, conn->fd, url);
+            return -1;
+        }
+        if(url)
+        {
+            s = tasklist[c_id].url;
+            es = s + strlen(s);
+            p = url;
+            e = p + strlen(p);
+            pp = newurl;
+            epp = newurl + HTTP_URL_MAX;
+            memset(newurl, 0, HTTP_URL_MAX);
+            CPURL(s, es, p, e, pp, epp, end, host, path, last);
+            if(host == NULL || path == NULL) 
+            {
+                ERROR_LOGGER(logger, "Invalid url:%s on TASK[%d] to location:%s", 
+                        tasklist[c_id].url, c_id, url);
+                goto restart_task;
+            }
+            tasklist[c_id].is_redirect = 1;
+            strcpy(tasklist[c_id].location, newurl);
+            p = host;
+            pp = newhost;
+            epp = newhost + HTTP_HOST_MAX;
+            memset(newhost, 0, HTTP_HOST_MAX);
+            while(*p != '\0' && *p != '/' && *p != ':' && pp < epp) *pp++ = *p++;
+            sport = port = 80;
+            if(*p == ':')
+            {
+                ++p;
+                port = sport = atoi(p);
+                while(*p >= '0' && *p <= '9') ++p;
+            }
+            if(tasklist[c_id].c_conn) 
+            {
+                tasklist[c_id].c_conn->over_cstate(tasklist[c_id].c_conn);
+                tasklist[c_id].c_conn->close(tasklist[c_id].c_conn);
+                tasklist[c_id].c_conn = NULL;
+            }
+            DEBUG_LOGGER(logger, "Redirect %s on TASK[%d] to %s host[%s] newhost[%s:%d]", 
+                    tasklist[c_id].url, c_id, newurl, host, newhost, port);
+            host = newhost;
+            if(strcasecmp(host, tasklist[c_id].host) == 0)
+            {
+                ip = tasklist[c_id].ip;
+            }
+            else ip = "255.255.255.255";
+        }
+        else
+        {
+            host = ((n = http_resp->headers[HEAD_REQ_HOST]) > 0) 
+                ? (http_resp->hlines + n): NULL; 
+            sip = ip = ((n = http_resp->headers[HEAD_RESP_SERVER]) > 0)
+                ? (http_resp->hlines + n): NULL;
+            sport = port = ((n = http_resp->headers[HEAD_REQ_TE]) > 0)
+                ? atoi(http_resp->hlines + n) : 0;
+            path = ((n = http_resp->headers[HEAD_RESP_LOCATION]) > 0)
+                ? (http_resp->hlines + n): NULL;
+            if(host && path)
+            {
+                if(port > 0 && port != 80)
+                    sprintf(tasklist[c_id].url, "http://%s:%d%s", host, sport, path);
+                else
+                    sprintf(tasklist[c_id].url, "http://%s%s", host, path);
+            }
+            DEBUG_LOGGER(logger, "TASK[%d] host:%s ip:%s port:%d path:%s urlid:%d", 
+                    c_id, host, ip, port, path, urlid);
+        }
+        pip = ((n = http_resp->headers[HEAD_REQ_USER_AGENT]) > 0)
+            ? (http_resp->hlines + n): NULL;
+        pport = ((n = http_resp->headers[HEAD_GEN_VIA]) > 0)
+            ? atoi(http_resp->hlines + n) : 0;
+        urlid = tasklist[c_id].urlid = ((n = http_resp->headers[HEAD_REQ_FROM]) > 0)
+            ? atoi(http_resp->hlines + n) : 0;
+        userid = tasklist[c_id].userid = ((n = http_resp->headers[HEAD_GEN_USERID]) > 0)
+            ? atoi(http_resp->hlines + n) : -1;
+        uuid = tasklist[c_id].uuid = ((n = http_resp->headers[HEAD_GEN_UUID]) > 0)
+            ? atoi(http_resp->hlines + n) : -1;
+        if(pip && pport > 0) 
+        {
+            ip = pip;
+            port = pport;
+            is_use_proxy = 1; 
+        }
+        if(host == NULL || ip == NULL || path == NULL || port == 0 || urlid < 0) 
+        {
+            goto restart_task;
+        }
+        if(is_use_proxy == 0 && strcmp(ip, "255.255.255.255") == 0)
+        {
+            if((hp = gethostbyname(host)))
+            {
+                tasklist[c_id].is_new_host = 1;
+                strcpy(tasklist[c_id].host, host);
+                sprintf(tasklist[c_id].ip, "%s", 
+                        inet_ntoa(*((struct in_addr *)(hp->h_addr))));
+                ip = tasklist[c_id].ip;
+            }
+            else
+            {
+                DEBUG_LOGGER(logger, "Resolving name[%s] failed, %s", host, strerror(h_errno));
+                goto restart_task;
+            }
+        }
+        if((conn = tasklist[c_id].c_conn = service->newconn(service, -1, -1, ip, port, NULL)))
+        {
+            p = tasklist[c_id].request;
+            //GET/POST path
+            if(is_use_proxy || sport != 80)
+            {
+                if(*path == '/')
+                    p += sprintf(p, "GET http://%s:%d%s HTTP/1.0\r\n", host, sport, path);
+                else
+                    p += sprintf(p, "GET http://%s:%d/%s HTTP/1.0\r\n", host, sport, path);
+            }
+            else 
+            {
+                if(*path == '/')
+                    p += sprintf(p, "GET %s HTTP/1.0\r\n", path);
+                else
+                    p += sprintf(p, "GET /%s HTTP/1.0\r\n", path);
+            }
+            //general
+            p += sprintf(p, "Host: %s\r\nUser-Agent: %s\r\nAccept: %s\r\n"
+                    "Accept-Language: %s\r\nAccept-Encoding: %s\r\n"
+                    "Accept-Charset: %s\r\nConnection: close\r\n", host, 
+                    USER_AGENT, ACCEPT_TYPE, ACCEPT_LANGUAGE, 
+                    ACCEPT_ENCODING, ACCEPT_CHARSET);
+            if((n = http_resp->headers[HEAD_REQ_COOKIE]) > 0)
+                p += sprintf(p, "Cookie: %s\r\n", http_resp->hlines + n);
+            if((n = http_resp->headers[HEAD_REQ_REFERER]) > 0)
+                p += sprintf(p, "Referer: %s\r\n", http_resp->hlines + n);
+            if((n = http_resp->headers[HEAD_ENT_LAST_MODIFIED]) > 0)
+                p += sprintf(p, "If-Modified-Since: %s\r\n", http_resp->hlines + n);
+            //end
+            p += sprintf(p, "%s", "\r\n");
+            tasklist[c_id].nrequest = p - tasklist[c_id].request;
+            tasklist[c_id].userid = userid;
+            tasklist[c_id].uuid = uuid;
+            tasklist[c_id].c_conn->c_id = c_id;
+            tasklist[c_id].c_conn->start_cstate(tasklist[c_id].c_conn);
+            DEBUG_LOGGER(logger, "starting TASK[%d] connection[%p] to remote[%s:%d] "
+                    " via local[%s:%d] fd[%d]", c_id, conn, conn->remote_ip, 
+                    conn->remote_port, conn->local_ip, conn->local_port, conn->fd);
+            return service->newtransaction(service, tasklist[c_id].c_conn, c_id);
+        }
+        else
+        {
+            ERROR_LOGGER(logger, "Connect TASK[%d] to [%s][%s:%d] failed, %s\n", 
+                    c_id, host, ip, port, strerror(errno));
+        }
+restart_task:
+        return http_download_error(c_id, ERR_HOST_IP);
+    }
+    return -1;
+}
+
 /* heartbeat */
 void cb_heartbeat_handler(void *arg)
 {
     int id = 0, left = 0, *px = NULL;
+    SESSION sess = {0}, *psess = NULL;
 
     if(arg == (void *)service)
     {
+        sess.packet_reader = &hitask_packet_reader;
+        sess.packet_handler = &hitask_packet_handler;
+        sess.data_handler = &hitask_data_handler;
+        sess.error_handler = &hitask_error_handler;
+        sess.timeout_handler = &hitask_timeout_handler;
+        sess.transaction_handler = &hitask_trans_handler;
+        sess.oob_handler = &hitask_oob_handler;
+        psess = &sess;
         while(QTOTAL(taskqueue) > 0)
         {
             id = -1;
@@ -813,8 +829,10 @@ void cb_heartbeat_handler(void *arg)
             {
                 if(tasklist[id].s_conn == NULL)
                 {
+                    if(hitaskd_use_SSL) sess.is_use_SSL = 1;
+                    else sess.is_use_SSL = 0;
                     if((tasklist[id].s_conn = service->newconn(service, -1, -1, 
-                                    hitaskd_ip, hitaskd_port, NULL)))
+                                    hitaskd_ip, hitaskd_port, psess)))
                     {
                         tasklist[id].s_conn->c_id = id;
                         tasklist[id].s_conn->start_cstate(tasklist[id].s_conn);
@@ -831,8 +849,10 @@ void cb_heartbeat_handler(void *arg)
                 }
                 if(tasklist[id].d_conn == NULL)
                 {
+                    if(histore_use_SSL) sess.is_use_SSL = 1;
+                    else sess.is_use_SSL = 0;
                     if((tasklist[id].d_conn = service->newconn(service, -1, -1, 
-                                    histore_ip, histore_port, NULL)))
+                                    histore_ip, histore_port, psess)))
                     {   
                         tasklist[id].d_conn->c_id = id;
                         tasklist[id].d_conn->start_cstate(tasklist[id].d_conn);
@@ -888,8 +908,10 @@ int sbase_initialize(SBASE *sbase, char *conf)
     service->sock_type = iniparser_getint(dict, "HITASK:socket_type", SOCK_STREAM);
     hitaskd_ip = iniparser_getstr(dict, "HITASK:hitaskd_ip");
     hitaskd_port = iniparser_getint(dict, "HITASK:hitaskd_port", 2816);
+    hitaskd_use_SSL = iniparser_getint(dict, "HITASK:hitaskd_use_SSL", 0);
     histore_ip = iniparser_getstr(dict, "HITASK:histore_ip");
     histore_port = iniparser_getint(dict, "HITASK:histore_port", 3927);
+    histore_use_SSL = iniparser_getint(dict, "HITASK:histore_use_SSL", 0);
     service->working_mode = iniparser_getint(dict, "HITASK:working_mode", WORKING_PROC);
     service->service_type = iniparser_getint(dict, "HITASK:service_type", C_SERVICE);
     service->service_name = iniparser_getstr(dict, "HITASK:service_name");

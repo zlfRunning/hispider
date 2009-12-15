@@ -2230,7 +2230,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
     httpd_home = iniparser_getstr(dict, "HITASKD:httpd_home");
     cacert_file = iniparser_getstr(dict, "HITASKD:cacert_file");
     privkey_file = iniparser_getstr(dict, "HITASKD:privkey_file");
-    if(cacert_file && privkey_file && iniparser_getint(dict, "HITASKD:is_use_ssl", 0)) 
+    if(cacert_file && privkey_file && iniparser_getint(dict, "HITASKD:is_use_SSL", 0)) 
     {
         hitaskd->is_use_SSL = 1;
         hitaskd->cacert_file = cacert_file;
@@ -2331,6 +2331,14 @@ int sbase_initialize(SBASE *sbase, char *conf)
 #ifdef _DEBUG
     if((p = iniparser_getstr(dict, "HISTORE:access_log"))){LOGGER_INIT(histore_logger, p);}
 #endif
+    cacert_file = iniparser_getstr(dict, "HISTORE:cacert_file");
+    privkey_file = iniparser_getstr(dict, "HISTORE:privkey_file");
+    if(cacert_file && privkey_file && iniparser_getint(dict, "HISTORE:is_use_SSL", 0)) 
+    {
+        histore->is_use_SSL = 1;
+        histore->cacert_file = cacert_file;
+        histore->privkey_file = privkey_file;
+    }
     /* dns service */
     if((adns = service_init()) == NULL)
     {
