@@ -797,10 +797,9 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
             {
                 p = buf;
                 p += sprintf(p, "HTTP/1.0 200 OK\r\nContent-Length:%d\r\n"
-                        "Content-Type: text/html;charset=%s\r\n",
+                        "Content-Type: text/html;charset=%s\r\nConnection: close\r\n",
                         nhttpd_index_html_code, http_default_charset);
-                if((n = http_req.headers[HEAD_GEN_CONNECTION]) > 0)
-                    p += sprintf(p, "Connection: %s\r\n", http_req.hlines + n);
+                //if((n = http_req.headers[HEAD_GEN_CONNECTION]) > 0)
                 p += sprintf(p, "\r\n");
                 conn->push_chunk(conn, buf, (p - buf));
                 return conn->push_chunk(conn, httpd_index_html_code, nhttpd_index_html_code);
