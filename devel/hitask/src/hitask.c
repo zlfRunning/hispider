@@ -65,6 +65,7 @@ static void *logger = NULL;
 static long long int doc_total = 0ll;
 static long long int gzdoc_total = 0ll;
 static long long int zdoc_total = 0ll;
+static SESSION session = {0};
 /* data handler */
 int hitask_packet_reader(CONN *conn, CB_DATA *buffer);
 int hitask_packet_handler(CONN *conn, CB_DATA *packet);
@@ -812,13 +813,7 @@ void cb_heartbeat_handler(void *arg)
 
     if(arg == (void *)service)
     {
-        sess.packet_reader = &hitask_packet_reader;
-        sess.packet_handler = &hitask_packet_handler;
-        sess.data_handler = &hitask_data_handler;
-        sess.error_handler = &hitask_error_handler;
-        sess.timeout_handler = &hitask_timeout_handler;
-        sess.transaction_handler = &hitask_trans_handler;
-        sess.oob_handler = &hitask_oob_handler;
+        memcpy(&sess, &session, sizeof(SESSION));
         psess = &sess;
         while(QTOTAL(taskqueue) > 0)
         {
@@ -948,6 +943,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
     service->session.timeout_handler = &hitask_timeout_handler;
     service->session.transaction_handler = &hitask_trans_handler;
     service->session.oob_handler = &hitask_oob_handler;
+    memcpy(&session, &(service->session), sizeof(SESSION));
     interval = iniparser_getint(dict, "HITASK:heartbeat_interval", SB_HEARTBEAT_INTERVAL);
     service->set_heartbeat(service, interval, &cb_heartbeat_handler, service);
     /* server */
