@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.59])
-AC_INIT([hitask], [0.0.8], [SounOS@gmail.com])
+AC_INIT([hitask], [0.0.9], [SounOS@gmail.com])
 AC_CONFIG_SRCDIR([src/hitaskd.c])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE
