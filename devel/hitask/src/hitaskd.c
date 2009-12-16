@@ -27,7 +27,7 @@
 #define PROXY_TIMEOUT 1000000
 static char *http_default_charset = "UTF-8";
 static char *httpd_home = NULL;
-static char *httpd_index_html_code = "";
+static unsigned char *httpd_index_html_code = NULL;
 static int  nhttpd_index_html_code = 0;
 static SBASE *sbase = NULL;
 static SERVICE *hitaskd = NULL, *histore = NULL, *adns = NULL;
@@ -797,11 +797,13 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
             {
                 p = buf;
                 p += sprintf(p, "HTTP/1.0 200 OK\r\nContent-Length:%d\r\n"
-                        "Content-Type: text/html;charset=%s\r\nConnection: close\r\n",
+                        "Content-Type: text/html;charset=%s\r\n",
                         nhttpd_index_html_code, http_default_charset);
-                //if((n = http_req.headers[HEAD_GEN_CONNECTION]) > 0)
+                if((n = http_req.headers[HEAD_GEN_CONNECTION]) > 0)
+                    p += sprintf(p, "Connection: %s\r\n", (http_req.hlines + n));
                 p += sprintf(p, "\r\n");
                 conn->push_chunk(conn, buf, (p - buf));
+                //DEBUG_LOGGER(hitaskd_logger, "Ready push html_code[%d][%d]:%s", strlen(httpd_index_html_code), nhttpd_index_html_code, httpd_index_html_code);
                 return conn->push_chunk(conn, httpd_index_html_code, nhttpd_index_html_code);
             }
             else if(httpd_home)
@@ -1812,7 +1814,7 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
             if((reg = pcre_compile(templates[i].pattern, flag, &error, &erroffset, NULL))) 
             {
                 nres = FIELD_NUM_MAX * 2;
-                pres = (PRES *)res;
+                pres = (PRES *)((void *)res);
                 start_offset = 0;
                 while(start_offset >= 0)
                 {
@@ -2041,7 +2043,7 @@ void histore_task_handler(void *arg)
             DEBUG_LOGGER(histore_logger, "ready for decompress %d:%d ",
                     docheader->ncontent, (int)ndata);
             if(zdecompress((Bytef *)zdata, (uLong )(docheader->ncontent), 
-                        (Bytef *)content, (uLong *)&ndata) == 0)
+                        (Bytef *)content, (uLong *)((void *)&ndata)) == 0)
             {
                 DEBUG_LOGGER(histore_logger, "compressed nzdata:%d -> ndata:%d", 
                         (int)docheader->ncontent, (int)ndata);
@@ -2237,9 +2239,9 @@ int sbase_initialize(SBASE *sbase, char *conf)
     }
     /* decode html base64 */
     if(html_code_base64 && (n = strlen(html_code_base64)) > 0 
-            && (httpd_index_html_code = (char *)calloc(1, n+1)))
+            && (httpd_index_html_code = (unsigned char *)calloc(1, n + 1)))
     {
-        nhttpd_index_html_code = base64_decode((unsigned char *)httpd_index_html_code, 
+        nhttpd_index_html_code = base64_decode(httpd_index_html_code, 
                 (char *)html_code_base64, n);
     }
     /* link  task table */

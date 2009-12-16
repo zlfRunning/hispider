@@ -385,7 +385,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     if((data = (char *)calloc(1, ndata)))
                     {
                         if((n = httpgzdecompress((Bytef *)zdata, 
-                                        nzdata, (Bytef *)data, (uLong *)&ndata)) == 0)
+                            nzdata, (Bytef *)data, (uLong *)((void *)&ndata))) == 0)
                         {
                             gzdoc_total++;
                             DEBUG_LOGGER(logger, "gzdecompress data from %ld to %ld "
@@ -415,7 +415,8 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                     if((data = (char *)calloc(1, ndata)))
                     {
 
-                        if(zdecompress((Bytef *)zdata, nzdata, (Bytef *)data, (uLong *)&ndata) == 0)
+                        if(zdecompress((Bytef *)zdata, nzdata, (Bytef *)data, 
+                                    (uLong *)((void *)&ndata)) == 0)
                         {
                             zdoc_total++;
                             DEBUG_LOGGER(logger, "zdecompress data from %ld to %ld "
@@ -507,7 +508,7 @@ int hitask_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *ch
                 n = nrawdata;
                 if((zdata = (char *)calloc(1, nzdata)))
                 {
-                    if(zcompress((Bytef *)p, n, (Bytef *)zdata, (uLong * )&(nzdata)) != 0)
+                    if(zcompress((Bytef *)p, n, (Bytef *)zdata, (uLong * )((void *)&nzdata)) != 0)
                     {
                         free(zdata);
                         zdata = NULL;

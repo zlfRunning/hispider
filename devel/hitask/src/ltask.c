@@ -1870,7 +1870,7 @@ end:
             ndata = ncontent * 20;
             if((data = (char *)calloc(1, ndata)))
             {
-                if(uncompress((Bytef *)data, (uLongf *)&ndata, 
+                if(uncompress((Bytef *)data, (uLongf *)((void *)&ndata), 
                             (const Bytef *)content, (uLong)ncontent) == 0)
                 {
                     if(task->state && (n = (ndata - ncontent)) > 0)

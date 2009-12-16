@@ -1,3 +1,6 @@
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
 #ifndef _LTASK_H
 #define _LTASK_H
 #define HTTP_PATH_MAX           256
