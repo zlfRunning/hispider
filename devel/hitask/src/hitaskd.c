@@ -434,6 +434,7 @@ int http_proxy_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA
                if(HEAD_ENT_CONTENT_ENCODING == i
                || HEAD_ENT_CONTENT_LENGTH == i
                || HEAD_ENT_CONTENT_TYPE == i
+               || HEAD_GEN_CONNECTION == i
                || HEAD_RESP_SET_COOKIE == i)
                {
                     continue;
@@ -451,6 +452,7 @@ int http_proxy_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA
                 p += sprintf(p, "%s deflate\r\n", http_headers[HEAD_ENT_CONTENT_ENCODING].e);
             p += sprintf(p, "%s text/html;charset=%s\r\n", http_headers[HEAD_ENT_CONTENT_TYPE].e, 
                         http_default_charset);
+            p += sprintf(p, "Connection:Keep-Alive\r\n");
             p += sprintf(p, "%s %d\r\n", http_headers[HEAD_ENT_CONTENT_LENGTH].e, nout);
             p += sprintf(p, "\r\n");
             //fprintf(stdout, "%s::%d out-length:%d %s\n", __FILE__, __LINE__, nout, buf);
