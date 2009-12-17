@@ -144,6 +144,7 @@
             .eview{color:#0000ff;font-size:13pt;font-weight:bolder;cursor:pointer;}
             .icon{display:inline;color:#FF8000;font-size:13pt;text-align:center;cursor:pointer;}
             .nchilds{display:inline;color:red;font-size:12pt;}
+            #bframe{position:absolute;z-index:1;display:none;border:0}
         </style>
     <script language='javascript'>
             var chradd = '✚', chrfold = '►', chrtree = '▼', chredit='✎', chrdel='✘', chrview = '☜ ';
@@ -2705,6 +2706,11 @@
                     element.style.left = x+'px';
                     element.style.top = y+'px';
                     element.style.width = divwidth + 'px';
+                    element.style.z-index = 100;
+                    var bframe = document.getElementById('bframe');
+                    bframe.style.top = y+'px';
+                    bframe.style.left = x+'px';
+                    bframe.style.z-index = 99;
                     document.body.appendChild(element);
                 }
             }
@@ -3523,5 +3529,6 @@
             http://abc.com/abclist/[a-z].html &nbsp;&nbsp;http://abc.com/aaalist/[a-z]{3}.html
         </form>
     </div>
+    <iframe id='bframe' frameborder=0 ></iframe>
     </body>
 </html>
