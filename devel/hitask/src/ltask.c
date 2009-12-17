@@ -19,6 +19,7 @@
 #include "tm.h"
 #include "hio.h"
 #include "mmtree.h"
+#include "xbase.h"
 #ifndef LI
 #define LI(_x_) ((long int)_x_)
 #endif
@@ -557,8 +558,9 @@ int ltask_view_proxylist(LTASK *task, char *block)
             }
             if(pp != p) --p;
             p += sprintf(p, "%s", "})");
-            n = sprintf(block, "HTTP/1.0 200 OK\r\nContent-Type:text/html\r\n"
-                    "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (long)(p - buf), buf);
+            n = sprintf(block, "HTTP/1.0 200 OK\r\nContent-Type:text/html;charset=%s\r\n"
+                    "Content-Length:%ld\r\nConnection:Keep-Alive\r\n\r\n%s", 
+                    http_default_charset, (long)(p - buf), buf);
         }
         MUTEX_UNLOCK(task->mutex);
     }
@@ -1544,8 +1546,9 @@ int ltask_view_dnslist(LTASK *task, char *block)
             }
             if(p != pp) --p;
             p += sprintf(p, "%s", "}})");
-            n = sprintf(block, "HTTP/1.0 200 OK\r\nContent-Type:text/html\r\n"
-                    "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (long)(p - buf), buf);
+            n = sprintf(block, "HTTP/1.0 200 OK\r\nContent-Type:text/html;charset=%s\r\n"
+                    "Content-Length:%ld\r\nConnection:Keep-Alive\r\n\r\n%s", 
+                    http_default_charset, (long)(p - buf), buf);
         }
         MUTEX_UNLOCK(task->mutex);
     }
@@ -1766,8 +1769,15 @@ int ltask_get_stateinfo(LTASK *task, char *block)
                 task->state->url_task_ok, task->state->url_task_error, task->state->doc_total_zsize, 
                 task->state->doc_total_size, task->state->host_ok, task->state->host_total, 
                 day, hour, min, sec, usec, task->state->speed, task->state->speed_limit);
-        ret = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
-                "Content-Length:%d\r\nConnection:close\r\n\r\n%s", n, buf);
+        p = block;
+        p += sprintf(p, "HTTP/1.0 200 OK\r\n");
+        p += sprintf(p, "Date: ");
+        p += GMTstrdate(0, p);
+        p += sprintf(p, "\r\n");
+        p += sprintf(p, "Content-Type: text/plain;charset=%s\r\n"
+                "Content-Length:%d\r\nConnection:Keep-Alive\r\n\r\n%s", 
+                http_default_charset, n, buf);
+        ret =  p - block;
         MUTEX_UNLOCK(task->mutex);
     }
     return ret;

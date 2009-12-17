@@ -13,6 +13,7 @@
 #include "base64.h"
 #include "hio.h"
 #include "mmtree.h"
+#include "xbase.h"
 #define  HIBASE_TABLE_NAME          "hibase.table"
 #define  HIBASE_TEMPLATE_NAME       "hibase.template"
 #define  HIBASE_TNODE_NAME          "hibase.tnode"
@@ -588,8 +589,9 @@ int hibase_view_table(HIBASE *hibase, int tableid, char *block)
             }
             if(p != pp) --p;
             p += sprintf(p, "%s", "]})");
-            ret = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
-                "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (long)(p - buf), buf);
+            ret = sprintf(block, "HTTP/1.0 200 OK\r\nContent-Type:text/html;charset=%s\r\n"
+                "Content-Length:%ld\r\nConnection:Keep-Alive\r\n\r\n%s", 
+                http_default_charset, (long)(p - buf), buf);
         }
         MUTEX_UNLOCK(hibase->mutex);
     }
@@ -622,8 +624,9 @@ int hibase_list_table(HIBASE *hibase, char *block)
             {
                 --p;
                 p += sprintf(p, "%s", "]})");
-                ret = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
-                "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (long)(p - buf), buf);
+                ret = sprintf(block, "HTTP/1.0 200 OK\r\nContent-Type:text/html;charset=%s\r\n"
+                "Content-Length:%ld\r\nConnection:Keep-Alive\r\n\r\n%s", 
+                http_default_charset, (long)(p - buf), buf);
             }
         }
         MUTEX_UNLOCK(hibase->mutex);
@@ -669,8 +672,9 @@ int hibase_view_database(HIBASE *hibase, char *block)
             }
             if(p != pp)--p;
             p += sprintf(p, "%s", "}})");
-            ret = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
-                "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (long)(p - buf), buf);
+            ret = sprintf(block, "HTTP/1.0 200 OK\r\nContent-Type:text/html;charset=%s\r\n"
+                "Content-Length:%ld\r\nConnection:Keep-Alive\r\n\r\n%s", 
+                http_default_charset, (long)(p - buf), buf);
         }
         MUTEX_UNLOCK(hibase->mutex);
     }
@@ -894,8 +898,9 @@ int hibase_view_tnode_childs(HIBASE *hibase, int tnodeid, char *block)
             }
             if(pp != p) --p;
             p += sprintf(p, "]})\r\n");
-            n = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
-                "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (long)(p - buf), buf);
+            n = sprintf(block, "HTTP/1.0 200 OK\r\nContent-Type:text/html;charset=%s\r\n"
+                "Content-Length:%ld\r\nConnection:Keep-Alive\r\n\r\n%s", 
+                http_default_charset, (long)(p - buf), buf);
         }
         MUTEX_UNLOCK(hibase->mutex);
     }
@@ -1193,8 +1198,9 @@ int hibase_view_templates(HIBASE *hibase, int tnodeid, char *block)
             }
             if(pp != p) --p;
             p += sprintf(p, "%s", "]})");
-            n = sprintf(block, "HTTP/1.0 200\r\nContent-Type:text/html\r\n"
-                "Content-Length:%ld\r\nConnection:close\r\n\r\n%s", (long)(p - buf), buf);
+            n = sprintf(block, "HTTP/1.0 200 OK\r\nContent-Type:text/html;charset=%s\r\n"
+                "Content-Length:%ld\r\nConnection:Keep-Alive\r\n\r\n%s", 
+                http_default_charset, (long)(p - buf), buf);
         }
         MUTEX_UNLOCK(hibase->mutex);
     }

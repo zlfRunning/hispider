@@ -24,8 +24,8 @@
 #include "zstream.h"
 #include "base64.h"
 #include "htmlbase64.h"
+#include "xbase.h"
 #define PROXY_TIMEOUT 1000000
-static char *http_default_charset = "UTF-8";
 static char *httpd_home = NULL;
 static int is_inside_html = 1;
 static unsigned char *httpd_index_html_code = NULL;
@@ -797,11 +797,12 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
             if(is_inside_html && httpd_index_html_code && nhttpd_index_html_code > 0)
             {
                 p = buf;
-                p += sprintf(p, "HTTP/1.0 200 OK\r\nContent-Length:%d\r\n"
+                p += sprintf(p, "HTTP/1.0 200 OK\r\nContent-Length: %d\r\n"
                         "Content-Type: text/html;charset=%s\r\n",
                         nhttpd_index_html_code, http_default_charset);
-                if((n = http_req.headers[HEAD_GEN_CONNECTION]) > 0)
-                    p += sprintf(p, "Connection: %s\r\n", (http_req.hlines + n));
+                //if((n = http_req.headers[HEAD_GEN_CONNECTION]) > 0)
+                //    p += sprintf(p, "Connection: %s\r\n", (http_req.hlines + n));
+                p += sprintf(p, "Connection:Keep-Alive\r\n");
                 p += sprintf(p, "\r\n");
                 conn->push_chunk(conn, buf, (p - buf));
                 //DEBUG_LOGGER(hitaskd_logger, "Ready push html_code[%d][%d]:%s", strlen(httpd_index_html_code), nhttpd_index_html_code, httpd_index_html_code);
@@ -945,7 +946,7 @@ do                                                                              
         }                                                                                       \
         p += sprintf(p, "})");                                                                  \
         x = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html;charset=%s\r\n"                \
-                "Content-Length:%ld\r\nConnection:close\r\n\r\n",                               \
+                "Content-Length:%ld\r\nConnection:Keep-Alive\r\n\r\n",                               \
                 http_default_charset, (long)(p - pp));                                          \
         conn->push_chunk(conn, buf, x);                                                         \
         conn->push_chunk(conn, pp, (p - pp));                                                   \
@@ -1206,7 +1207,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                             id = hibase->update_tnode(hibase, parentid, nodeid, name);
                             n = sprintf(buf, "%d\r\n", id);
                             n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html;charset=%s\r\n"
-                                    "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", 
+                                    "Content-Length:%d\r\nConnection:Keep-Alive\r\n\r\n%d\r\n", 
                                     http_default_charset, n, id);
                             conn->push_chunk(conn, buf, n);
                             goto end;
@@ -1219,7 +1220,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                             id = hibase->delete_tnode(hibase, parentid, nodeid);
                             n = sprintf(buf, "%d\r\n", id);
                             n = sprintf(buf, "HTTP/1.0 200\r\nContent-Type:text/html;charset=%s\r\n"
-                                    "Content-Length:%d\r\nConnection:close\r\n\r\n%d\r\n", 
+                                    "Content-Length:%d\r\nConnection:Keep-Alive\r\n\r\n%d\r\n", 
                                     http_default_charset, n, id);
                             conn->push_chunk(conn, buf, n);
                             goto end;
@@ -1248,6 +1249,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         if((n = ltask->get_stateinfo(ltask, block)) > 0)
                         {
                             conn->push_chunk(conn, block, n);
+                            //DEBUG_LOGGER(hitaskd_logger, "OUT:%s", block);
                             goto end;
                         }else goto err_end;
                         break;
@@ -1527,7 +1529,7 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                         {
                             p = buf;
                             p += sprintf(p, "HTTP/1.0 200\r\nContent-Type:text/html;charset=%s\r\n"
-                                "Content-Length:%d\r\nConnection:close\r\n\r\n", 
+                                "Content-Length:%d\r\nConnection:Keep-Alive\r\n\r\n", 
                                 http_default_charset, n);
                             conn->push_chunk(conn, buf, p - buf);
                             conn->push_chunk(conn, pp, n);

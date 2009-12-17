@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <time.h>
+#include "tm.h"
 static char *_wdays_[]={"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
 static char *_ymonths_[]= {"Jan", "Feb", "Mar","Apr", "May", "Jun",
     "Jul", "Aug", "Sep","Oct", "Nov", "Dec"};
@@ -56,13 +57,20 @@ time_t str2time(char *datestr)
 }
 
 /* time to GMT */
-int GMTstrdate(time_t time, char *date)
+int GMTstrdate(time_t times, char *date)
 {
     struct tm *tp = NULL;
+    time_t timep;
     int n = 0;
 
-    if(time > 0 && (tp = gmtime(&time)))
+    if(date)
     {
+        if(times > 0) tp = gmtime(&times);
+        else
+        {
+            time(&timep);
+            tp = gmtime(&timep);
+        }
         n = sprintf(date, "%s, %02d %s %d %02d:%02d:%02d GMT", _wdays_[tp->tm_wday],
                 tp->tm_mday, _ymonths_[tp->tm_mon], 1900+tp->tm_year, tp->tm_hour,
                 tp->tm_min, tp->tm_sec);
