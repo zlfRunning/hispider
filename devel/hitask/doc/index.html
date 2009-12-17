@@ -26,15 +26,15 @@
             #itab {position:relative;background-color:#F4FBFF;margin:0;padding:0;
                 height:40px; width:100%;top:0px;left:0px;font-size:16pt;cursor:pointer;}
             #itab ul{margin:0;padding:0;list-style:none;font-weight:bolder;cursor: pointer;}
-            #itab li{float:left;background-color:#2F5FA1;color:#c0c0c0;width:150px; height:40px;
+            #itab li{float:left;background-color:#2F5FA1;color:#c0c0c0;width:140px; height:40px;
                 border-right:1px solid #ccc;font-weight:bolder;padding:3px 8px 3px 8px;}
             #itab .tab-selected{background-color:#D0E9F7;color:#2F5FA1;border-right:1px solid #ccc;
-                font-weight:bolder;padding:3px 8px 3px 8px;width:120px;height:40px;}
+                font-weight:bolder;padding:3px 8px 3px 8px;}
             #taskinfo{position:absolute;background-color:#D0E9F7; color:#2F5FA1;display:none;
                 border:1px solid #81BEF7; padding:0px;left:0px;top:46px;height:100%;width:100%;}
             .ktask{font-size:12pt;font-weight:bold;}
             .vtask{font-size:12pt;font-weight:bold;}
-            #database{position:absolute;background-color:#F4FBFF;display:none;
+            #database{position:absolute;background-color:#F4FBFF;display:none;overflow:auto;
                 border:1px solid #81BEF7;padding:0px;left:0px;top:46px;width:100%;height:100%;}
             .dblist{position:relative;padding:0px; background-color:#D0E9F7;height:100%;}
             .dbtitle{position:relative;background-color:#2F5FA1;color:#c0c0c0; height:30px;}
@@ -50,11 +50,11 @@
             .lfield-selected{background-color:#D0E9F7;cursor: pointer;}
             #dbfieldform{position:absolute;width:720px;height:50px;background-color:#ffffff;
                 border:1px solid #81BEF7;padding-top:10px;padding-left:6px;font-size:12pt;
-                color:#2F5FA1;overflow:auto;display:none;}
-            #template{position:absolute;background-color:#F4FBFF;display:none;
+                color:#2F5FA1;z-index:99;overflow:auto;display:none;}
+            #template{position:absolute;background-color:#F4FBFF;display:none;overflow:auto;
                 border:1px solid #81BEF7;padding:0px;left:0px;top:46px;height:100%;width:100%;}
             .template-tab{height:100%;width:100%;}
-            .treetab{background-color:#D0E9F7;height:100%;margin:auto;overflow:auto}
+            .treetab{background-color:#D0E9F7;height:100%;margin:auto;z-index:99;overflow:auto;}
             #tree-title{background-color:#2F5FA1;color:#c0c0c0;font-size:13pt;
                 font-weight:bold;height:30px;width:100%;}
             #treebody{position:relative;color:#000000;width:100%;overflow:auto}
@@ -65,12 +65,13 @@
                 font-weight:bold;height:30px;width:100%;}
             #node-template{position:relative;background-color:#D0E9F7;
                 border:1px solid #ffffff;padding:0px;color:#2F5FA1;}
-            .template-header{background-color:#D0E9F7;cursor: pointer;}
-            .ltemplate{background-color:#D0E9F7;cursor: pointer;}
+            .template-header{background-color:#D0E9F7;}
+            .ltemplate{background-color:#D0E9F7;}
+            .ltemplate-hl{background-color:#F4FBFF;}
             #txtform{position:absolute;width:350px;background-color:#ffffff;
-                border:1px solid #81BEF7;padding:10px;overflow:auto;display:none;}
+                border:1px solid #81BEF7;padding:10px;z-index:99;overflow:auto;display:none;}
             #dbform{position:absolute;width:380px;background-color:#ffffff;
-                border:1px solid #81BEF7;padding:10px;overflow:auto;display:none;}
+                border:1px solid #81BEF7;padding:10px;z-index:99;overflow:auto;display:none;}
             #xtemplateform{position:relative;background-color:#ffffff;display:none;width:100%;
                 border:0px solid #81BEF7;padding:0px;font-size:12pt;color:#2F5FA1;}
             #urlform{position:relative;background-color:#D0E9F7;}
@@ -79,11 +80,11 @@
             .template-bar{position:relative;background-color:#2F5FA1;height:30px;
                 font-size:13pt;font-weight:bold;color:silver;}
             #editor-frame{height:200px;width:100%;border:1px solid #000000;}
-            #template-config{position:absolute;background-color:#D0E9F7;
+            #template-config{position:absolute;background-color:#D0E9F7;z-index:99;
                 border:2px solid #000000;padding:0px;font-size:12pt;color:#2F5FA1;height:550px;}
             #template-config-block{position:relative;width:100%;height:520px;overflow:auto;}
             #template-test{position:absolute;background-color:#D0E9F7; border:2px solid #000000;
-                padding:0px;height:550px;font-size:12pt;color:#2F5FA1;}
+                padding:0px;height:550px;font-size:12pt;color:#2F5FA1;z-index:99;}
             #template-matches{position:relative;height:520px;overflow:auto;}
             #template-test-header{position:relative;background-color:#2F5FA1;height:30px;
                 font-size:14pt;color:red;font-weight:bold;}
@@ -94,7 +95,7 @@
             .closebutton{font-size:14pt;font-weight:bold;color:red;
                 cursor:pointer;display:inline;text-align:right;}
             .closetxt{cursor:pointer;font-size:10pt;color:#cccccc;text-align:right;}
-            #urlblock{position:absolute;background-color:#F4FBFF;display:none;
+            #urlblock{position:absolute;background-color:#F4FBFF;display:none;overflow:auto;
                 border:1px solid #81BEF7;padding:0px;left:0px;top:46px;width:100%;height:100%;}
             #url-header{position:relative;background-color:#2F5FA1;color:#cccccc;
                 height:30px;width:100%;border:1px solid #FFFFFF;}
@@ -107,9 +108,9 @@
             .url-li-page{color:#cccc70;font-weight:bold;font-size:13pt;}
             #urllist-form{position:absolute;width:720px;height:150px;background-color:#ffffff;
                 border:1px solid #81BEF7;padding-top:10px;padding-left:6px;font-size:12pt;
-                color:#2F5FA1;overflow:auto;display:none;}
-            #record-view{position:absolute;background-color:#D0E9F7; border:2px solid #000000;
-                padding:0px;height:550px;font-size:12pt;color:#2F5FA1;}
+                color:#2F5FA1;z-index:99;overflow:auto;display:none;}
+            #record-view{position:absolute;background-color:#D0E9F7; z-index:99;
+                border:2px solid #000000;padding:0px;height:550px;font-size:12pt;color:#2F5FA1;}
             #record-res{position:relative;height:520px;overflow:auto;}
             #record-header{position:relative;background-color:#2F5FA1;height:30px;
                 font-size:14pt;color:red;font-weight:bold;}
@@ -136,7 +137,7 @@
             #user{position:absolute;background-color:#D0E9F7; color:#2F5FA1;display:none;
                 border:1px solid #81BEF7; padding:0px;left:0px;top:46px;height:100%;width:100%;}
             .listform{margin:0px;display: inline;}
-            .node{overflow:hidden;color:black;font-size:12pt;}
+            .node{z-index:99;overflow:hidden;color:black;font-size:12pt;}
             .nodename{color:black;font-size:12pt;cursor:pointer;}
             .eadd{color:#5FB404;font-size:13pt;font-weight:bolder;cursor:pointer;}
             .eupdate{color:#FF8000;font-size:13pt;font-weight:bolder;cursor:pointer;}
@@ -321,17 +322,37 @@
             {
                 obj.className = "title";
             }
+            function overBFrame(element)
+            {
+                var bframe = document.getElementById('bframe');
+                if(bframe)
+                {
+                    bframe.style.left = element.offsetLeft+"px";
+                    bframe.style.top = element.offsetTop+"px";
+                    bframe.style.width = element.offsetWidth+"px";
+                    bframe.style.height = element.offsetHeight+"px";
+                    bframe.style.display = 'inline';
+                }
+            }
+            function hideBFrame()
+            {
+                var bframe = document.getElementById('bframe');
+                bframe.style.display = 'none';
+            }
             function removeElement(_element)
             {
                 var _parentElement = _element.parentNode;
-                if(_parentElement){
+                if(_parentElement)
+                {
                     _parentElement.removeChild(_element);  
                 }
+                return hideBFrame();
             }
             function CreateXMLHTTP()
             {
                 var xmlhttp = null;
-                xmlhttpObj = ["MSXML2.XmlHttp.5.0","MSXML2.XmlHttp.4.0","MSXML2.XmlHttp.3.0","MSXML2.XmlHttp","Microsoft.XmlHttp"];
+                xmlhttpObj = ["MSXML2.XmlHttp.5.0","MSXML2.XmlHttp.4.0",
+                "MSXML2.XmlHttp.3.0","MSXML2.XmlHttp","Microsoft.XmlHttp"];
                 if(window.XMLHttpRequest)
                 {
                     xmlhttp = new XMLHttpRequest();
@@ -533,6 +554,7 @@
             function CloseThis(element)
             {
                 element.parentNode.parentNode.style.display = "none";
+                hideBFrame(element.parentNode.parentNode);
             }
             //Add child
             function XAdd(e)
@@ -545,6 +567,7 @@
                 Xdiv.style.left = x;
                 Xdiv.style.top = y + 10;
                 Xdiv.style.display = 'inline';
+                overBFrame(Xdiv);
                 var form = document.forms["editorform"];
                 form['op'].value = 'node_add';
                 form['pid'].value = element.parentNode.parentNode.getAttribute('UID');
@@ -562,6 +585,7 @@
                 Xdiv.style.left = x;
                 Xdiv.style.top = y + 10;
                 Xdiv.style.display = 'inline';
+                overBFrame(Xdiv);
                 var form = document.forms["editorform"];
                 form['op'].value = 'node_update';
                 form['pid'].value = element.parentNode.parentNode.getAttribute('parent');
@@ -573,6 +597,7 @@
             {
                 var div = document.getElementById('txtform');
                 div.style.display = 'none';
+                hideBFrame();
                 return true;
             }
             function EditNode(form)
@@ -1041,6 +1066,7 @@
             {
                 var div = document.getElementById('dbform');
                 div.style.display = 'none';
+                hideBFrame();
                 return true;
             }
             function DBXAdd(e)
@@ -1053,6 +1079,7 @@
                 Xdiv.style.left = x;
                 Xdiv.style.top = y + 10;
                 Xdiv.style.display = 'inline';
+                overBFrame(Xdiv);
                 var form = document.forms["xdbform"];
                 form['op'].value = 'table_add';
                 form['tableid'].value = '';
@@ -1069,6 +1096,7 @@
                 Xdiv.style.left = x;
                 Xdiv.style.top = y + 10;
                 Xdiv.style.display = 'inline';
+                overBFrame(Xdiv);
                 var form = document.forms["xdbform"];
                 form['op'].value = 'table_rename';
                 form['tableid'].value = id;
@@ -1124,6 +1152,7 @@
                 Xdiv.style.left = x;
                 Xdiv.style.top = y + 10;
                 Xdiv.style.display = 'inline';
+                overBFrame(Xdiv);
                 var form = document.forms["dbfieldform"];
                 form['op'].value = 'field_add';
                 form['tableid'].value = tabid;
@@ -1146,6 +1175,7 @@
                 Xdiv.style.left = x;
                 Xdiv.style.top = y + 10;
                 Xdiv.style.display = 'inline';
+                overBFrame(Xdiv);
                 var form = document.forms["dbfieldform"];
                 form['op'].value = 'field_update';
                 form['tableid'].value = tabid;
@@ -1171,6 +1201,7 @@
             {
                 var div = document.getElementById('dbfieldform');
                 div.style.display = 'none';
+                hideBFrame();
                 return true;
             }
             function EditField(form)
@@ -1253,6 +1284,7 @@
             function divremove(element)
             {
                 document.body.removeChild(element);
+                hideBFrame();
                 return true;
             }
             function divhidden(element)
@@ -1261,7 +1293,9 @@
                 {
                     element.innerHTML = "";
                 }
+                hideBFrame();
             }
+            
             //moving div
             function divmove(e, o)
             {
@@ -1279,6 +1313,7 @@
                         e=e||window.event;
                         o.parentNode.style.left=(e.clientX-x)+"px";
                         o.parentNode.style.top=(e.clientY-y)+"px";
+                        overBFrame(o.parentNode);
                     };
                     document.onmouseup=function()
                     {
@@ -1286,6 +1321,7 @@
                     };
                 };
             }
+
             function ResetTemplateform()
             {
                 var form = document.forms["templateform"];
@@ -1333,6 +1369,7 @@
                 form['link_node'].options.length = 1;
                 form = document.forms['urlform'];
                 form['method'][0].checked = true;
+                hideBFrame();
             }
             function XTAdd(nodeid)
             {
@@ -1716,6 +1753,7 @@
                         element.style.top = y+'px';
                         element.style.width = divwidth + 'px';
                         document.body.appendChild(element);
+                        overBFrame(element);
                         /*
                         var frame = document.createElement('iframe');
                         frame.id = 'template-config-frame';
@@ -1822,6 +1860,7 @@
                         element.style.top = y+'px';
                         element.style.width = divwidth + 'px';
                         document.body.appendChild(element);
+                        overBFrame(element);
                         /*
                         var frame = document.createElement('iframe');
                         frame.id = 'template-viewer';
@@ -1920,10 +1959,12 @@
                         }
                         url = temp['url'];
                         link = temp['link'];
+                        if(i%2) cssname = 'ltemplate';
+                        else cssname = 'ltemplate-hl';
                         nfields = temp['nfields']+1;
                         htmlstr += "<form action='javascript:void(0)' class='listform' ";
                         htmlstr += " name='xform"+tempid+"' onsubmit='XTEdit(this)'>";
-                        htmlstr += "<li class='ltemplate' >";
+                        htmlstr += "<li class='"+cssname+"' >";
                         htmlstr += "<textarea name='pattern' cols=80 rows=1 readonly/disabled >" 
                             +pattern+"</textarea>&nbsp;&nbsp;&nbsp;&nbsp;";
                         htmlstr += "<input type=hidden name='nodeid' value='"+nodeid+"'>";
@@ -2138,6 +2179,7 @@
                 e = e || window.event;
                 var element = e.target || e.srcElement;
                 var oli = null, ob = null, odiv = null;
+                hideBFrame();
                 for(i = 0; i < elist.length; i++)
                 {
                     if((oli = document.getElementById('tab'+i)))
@@ -2706,12 +2748,9 @@
                     element.style.left = x+'px';
                     element.style.top = y+'px';
                     element.style.width = divwidth + 'px';
-                    element.style.z-index = 100;
-                    var bframe = document.getElementById('bframe');
-                    bframe.style.top = y+'px';
-                    bframe.style.left = x+'px';
-                    bframe.style.z-index = 99;
                     document.body.appendChild(element);
+                    element.style.display = 'inline';
+                    overBFrame(element);
                 }
             }
             function ViewRecord(recordid)
@@ -2855,7 +2894,7 @@
                         htmlstr += "<li class='"+css+"' onmouseout=\"outDiv(this,'"+css+"')\" ";
                         htmlstr += " onmousemove=\"onDiv(this, 'url-li-selected')\" >";
                         htmlstr += i+":&nbsp;&nbsp;";
-                        htmlstr += "<a target='_blank' href='"+url+"'>"+url+"</a>";
+                        htmlstr += "<a href='"+url+"' target='_blank'>"+url+"</a>";
                         htmlstr += "&nbsp;&nbsp;";
                         if(nchilds > 0)
                         {
@@ -2904,6 +2943,7 @@
             {
                 var div = document.getElementById('urllist-form');
                 if(div) div.style.display = 'none';
+                hideBFrame();
             }
             function AddNodeURL(form)
             {
@@ -2955,6 +2995,7 @@
                 form['parentid'].value = parentid;
                 form['url'].focus();
                 form['url'].value = 'http://';
+                overBFrame(Xdiv);
             }
 
             function UpdateNodeURL(nodeid, urlnodeid, urlid, oselect, page)
@@ -3345,16 +3386,16 @@
                     <option value='-1' selected>数据表</option>
                 </select>
                 &nbsp;&nbsp;&nbsp;&nbsp;
-                <input type='button' value='Test Template' onclick="TestTemplate(this.form)">
+                <input type='button' value='模板测试' onclick="TestTemplate(this.form)">
                 &nbsp;&nbsp;&nbsp;&nbsp;
-                <input type='button' value='Config Template' onclick="ConfigTemplate(this.form)">
+                <input type='button' value='确认模板' onclick="ConfigTemplate(this.form)">
                 <hr>
                 <div class='template-bar'>用于拼接隐藏的链接和Ajax内容块地址</div>
                 URL规则:<input type=text name='link' value='' size=48>
                 &nbsp;&nbsp;&nbsp;&nbsp;
-                <input type='button' value='Test Template & Link' onclick="TestTemplate(this.form)">
+                <input type='button' value='测试' onclick="TestTemplate(this.form)">
                 &nbsp;&nbsp;&nbsp;&nbsp;
-                <input type='button' value='Submit Link' onclick="EditLink(this.form);">
+                <input type='button' value='确认' onclick="EditLink(this.form);">
                 <br>
                 <input type=radio name='link_method' value='0' checked>GET
                 &nbsp;
@@ -3448,7 +3489,6 @@
             &nbsp;&nbsp;&nbsp;&nbsp;
             <span class='closebutton' onclick="CloseThis(this)">x</span>
         </form>
-        <iframe style='position:absolutetop:0;left:0;height:100%;width:100%;border:0;'></iframe>
     </div>
     <div id='dbform'>
         <form name="xdbform" class='listform' action="javascript:void(0)" 
