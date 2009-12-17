@@ -19,6 +19,7 @@
             {
                 position:relative;
                 background-color:#F4FBFF;
+                z-index:0;
                 width:100%;
                 height:100%;
             }
@@ -3246,7 +3247,7 @@
     </script>
     </head>
     <!-- <body onload='javascript:loadInit();'> -->
-    <body onload='javascript:loadTaskInfo();'>
+<body onload='javascript:loadTaskInfo();'>
   <div id='mainframe'>
     <div id='itab'>
         <ul>
@@ -3423,8 +3424,10 @@
     </form>
     </div>
     <div id='proxy-list'></div>
+
     </div>
     <div id='user'>
+
     </div>
 </div>
     <div id='txtform'>
@@ -3439,6 +3442,7 @@
             &nbsp;&nbsp;&nbsp;&nbsp;
             <span class='closebutton' onclick="CloseThis(this)">x</span>
         </form>
+        <iframe style='position:absolutetop:0;left:0;height:100%;width:100%;border:0;'></iframe>
     </div>
     <div id='dbform'>
         <form name="xdbform" class='listform' action="javascript:void(0)" 
@@ -3519,6 +3523,5 @@
             http://abc.com/abclist/[a-z].html &nbsp;&nbsp;http://abc.com/aaalist/[a-z]{3}.html
         </form>
     </div>
-
     </body>
 </html>
