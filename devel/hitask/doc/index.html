@@ -2247,7 +2247,7 @@
                             }
                         }
                     }
-                    xmlHttp.send();
+                    xmlHttp.send(null);
                 }
                 return HiddenDBFieldform();
             }
@@ -2387,7 +2387,7 @@
 		            if((xmlHttp = CreateXMLHTTP()) != null)
 		            {
 		                var requestURL = '/proxy/'+url;
-                        var argv = "";
+                        var argv = null;
                         var method = 0;
                         if(form['method'][1].checked == true)
                         {
@@ -2412,6 +2412,7 @@
                         {
 		                    requestURL = '/proxy/'+url;
 		                    xmlHttp.open('GET', requestURL, true);
+                            argv = null;
                         }
 		                xmlHttp.onreadystatechange=function()
 		                {
@@ -2463,7 +2464,7 @@
 		                    }
                             over_wait();
 		                }
-		                xmlHttp.send();
+		                xmlHttp.send(argv);
                         start_wait();
 		            }
 		        }

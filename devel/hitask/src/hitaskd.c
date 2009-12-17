@@ -27,6 +27,7 @@
 #define PROXY_TIMEOUT 1000000
 static char *http_default_charset = "UTF-8";
 static char *httpd_home = NULL;
+static int is_inside_html = 1;
 static unsigned char *httpd_index_html_code = NULL;
 static int  nhttpd_index_html_code = 0;
 static SBASE *sbase = NULL;
@@ -793,7 +794,7 @@ int hitaskd_packet_handler(CONN *conn, CB_DATA *packet)
         }
         if(http_req.reqid == HTTP_GET)
         {
-            if(httpd_index_html_code && nhttpd_index_html_code > 0)
+            if(is_inside_html && httpd_index_html_code && nhttpd_index_html_code > 0)
             {
                 p = buf;
                 p += sprintf(p, "HTTP/1.0 200 OK\r\nContent-Length:%d\r\n"
@@ -2228,6 +2229,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
     /* page number */
     http_page_num = iniparser_getint(dict, "HITASKD:http_page_num", 100);
     /* httpd_home */
+    is_inside_html = iniparser_getint(dict, "HITASKD:is_inside_html", 1);
     httpd_home = iniparser_getstr(dict, "HITASKD:httpd_home");
     cacert_file = iniparser_getstr(dict, "HITASKD:cacert_file");
     privkey_file = iniparser_getstr(dict, "HITASKD:privkey_file");
