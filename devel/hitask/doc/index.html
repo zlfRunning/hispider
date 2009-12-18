@@ -79,7 +79,7 @@
             #templatediv{display:none;position:relative;}
             .template-bar{position:relative;background-color:#2F5FA1;height:30px;
                 font-size:13pt;font-weight:bold;color:silver;}
-            #editor-frame{height:200px;width:100%;border:1px solid #000000;}
+            #editor-frame{height:200px;width:100%;border:1px solid #000000;overflow:auto;}
             #template-config{position:absolute;background-color:#D0E9F7;z-index:99;
                 border:2px solid #000000;padding:0px;font-size:12pt;color:#2F5FA1;height:550px;}
             #template-config-block{position:relative;width:100%;height:520px;overflow:auto;}
@@ -2318,18 +2318,21 @@
 	            var Doc = null;
 	            if(iframe)
 	            {
-	                if(iframe.document)
+                    var browser = navigator.appName;
+                    var version = navigator.appVersion;
+                    if(version.match(/MSIE/i) && iframe.contentWindow) //IE
 	                {
-	                    Doc = iframe.document;
+	                    Doc = iframe.contentWindow.document;
 	                }
 	                else if(iframe.contentDocument) // For NS6
 	                {
 	                    Doc = iframe.contentDocument;
 	                }
-	                else if(iframe.contentWindow)
+	                else if(iframe.document)
 	                {
-	                    Doc = iframe.contentWindow.document;
+	                    Doc = iframe.document;
 	                }
+                    else return null;
 	                if(Doc)
 	                {
 	                    if(Doc.designMode) Doc.designMode = 'On';
@@ -2487,9 +2490,6 @@
                                         ediv.style.display = "inline";
 		                            var element = document.getElementById('source_view');
 		                            if(element) element.innerHTML = "";
-		                            var frame = document.createElement("iframe");
-		                            frame.setAttribute("id", 'editor-frame');
-		                            element.appendChild(frame);
 		                            if((ediv = document.getElementById('templatediv'))) 
                                     {
                                         ediv.style.display = "inline";
@@ -2497,6 +2497,10 @@
 		                                document.forms['templateform']['url'].value = url;
 		                                document.forms['templateform']['method'].value = method;
                                     }
+                                    var frame = document.createElement("iframe");
+		                                frame.setAttribute("id", 'editor-frame');
+		                                frame.setAttribute("src", 'about:blank');
+		                                element.appendChild(frame);
 		                            var doc = null;
                                     if((doc = getFrameDocument('editor-frame')))
 		                            {
@@ -2515,7 +2519,7 @@
 		                                doc.open();
 		                                doc.write(htmlstr);
 		                                doc.close();
-		                            }
+                                    }
 		                        }
                                 else
                                 {
