@@ -2490,8 +2490,15 @@
 		                            var frame = document.createElement("iframe");
 		                            frame.setAttribute("id", 'editor-frame');
 		                            element.appendChild(frame);
+		                            if((ediv = document.getElementById('templatediv'))) 
+                                    {
+                                        ediv.style.display = "inline";
+		                                document.forms['templateform']['code'].value = str;
+		                                document.forms['templateform']['url'].value = url;
+		                                document.forms['templateform']['method'].value = method;
+                                    }
 		                            var doc = null;
-		                            if((doc = getFrameDocument('editor-frame')))
+                                    if((doc = getFrameDocument('editor-frame')))
 		                            {
                                         var htmlstr = str;
                                         if(str.match(/<base .*?href=.*?>/i) == null)
@@ -2509,13 +2516,6 @@
 		                                doc.write(htmlstr);
 		                                doc.close();
 		                            }
-                                    if((ediv = document.getElementById('templatediv'))) 
-                                    {
-                                        ediv.style.display = "inline";
-		                                document.forms['templateform']['code'].value = str;
-		                                document.forms['templateform']['url'].value = url;
-		                                document.forms['templateform']['method'].value = method;
-                                    }
 		                        }
                                 else
                                 {
