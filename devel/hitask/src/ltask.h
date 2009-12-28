@@ -203,12 +203,14 @@ typedef struct _LUPDATE
     int urlid;
     int time;
 }LUPDATE;
+
 /* COOKIE */
 typedef struct _LCOOKIE
 {
     int hostid;
     int offsets[L_COOKIE_MAX];
 }LCOOKIE;
+
 /* USER */
 typedef struct _LUSER
 {
@@ -217,6 +219,7 @@ typedef struct _LUSER
     char name[L_USER_MAX];
     char passwd[L_PASSWD_MAX];
 }LUSER;
+
 /* TASK */
 typedef struct _LTASK
 {
@@ -240,7 +243,7 @@ typedef struct _LTASK
     void *qfile;
     void *users;
     LSTATE *state;
-    int state_fd;
+    int  state_fd;
     int  cookie_fd;
     void *cookies;
     void *timer;
@@ -286,7 +289,7 @@ typedef struct _LTASK
     int (*update_permission)(struct _LTASK *, int userid, char *username, int permission);
     int (*authorization)(struct _LTASK *, int userid, char *username, char *passwd, LUSER *user);
     int (*set_user_status)(struct _LTASK *, int userid, char *username, int status);
-    int (*list_users)(struct _LTASK *, char *block, int *nblock);
+    int (*list_users)(struct _LTASK *, char *block);
     int (*get_stateinfo)(struct _LTASK *, char *block);
     int (*update_content)(struct _LTASK *, int urlid, char *date, 
             char *type, char *content, int ncontent, int nrawdata, 

@@ -37,8 +37,8 @@ static LTASK *ltask = NULL;
 static HIBASE *hibase = NULL;
 static void *hitaskd_logger = NULL, *histore_logger = NULL, *adns_logger = NULL;
 static int is_need_authorization = 0;
-static int is_need_extract_link = 0;
 static char *authorization_name = "Hitask Administration System";
+static int is_need_extract_link = 0;
 static void *argvmap = NULL;
 static int proxy_timeout = 2000000;
 static int histore_ntask = 0;
@@ -89,10 +89,17 @@ static char *e_argvs[] =
 #define E_ARGV_SPEED     19
     "page",
 #define E_ARGV_PAGE      20
-    "recordid"
+    "recordid",
 #define E_ARGV_RECORDID  21
+    "userid",
+#define E_ARGV_USERID    22
+    "user",
+#define E_ARGV_USER      23
+    "passwd"
+#define E_ARGV_PASSWD    24
 };
-#define E_ARGV_NUM       22
+#define E_ARGV_NUM       25
+
 static char *e_ops[]=
 {
     "host_up",
@@ -165,10 +172,18 @@ static char *e_ops[]=
 #define E_OP_SPEED_LIMIT        33
     "node_brother",
 #define E_OP_NODE_BROTHER       34
-    "record_view"
+    "record_view",
 #define E_OP_RECORD_VIEW        35
+    "user_add",
+#define E_OP_USER_ADD           36
+    "user_del",
+#define E_OP_USER_DEL           37
+    "user_update",
+#define E_OP_USER_UPDATE        38
+    "user_list"
+#define E_OP_USER_LIST          39
 };
-#define E_OP_NUM 36
+#define E_OP_NUM                40
 
 /* dns packet reader */
 int adns_packet_reader(CONN *conn, CB_DATA *buffer)
@@ -667,15 +682,21 @@ do                                                                  \
 /* authorization */
 int hitaskd_auth(CONN *conn, HTTP_REQ *http_req)
 {
-    char *key = NULL, *val = NULL;
-    int i = 0, session_id = 0;
+    char *key = NULL, *val = NULL, buf[HTTP_BUF_SIZE];
+    int i = 0, session_id = -1, n = 0;
     LUSER user = {0};
 
     if(http_kv(&(http_req->auth), http_req->hlines, 
                 http_req->nhline, &key, &val) >= 0) 
     {
+        DEBUG_LOGGER(hitaskd_logger, "auth:key[%s]=>val[%s]", key, val);
         if((session_id = ltask->authorization(ltask, -1, key, val, &user)) >= 0)
         {
+            n = sprintf(buf, "HTTP/1.0 204 OK\r\nContent-Type: text/html;charset=%s\r\n"
+                    "Content-Length: 0\r\nSet-Cookie: hitaskd_authid=%d\r\n\r\n", 
+                    http_default_charset, session_id);
+            conn->push_chunk(conn, buf, n);
+            conn->session_id = session_id;
             return session_id;
         }
     }
@@ -683,10 +704,15 @@ int hitaskd_auth(CONN *conn, HTTP_REQ *http_req)
     {
         for(i = 0; i < http_req->ncookies; i++)
         {
-            if(http_kv(&(http_req->cookies[i]), http_req->hlines,
-                        http_req->nhline, &key, &val) >= 0)
+            if((http_kv(&(http_req->cookies[i]), http_req->hlines,
+                            http_req->nhline, &key, &val)) >= 0)
             {
-                return session_id; 
+                DEBUG_LOGGER(hitaskd_logger, "cookie:key[%s]=>val[%s]", key, val);
+                if(strcmp(key, "hitaskd_authid") == 0 && (session_id = atoi(val)) >= 0  
+                        && session_id == conn->session_id)
+                {
+                    return session_id;
+                }
             }
         }
     }
@@ -962,9 +988,9 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
     int i = 0, id = 0, n = 0, op = -1, nodeid = -1, x = -1, fieldid = -1, parentid = -1, 
         urlid = -1, hostid = -1, tableid = -1, type = -1,  flag = -1, templateid = -1, 
         urlnodeid = -1, recordid = -1, level = -1, count = 0, page = 1, from = 0, 
-        total = 0, ret = 0, is_purl = 0, ppid = 0;
+        total = 0, ret = 0, is_purl = 0, ppid = 0, userid = -1;
     char *p = NULL, *end = NULL, *name = NULL, *host = NULL, *url = NULL, *link = NULL, 
-         *pattern = NULL, *map = NULL, *linkmap = NULL, *pp = NULL, 
+         *pattern = NULL, *map = NULL, *linkmap = NULL, *pp = NULL, *user = NULL, *passwd = NULL,
          format[HTTP_URL_MAX], buf[HTTP_BUF_SIZE], block[HTTP_BUF_SIZE];
     HTTP_REQ httpRQ = {0}, *http_req = NULL;
     TNODE *tnodes = NULL, tnode = {0};
@@ -1067,6 +1093,15 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                                     break;
                                 case E_ARGV_PAGE:
                                     page = atoi(p);
+                                    break;
+                                case E_ARGV_USERID:
+                                    userid = atoi(p);
+                                    break;
+                                case E_ARGV_USER:
+                                    user = p;
+                                    break;
+                                case E_ARGV_PASSWD:
+                                    passwd = p;
                                     break;
                                 default:
                                     break;
@@ -1592,6 +1627,48 @@ int hitaskd_data_handler(CONN *conn, CB_DATA *packet, CB_DATA *cache, CB_DATA *c
                             conn->push_chunk(conn, block, n);
                             goto end;
                         }else goto err_end;
+                        break;
+                    case E_OP_USER_ADD:
+                        if((ltask->add_user(ltask, user, passwd)) >= 0)
+                        {
+                            if((n = ltask->list_users(ltask, block)) > 0)
+                            {
+                                conn->push_chunk(conn, block, n);
+                                goto end;
+                            }
+                            else goto err_end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_USER_DEL:
+                        if((userid >= 0 || user) && (ltask->del_user(ltask, userid, user)) >= 0)
+                        {
+                            if((n = ltask->list_users(ltask, block)) > 0)
+                            {
+                                conn->push_chunk(conn, block, n);
+                                goto end;
+                            }
+                            else goto err_end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_USER_UPDATE:
+                        if(passwd && (userid >= 0 || user) 
+                                && (ltask->update_passwd(ltask, userid, user, passwd)) >= 0)
+                        {
+                            if((n = ltask->list_users(ltask, block)) > 0)
+                            {
+                                conn->push_chunk(conn, block, n);
+                                goto end;
+                            }
+                            else goto err_end;
+                        }else goto err_end;
+                        break;
+                    case E_OP_USER_LIST:
+                        if((n = ltask->list_users(ltask, block)) > 0)
+                        {
+                            conn->push_chunk(conn, block, n);
+                            goto end;
+                        }
+                        else goto err_end;
                         break;
                     default:
                         goto err_end;
@@ -2234,6 +2311,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
     http_page_num = iniparser_getint(dict, "HITASKD:http_page_num", 100);
     /* httpd_home */
     is_inside_html = iniparser_getint(dict, "HITASKD:is_inside_html", 1);
+    is_need_authorization = iniparser_getint(dict, "HITASKD:is_need_authorization", 1);
     httpd_home = iniparser_getstr(dict, "HITASKD:httpd_home");
     cacert_file = iniparser_getstr(dict, "HITASKD:cacert_file");
     privkey_file = iniparser_getstr(dict, "HITASKD:privkey_file");

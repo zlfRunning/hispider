@@ -20,6 +20,8 @@
 #include "hio.h"
 #include "mmtree.h"
 #include "xbase.h"
+#include "hibase.h"
+
 #ifndef LI
 #define LI(_x_) ((long int)_x_)
 #endif
@@ -280,6 +282,28 @@ int ltask_set_basedir(LTASK *task, char *dir)
                 ++dns;
             }while(++i < task->dnsio.total);
         }
+        /* urlmap */
+        if(fstat(task->key_fd, &st) == 0 && st.st_size > 0)
+        {
+            if((pp = (char *)mmap(NULL, st.st_size, PROT_READ, 
+                            MAP_PRIVATE, task->key_fd, 0)) != (void *)-1)
+            {
+                p = pp;
+                end = p + st.st_size;
+                i = 0;
+                do
+                {
+                    dp = (void *)((long)(++i));
+                    KVMAP_ADD(task->urlmap, p, dp, olddp);
+                    p += MD5_LEN;
+                }while(p < end);
+                munmap(pp, st.st_size);
+            }
+            else
+            {
+                _EXIT_("mmap domain(%d) failed, %s\n", task->domain_fd, strerror(errno));
+            }
+        }
         /* user */
         sprintf(path, "%s/%s", dir, L_USER_NAME);
         p = path;
@@ -290,7 +314,23 @@ int ltask_set_basedir(LTASK *task, char *dir)
         }
         if(task->userio.total > 0 && (user = HIO_MAP(task->userio, LUSER)))
         {
-            i = 0;
+            if(user[0].status <= 0) 
+            {
+                dp = (void *)((long)(1));
+                p = "admin";
+                strcpy(user[0].name, p);
+                strcpy(user[0].passwd, p);
+                n = strlen(p);
+                TRIETAB_ADD(task->users, p, n, dp);
+            }
+            else
+            {
+                dp = (void *)((long)(1));
+                p = user[0].name;
+                n = strlen(p);
+                TRIETAB_ADD(task->users, p, n, dp);
+            }
+            i = 1;
             do
             {
                 if(user->status != USER_STATUS_ERR && (n = strlen((p = user->name))) > 0)
@@ -303,28 +343,6 @@ int ltask_set_basedir(LTASK *task, char *dir)
                 ++user;
             }while(++i < task->userio.total);
         }
-        /* urlmap */
-         if(fstat(task->key_fd, &st) == 0 && st.st_size > 0)
-         {
-             if((pp = (char *)mmap(NULL, st.st_size, PROT_READ, 
-                             MAP_PRIVATE, task->key_fd, 0)) != (void *)-1)
-             {
-                 p = pp;
-                 end = p + st.st_size;
-                 i = 0;
-                 do
-                 {
-                     dp = (void *)((long)(++i));
-                     KVMAP_ADD(task->urlmap, p, dp, olddp);
-                     p += MD5_LEN;
-                 }while(p < end);
-                 munmap(pp, st.st_size);
-             }
-             else
-             {
-                 _EXIT_("mmap domain(%d) failed, %s\n", task->domain_fd, strerror(errno));
-             }
-         }
         /* document */
         return 0;
     }
@@ -1573,6 +1591,7 @@ int ltask_add_user(LTASK *task, char *name, char *passwd)
             {HIO_MMAP(task->userio, LUSER, USER_INCRE_NUM);}
             if((user = HIO_MAP(task->userio, LUSER)))
             {
+                i = 1;
                 while(i < task->userio.total)
                 {
                     if(user[i].status <= 0)
@@ -1694,7 +1713,8 @@ int ltask_authorization(LTASK *task, int userid, char *name, char *passwd, LUSER
         {
             TRIETAB_GET(task->users, name, n, dp);
             id = (long)dp - 1;
-        }else id = userid;
+        }
+        else id = userid;
         if(id >= 0 && id < task->userio.total 
                 && (user = (LUSER *)(task->userio.map)) 
                 && user != (LUSER *)-1 && (n = strlen(user[id].name)) > 0)
@@ -1736,13 +1756,39 @@ int ltask_set_user_status(LTASK *task, int userid, char *name, int status)
 }
 
 /* list users */
-int ltask_list_users(LTASK *task, char *block, int *nblock)
+int ltask_list_users(LTASK *task, char *block)
 {
-    if(task && block && nblock && *nblock > 0)
+    char  buf[HTTP_BUF_SIZE], *p = NULL, *pp = NULL;
+    LUSER *user = NULL;
+    int i = 0, n = -1;
+
+    if(task && block)
     {
+        MUTEX_LOCK(task->mutex);
+        if((user = (LUSER *)(task->userio.map)) && user != (LUSER *)-1)
+        {
+            p = buf;
+            p += sprintf(p, "%s", "({");
+            pp = p;
+            for(i = 0; i < task->userio.total; i++)
+            {
+                if(user[i].status > 0)
+                {
+                    p += sprintf(p, "'%d':{'id':'%d', 'name':'%s', 'status':'%d'},", 
+                            i, i, user[i].name, user[i].status); 
+                }
+            }
+            if(pp != p) --p;
+            p += sprintf(p, "%s", "})");
+            n = sprintf(block, "HTTP/1.0 200 OK\r\nContent-Type:text/html;charset=%s\r\n"
+                    "Content-Length:%ld\r\nConnection:Keep-Alive\r\n\r\n%s", 
+                    http_default_charset, (long)(p - buf), buf);
+        }
+        MUTEX_UNLOCK(task->mutex);
     }
-    return 0;
+    return n;
 }
+
 /* get state infomation */
 int ltask_get_stateinfo(LTASK *task, char *block)
 {
