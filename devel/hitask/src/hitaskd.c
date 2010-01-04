@@ -682,7 +682,7 @@ do                                                                  \
 /* authorization */
 int hitaskd_auth(CONN *conn, HTTP_REQ *http_req)
 {
-    char *key = NULL, *val = NULL, buf[HTTP_BUF_SIZE];
+    char *key = NULL, *val = NULL, *name = NULL, buf[HTTP_BUF_SIZE];
     int i = 0, session_id = -1, n = 0;
     LUSER user = {0};
 
@@ -693,10 +693,9 @@ int hitaskd_auth(CONN *conn, HTTP_REQ *http_req)
         if((session_id = ltask->authorization(ltask, -1, key, val, &user)) >= 0)
         {
             n = sprintf(buf, "HTTP/1.0 204 OK\r\nContent-Type: text/html;charset=%s\r\n"
-                    "Content-Length: 0\r\nSet-Cookie: hitaskd_authid=%d\r\n\r\n", 
-                    http_default_charset, session_id);
+                    "Content-Length: 0\r\nSet-Cookie: hitaskd_authid=%d;"
+                    "hitaskd_authname=%s\r\n\r\n", http_default_charset, session_id, key);
             conn->push_chunk(conn, buf, n);
-            conn->session_id = session_id;
             return session_id;
         }
     }
@@ -708,12 +707,15 @@ int hitaskd_auth(CONN *conn, HTTP_REQ *http_req)
                             http_req->nhline, &key, &val)) >= 0)
             {
                 DEBUG_LOGGER(hitaskd_logger, "cookie:key[%s]=>val[%s]", key, val);
-                if(strcmp(key, "hitaskd_authid") == 0 && (session_id = atoi(val)) >= 0  
-                        && session_id == conn->session_id)
-                {
-                    return session_id;
-                }
+                if(strcmp(key, "hitaskd_authid") == 0)
+                    session_id = atoi(val);
+                if(strcmp(key, "hitaskd_authname") == 0)
+                    name = val;
             }
+        }
+        if(name && session_id >= 0 && session_id == ltask->find_user(ltask, name))
+        {
+            return session_id;
         }
     }
     return -1;

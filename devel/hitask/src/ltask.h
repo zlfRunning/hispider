@@ -217,7 +217,7 @@ typedef struct _LUSER
     int  status;
     int  permissions;
     char name[L_USER_MAX];
-    char passwd[L_PASSWD_MAX];
+    unsigned char passwd[L_PASSWD_MAX];
 }LUSER;
 
 /* TASK */
@@ -285,6 +285,7 @@ typedef struct _LTASK
     int (*pop_task)(struct _LTASK *);
     int (*add_user)(struct _LTASK *, char *name, char *passwd);
     int (*del_user)(struct _LTASK *, int userid, char *username);
+    int (*find_user)(struct _LTASK *, char *username);
     int (*update_passwd)(struct _LTASK *, int userid, char *username, char *passwd);
     int (*update_permission)(struct _LTASK *, int userid, char *username, int permission);
     int (*authorization)(struct _LTASK *, int userid, char *username, char *passwd, LUSER *user);

@@ -96,7 +96,7 @@ int ltask_set_basedir(LTASK *task, char *dir)
     char path[HTTP_PATH_MAX], host[HTTP_HOST_MAX], *p = NULL, *pp = NULL, *end = NULL;
     void *dp = NULL, *olddp = NULL;
     int n = 0, i = 0, *px = NULL;
-    unsigned char *ip = NULL;
+    unsigned char *ip = NULL, *key = NULL;
     LHOST *host_node = NULL;
     LPROXY *proxy = NULL;
     struct stat st = {0};
@@ -318,10 +318,11 @@ int ltask_set_basedir(LTASK *task, char *dir)
             {
                 dp = (void *)((long)(1));
                 p = "admin";
-                strcpy(user[0].name, p);
-                strcpy(user[0].passwd, p);
                 n = strlen(p);
+                strcpy(user[0].name, p);
                 TRIETAB_ADD(task->users, p, n, dp);
+                key = user[0].passwd;
+                md5((unsigned char *)p, n, key);
             }
             else
             {
@@ -1644,6 +1645,25 @@ int ltask_del_user(LTASK *task, int userid, char *name)
     return id;
 }
 
+/* find user */
+int ltask_find_user(LTASK *task, char *name)
+{
+    int id = -1, n = 0;
+    void *dp = NULL;
+
+    if(task)
+    {
+        MUTEX_LOCK(task->mutex);
+        if(name && (n = strlen(name)) > 0)
+        {
+            TRIETAB_GET(task->users, name, n, dp);
+            id = (long)dp - 1;
+        }
+        MUTEX_UNLOCK(task->mutex);
+    }
+    return id;
+}
+
 /* update user password */
 int ltask_update_passwd(LTASK *task, int userid, char *name, char *passwd)
 {
@@ -1709,19 +1729,23 @@ int ltask_authorization(LTASK *task, int userid, char *name, char *passwd, LUSER
     if(task && passwd && (x = strlen(passwd)) > 0)
     {
         MUTEX_LOCK(task->mutex);
+        fprintf(stdout, "%s::%d auth:%d\r\n", __FILE__, __LINE__, id);
         if(name && (n = strlen(name)) > 0)
         {
             TRIETAB_GET(task->users, name, n, dp);
             id = (long)dp - 1;
+        fprintf(stdout, "%s::%d auth:%d\r\n", __FILE__, __LINE__, id);
         }
         else id = userid;
+        fprintf(stdout, "%s::%d auth:%d\r\n", __FILE__, __LINE__, id);
         if(id >= 0 && id < task->userio.total 
-                && (user = (LUSER *)(task->userio.map)) 
-                && user != (LUSER *)-1 && (n = strlen(user[id].name)) > 0)
+            && (user = (LUSER *)(task->userio.map)) && user != (LUSER *)-1)
         {
+            fprintf(stdout, "%s::%d auth:%d\r\n", __FILE__, __LINE__, id);
             md5((unsigned char *)passwd, x, key);
             if(memcmp(user[id].passwd, key, MD5_LEN) != 0) id = -1;
             else memcpy(puser, &(user[id]), sizeof(LUSER));
+            fprintf(stdout, "%s::%d auth:%d\r\n", __FILE__, __LINE__, id);
         }
         else id = -1;
         MUTEX_UNLOCK(task->mutex);
@@ -2248,6 +2272,7 @@ LTASK *ltask_init()
         task->pop_task              = ltask_pop_task;
         task->add_user              = ltask_add_user;
         task->del_user              = ltask_del_user;
+        task->find_user             = ltask_find_user;
         task->set_user_status       = ltask_set_user_status;
         task->update_passwd         = ltask_update_passwd;
         task->update_permission     = ltask_update_permission;
