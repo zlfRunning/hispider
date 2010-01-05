@@ -111,6 +111,7 @@ int ltask_set_basedir(LTASK *task, char *dir)
         {
             _EXIT_("mkdir -p %s failed, %s\n", path, strerror(errno));
         }
+        strcpy(task->basedir, dir);
         LOGGER_INIT(task->logger, path);
         sprintf(path, "%s/%s", dir, L_ERR_NAME);
         LOGGER_INIT(task->errlogger, path);
@@ -314,33 +315,52 @@ int ltask_set_basedir(LTASK *task, char *dir)
         }
         if(task->userio.total > 0 && (user = HIO_MAP(task->userio, LUSER)))
         {
-            if(user[0].status <= 0) 
+            i = 0;
+            if(user[i].status <= 0) 
             {
-                dp = (void *)((long)(1));
+                dp = (void *)((long)(i+1));
                 p = "admin";
                 n = strlen(p);
-                strcpy(user[0].name, p);
+                strcpy(user[i].name, p);
                 TRIETAB_ADD(task->users, p, n, dp);
-                key = user[0].passwd;
+                key = user[i].passwd;
                 md5((unsigned char *)p, n, key);
+                fprintf(stdout, "%s::%d %s[%p]\n", __FILE__, __LINE__, p, dp);
             }
             else
             {
-                dp = (void *)((long)(1));
-                p = user[0].name;
+                dp = (void *)((long)(i+1));
+                p = user[i].name;
                 n = strlen(p);
                 TRIETAB_ADD(task->users, p, n, dp);
+                fprintf(stdout, "%s::%d %s[%p]\n", __FILE__, __LINE__, p, dp);
+                if((user[i].hibase = hibase_init()))
+                {
+                    sprintf(path, "%s/%s/%d/", task->basedir, L_USERS_DIR, i);
+                    PHIBASE(user[i].hibase)->set_basedir(PHIBASE(user[i].hibase), path);
+                }
             }
             i = 1;
+            ++user;
             do
             {
+                user->hibase = NULL;
                 if(user->status != USER_STATUS_ERR && (n = strlen((p = user->name))) > 0)
                 {
                     task->userio.current++;
                     dp = (void *)((long)(i+1));
                     TRIETAB_ADD(task->users, p, n, dp);
+                    fprintf(stdout, "%s::%d %s[%p]\n", __FILE__, __LINE__, p, dp);
+                    if((user->hibase = hibase_init()))
+                    {
+                        sprintf(path, "%s/%s/%d/", task->basedir, L_USERS_DIR, i);
+                        PHIBASE(user->hibase)->set_basedir(PHIBASE(user->hibase), path);
+                    }
                 }
-                else task->userio.left++;
+                else 
+                {
+                    task->userio.left++;
+                }
                 ++user;
             }while(++i < task->userio.total);
         }
@@ -1578,9 +1598,10 @@ int ltask_view_dnslist(LTASK *task, char *block)
 int ltask_add_user(LTASK *task, char *name, char *passwd)
 {
     int n = 0, id = -1, i = 0, x = 0;
-    void *dp = NULL;
-    LUSER *user = NULL;
     unsigned char key[MD5_LEN];
+    char path[L_PATH_MAX];
+    LUSER *user = NULL;
+    void *dp = NULL;
 
     if(task && name && (n = strlen(name)) > 0 && passwd && (x = strlen(passwd)) > 0)
     {
@@ -1603,15 +1624,28 @@ int ltask_add_user(LTASK *task, char *name, char *passwd)
                         dp = (void *)((long)(i + 1));
                         id = i;
                         TRIETAB_ADD(task->users, name, n, dp);
+                        fprintf(stdout, "%s::%d %s[%p]", __FILE__, __LINE__, name, dp);
                         user[i].status = USER_STATUS_OK;
                         task->userio.left--;
                         task->userio.current++;
+                        if((user[i].hibase = hibase_init()))
+                        {
+                            sprintf(path, "%s/%s/%d/", task->basedir, L_USERS_DIR, id);
+                            PHIBASE(user[i].hibase)->set_basedir(PHIBASE(user[i].hibase), path);
+                        }
+                        else 
+                        {
+                            user[i].hibase = NULL;
+                            id = -1;
+                            goto err; 
+                        }
                         break;
                     }
                     ++i;
                 }
             }
         }
+err:
         MUTEX_UNLOCK(task->mutex);
     }
     return id;
@@ -1733,6 +1767,7 @@ int ltask_authorization(LTASK *task, int userid, char *name, char *passwd, LUSER
         if(name && (n = strlen(name)) > 0)
         {
             TRIETAB_GET(task->users, name, n, dp);
+                fprintf(stdout, "%s::%d %s[%p]\n", __FILE__, __LINE__, name, dp);
             id = (long)dp - 1;
         fprintf(stdout, "%s::%d auth:%d\r\n", __FILE__, __LINE__, id);
         }

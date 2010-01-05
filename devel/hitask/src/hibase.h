@@ -288,6 +288,7 @@ typedef struct _HIBASE
 }HIBASE;
 /* hibase initialize */
 HIBASE *hibase_init();
+#define PHIBASE(p) ((HIBASE *)p)
 #ifdef __cplusplus
  }
 #endif

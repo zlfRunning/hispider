@@ -61,6 +61,7 @@
 #define TASK_STATE_OK           0x02
 #define TASK_STATE_ERROR        0x046
 #define L_SPEED_INTERVAL        1000000
+#define L_PATH_MAX              1024
 #define L_COOKIE_MAX            1024
 #define L_USER_MAX              32
 #define L_PASSWD_MAX            16
@@ -74,7 +75,7 @@
 #define L_QPRIORITY_NAME        "hi.qpriority"
 #define L_QHOST_NAME            "hi.qhost"
 #define L_QTASK_NAME            "hi.qtask"
-#define L_QFILE_NAME           "hi.qfile"
+#define L_QFILE_NAME            "hi.qfile"
 #define L_LOG_NAME              "hi.log"
 #define L_KEY_NAME              "hi.key"
 #define L_META_NAME             "hi.meta"
@@ -82,6 +83,7 @@
 #define L_USER_NAME             "hi.user"
 #define L_ERR_NAME              "hi.err"
 #define L_COOKIE_NAME           "hi.cookie"
+#define L_USERS_DIR             "users"
 #define L_TASK_TYPE_NORMAL      0x00
 #define L_TASK_TYPE_UPDATE      0x01
 #define L_TASK_TYPE_FILE        0x02
@@ -218,6 +220,7 @@ typedef struct _LUSER
     int  permissions;
     char name[L_USER_MAX];
     unsigned char passwd[L_PASSWD_MAX];
+    void *hibase;
 }LUSER;
 
 /* TASK */
@@ -234,6 +237,7 @@ typedef struct _LTASK
     int  domain_fd;
     int  meta_fd;
     int  doc_fd;
+    char basedir[L_PATH_MAX];
     void *urlmap;
     void *table;
     void *qproxy;
