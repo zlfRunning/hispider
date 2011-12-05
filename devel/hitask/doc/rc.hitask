@@ -18,17 +18,15 @@ start()
         echo -n $"Starting hitask: "
         daemon /usr/local/bin/hitask $HITASKARGS
 
-	touch /var/lock/subsys/hitask
         echo
 }
 
 stop() 
 {
-        echo -n $"Shutting down hitask: "
-	killproc hitask
+    echo -n $"Shutting down hitask: "
+    killproc hitask
 
-	rm -f  /var/lock/subsys/hitask
-        echo
+    echo
 }
 
 [ -f /usr/local/bin/hitask ] || exit 0
@@ -45,14 +43,8 @@ case "$1" in
 	stop
 	start
 	;;
-  condrestart)
-	[ -e /var/lock/subsys/hitask ] && (stop; start)
-	;;
-  status)
-  	status hidd
-	;;
   *)
-        echo $"Usage: $0 {start|stop|restart|reload|condrestart}"
+        echo $"Usage: $0 {start|stop|restart|reload}"
         exit 1
 esac
 

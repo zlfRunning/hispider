@@ -15,20 +15,18 @@ HITASKDARGS=" -d -c /usr/local/etc/hitaskd.ini > /tmp/hitaskd.log 2>&1 "
 
 start() 
 {
-        echo -n $"Starting hitaskd: "
-        daemon /usr/local/bin/hitaskd $HITASKDARGS
+    echo -n $"Starting hitaskd: "
+    daemon /usr/local/bin/hitaskd $HITASKDARGS
 
-	touch /var/lock/subsys/hitaskd
-        echo
+    echo
 }
 
 stop() 
 {
-        echo -n $"Shutting down hitaskd: "
-	killproc hitaskd
+    echo -n $"Shutting down hitaskd: "
+    killproc hitaskd
 
-	rm -f  /var/lock/subsys/hitaskd
-        echo
+    echo
 }
 
 [ -f /usr/local/bin/hitaskd ] || exit 0
@@ -45,14 +43,8 @@ case "$1" in
 	stop
 	start
 	;;
-  condrestart)
-	[ -e /var/lock/subsys/hitaskd ] && (stop; start)
-	;;
-  status)
-  	status hidd
-	;;
   *)
-        echo $"Usage: $0 {start|stop|restart|reload|condrestart}"
+        echo $"Usage: $0 {start|stop|restart|reload}"
         exit 1
 esac
 

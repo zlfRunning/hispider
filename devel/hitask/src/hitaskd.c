@@ -2319,7 +2319,7 @@ int sbase_initialize(SBASE *sbase, char *conf)
     privkey_file = iniparser_getstr(dict, "HITASKD:privkey_file");
     if(cacert_file && privkey_file && iniparser_getint(dict, "HITASKD:is_use_SSL", 0)) 
     {
-        hitaskd->is_use_SSL = 1;
+        hitaskd->session.flags |= SB_USE_SSL;
         hitaskd->cacert_file = cacert_file;
         hitaskd->privkey_file = privkey_file;
     }
@@ -2545,7 +2545,7 @@ int main(int argc, char **argv)
     //sbase->running(sbase, 1000000); sbase->stop(sbase);
     //fprintf(stdout, "%d::OK\n", __LINE__);
     //sbase->stop(sbase);
-    sbase->clean(&sbase);
+    sbase->clean(sbase);
     if(dict)iniparser_free(dict);
     if(hitaskd_logger){LOGGER_CLEAN(hitaskd_logger);}
     if(histore_logger){LOGGER_CLEAN(histore_logger);}

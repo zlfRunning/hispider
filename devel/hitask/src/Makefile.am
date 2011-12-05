@@ -11,7 +11,7 @@ utils/md5.c utils/md5.h utils/mmtree.c utils/mutex.h utils/queue.h utils/timer.h
 utils/trie.c utils/trie.h utils/base64.h utils/base64.c utils/zstream.c utils/zstream.h \
 iniparser.c iniparser.h utils/tm.c utils/tm.h utils/mmtree.h xbase.h 
 hitaskd_CPPFLAGS= -I utils -D_FILE_OFFSET_BITS=64 -D_HTTP_CHARSET_CONVERT -Wall
-hitaskd_LDFLAGS= -lz -lsbase -lpcre
+hitaskd_LDFLAGS= -lz -lsbase -lpcre -lchardet
 #hitask 
 hitask_SOURCES= hitask.c ltask.h http.h http.c utils/logger.h utils/trie.h utils/trie.c \
 utils/mutex.h utils/queue.h utils/timer.h utils/zstream.c utils/zstream.h \

@@ -159,8 +159,8 @@ int hitask_packet_handler(CONN *conn, CB_DATA *packet)
             if(http_resp.respid == RESP_MOVEDPERMANENTLY
                 && (n = http_resp.headers[HEAD_RESP_LOCATION]) > 0
                 && (p = (http_resp.hlines + n))
-                && (tasklist[c_id].s_conn) && tasklist[c_id].s_conn->cache
-                && (presp = (HTTP_RESPONSE *)(PCB(tasklist[c_id].s_conn->cache)->data))
+                && (tasklist[c_id].s_conn) 
+                && (presp = (HTTP_RESPONSE *)(tasklist[c_id].s_conn->cache.data))
                 && memcpy(&resp, presp, sizeof(HTTP_RESPONSE)))
             {
                 //return http_download_error(c_id, ERR_PROGRAM);
@@ -825,8 +825,8 @@ void cb_heartbeat_handler(void *arg)
             {
                 if(tasklist[id].s_conn == NULL)
                 {
-                    if(hitaskd_use_SSL) sess.is_use_SSL = 1;
-                    else sess.is_use_SSL = 0;
+                    if(hitaskd_use_SSL) sess.flags |= SB_USE_SSL;
+                    else sess.flags &= ~SB_USE_SSL;
                     if((tasklist[id].s_conn = service->newconn(service, -1, -1, 
                                     hitaskd_ip, hitaskd_port, psess)))
                     {
@@ -845,8 +845,8 @@ void cb_heartbeat_handler(void *arg)
                 }
                 if(tasklist[id].d_conn == NULL)
                 {
-                    if(histore_use_SSL) sess.is_use_SSL = 1;
-                    else sess.is_use_SSL = 0;
+                    if(histore_use_SSL) sess.flags |= SB_USE_SSL;
+                    else sess.flags &= ~SB_USE_SSL;
                     if((tasklist[id].d_conn = service->newconn(service, -1, -1, 
                                     histore_ip, histore_port, psess)))
                     {   
@@ -1048,7 +1048,7 @@ int main(int argc, char **argv)
     //sbase->running(sbase, 3600);
     //sbase->running(sbase, 60000000);
     //sbase->stop(sbase);
-    sbase->clean(&sbase);
+    sbase->clean(sbase);
     doctype_map_clean(&doctype_map);
     if(tasklist){free(tasklist); tasklist = NULL;}
     if(dict)iniparser_free(dict);
