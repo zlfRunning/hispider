@@ -54,8 +54,8 @@ am_hitask_OBJECTS = hitask-hitask.$(OBJEXT) hitask-http.$(OBJEXT) \
 hitask_OBJECTS = $(am_hitask_OBJECTS)
 hitask_LDADD = $(LDADD)
 am_hitaskd_OBJECTS = hitaskd-hitaskd.$(OBJEXT) hitaskd-evdns.$(OBJEXT) \
-	hitaskd-http.$(OBJEXT) hitaskd-ltask.$(OBJEXT) \
-	hitaskd-hibase.$(OBJEXT) hitaskd-kvmap.$(OBJEXT) \
+	hitaskd-ltask.$(OBJEXT) hitaskd-hibase.$(OBJEXT) \
+	hitaskd-http.$(OBJEXT) hitaskd-kvmap.$(OBJEXT) \
 	hitaskd-md5.$(OBJEXT) hitaskd-mmtree.$(OBJEXT) \
 	hitaskd-trie.$(OBJEXT) hitaskd-base64.$(OBJEXT) \
 	hitaskd-zstream.$(OBJEXT) hitaskd-iniparser.$(OBJEXT) \
@@ -145,8 +145,8 @@ sbindir = @sbindir@
 sharedstatedir = @sharedstatedir@
 sysconfdir = @sysconfdir@
 target_alias = @target_alias@
-hitaskd_SOURCES = hitaskd.c evdns.c evdns.h http.c http.h ltask.c ltask.h htmlbase64.h \
-hibase.h hibase.c hio.h url.h utils/fqueue.h utils/kvmap.c utils/kvmap.h utils/logger.h \
+hitaskd_SOURCES = hitaskd.c evdns.c evdns.h ltask.c ltask.h htmlbase64.h hibase.h hibase.c \
+hio.h url.h utils/http.h utils/http.c utils/fqueue.h utils/kvmap.c utils/kvmap.h utils/logger.h \
 utils/md5.c utils/md5.h utils/mmtree.c utils/mutex.h utils/queue.h utils/timer.h \
 utils/trie.c utils/trie.h utils/base64.h utils/base64.c utils/zstream.c utils/zstream.h \
 iniparser.c iniparser.h utils/tm.c utils/tm.h utils/mmtree.h xbase.h 
@@ -154,7 +154,7 @@ iniparser.c iniparser.h utils/tm.c utils/tm.h utils/mmtree.h xbase.h
 hitaskd_CPPFLAGS = -I utils -D_FILE_OFFSET_BITS=64 -D_HTTP_CHARSET_CONVERT -Wall
 hitaskd_LDFLAGS = -lz -lsbase -lpcre -lchardet
 #hitask 
-hitask_SOURCES = hitask.c ltask.h http.h http.c utils/logger.h utils/trie.h utils/trie.c \
+hitask_SOURCES = hitask.c ltask.h utils/http.h utils/http.c utils/logger.h utils/trie.h utils/trie.c \
 utils/mutex.h utils/queue.h utils/timer.h utils/zstream.c utils/zstream.h \
 iniparser.c iniparser.h doctype.h doctype.c  
 
@@ -277,19 +277,19 @@ hitask-hitask.obj: hitask.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitask_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hitask-hitask.obj `if test -f 'hitask.c'; then $(CYGPATH_W) 'hitask.c'; else $(CYGPATH_W) '$(srcdir)/hitask.c'; fi`
 
-hitask-http.o: http.c
-@am__fastdepCC_TRUE@	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitask_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hitask-http.o -MD -MP -MF "$(DEPDIR)/hitask-http.Tpo" -c -o hitask-http.o `test -f 'http.c' || echo '$(srcdir)/'`http.c; \
+hitask-http.o: utils/http.c
+@am__fastdepCC_TRUE@	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitask_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hitask-http.o -MD -MP -MF "$(DEPDIR)/hitask-http.Tpo" -c -o hitask-http.o `test -f 'utils/http.c' || echo '$(srcdir)/'`utils/http.c; \
 @am__fastdepCC_TRUE@	then mv -f "$(DEPDIR)/hitask-http.Tpo" "$(DEPDIR)/hitask-http.Po"; else rm -f "$(DEPDIR)/hitask-http.Tpo"; exit 1; fi
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='http.c' object='hitask-http.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='utils/http.c' object='hitask-http.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitask_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hitask-http.o `test -f 'http.c' || echo '$(srcdir)/'`http.c
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitask_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hitask-http.o `test -f 'utils/http.c' || echo '$(srcdir)/'`utils/http.c
 
-hitask-http.obj: http.c
-@am__fastdepCC_TRUE@	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitask_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hitask-http.obj -MD -MP -MF "$(DEPDIR)/hitask-http.Tpo" -c -o hitask-http.obj `if test -f 'http.c'; then $(CYGPATH_W) 'http.c'; else $(CYGPATH_W) '$(srcdir)/http.c'; fi`; \
+hitask-http.obj: utils/http.c
+@am__fastdepCC_TRUE@	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitask_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hitask-http.obj -MD -MP -MF "$(DEPDIR)/hitask-http.Tpo" -c -o hitask-http.obj `if test -f 'utils/http.c'; then $(CYGPATH_W) 'utils/http.c'; else $(CYGPATH_W) '$(srcdir)/utils/http.c'; fi`; \
 @am__fastdepCC_TRUE@	then mv -f "$(DEPDIR)/hitask-http.Tpo" "$(DEPDIR)/hitask-http.Po"; else rm -f "$(DEPDIR)/hitask-http.Tpo"; exit 1; fi
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='http.c' object='hitask-http.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='utils/http.c' object='hitask-http.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitask_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hitask-http.obj `if test -f 'http.c'; then $(CYGPATH_W) 'http.c'; else $(CYGPATH_W) '$(srcdir)/http.c'; fi`
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitask_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hitask-http.obj `if test -f 'utils/http.c'; then $(CYGPATH_W) 'utils/http.c'; else $(CYGPATH_W) '$(srcdir)/utils/http.c'; fi`
 
 hitask-trie.o: utils/trie.c
 @am__fastdepCC_TRUE@	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitask_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hitask-trie.o -MD -MP -MF "$(DEPDIR)/hitask-trie.Tpo" -c -o hitask-trie.o `test -f 'utils/trie.c' || echo '$(srcdir)/'`utils/trie.c; \
@@ -375,20 +375,6 @@ hitaskd-evdns.obj: evdns.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitaskd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hitaskd-evdns.obj `if test -f 'evdns.c'; then $(CYGPATH_W) 'evdns.c'; else $(CYGPATH_W) '$(srcdir)/evdns.c'; fi`
 
-hitaskd-http.o: http.c
-@am__fastdepCC_TRUE@	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitaskd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hitaskd-http.o -MD -MP -MF "$(DEPDIR)/hitaskd-http.Tpo" -c -o hitaskd-http.o `test -f 'http.c' || echo '$(srcdir)/'`http.c; \
-@am__fastdepCC_TRUE@	then mv -f "$(DEPDIR)/hitaskd-http.Tpo" "$(DEPDIR)/hitaskd-http.Po"; else rm -f "$(DEPDIR)/hitaskd-http.Tpo"; exit 1; fi
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='http.c' object='hitaskd-http.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitaskd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hitaskd-http.o `test -f 'http.c' || echo '$(srcdir)/'`http.c
-
-hitaskd-http.obj: http.c
-@am__fastdepCC_TRUE@	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitaskd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hitaskd-http.obj -MD -MP -MF "$(DEPDIR)/hitaskd-http.Tpo" -c -o hitaskd-http.obj `if test -f 'http.c'; then $(CYGPATH_W) 'http.c'; else $(CYGPATH_W) '$(srcdir)/http.c'; fi`; \
-@am__fastdepCC_TRUE@	then mv -f "$(DEPDIR)/hitaskd-http.Tpo" "$(DEPDIR)/hitaskd-http.Po"; else rm -f "$(DEPDIR)/hitaskd-http.Tpo"; exit 1; fi
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='http.c' object='hitaskd-http.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitaskd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hitaskd-http.obj `if test -f 'http.c'; then $(CYGPATH_W) 'http.c'; else $(CYGPATH_W) '$(srcdir)/http.c'; fi`
-
 hitaskd-ltask.o: ltask.c
 @am__fastdepCC_TRUE@	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitaskd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hitaskd-ltask.o -MD -MP -MF "$(DEPDIR)/hitaskd-ltask.Tpo" -c -o hitaskd-ltask.o `test -f 'ltask.c' || echo '$(srcdir)/'`ltask.c; \
 @am__fastdepCC_TRUE@	then mv -f "$(DEPDIR)/hitaskd-ltask.Tpo" "$(DEPDIR)/hitaskd-ltask.Po"; else rm -f "$(DEPDIR)/hitaskd-ltask.Tpo"; exit 1; fi
@@ -416,6 +402,20 @@ hitaskd-hibase.obj: hibase.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='hibase.c' object='hitaskd-hibase.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitaskd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hitaskd-hibase.obj `if test -f 'hibase.c'; then $(CYGPATH_W) 'hibase.c'; else $(CYGPATH_W) '$(srcdir)/hibase.c'; fi`
+
+hitaskd-http.o: utils/http.c
+@am__fastdepCC_TRUE@	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitaskd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hitaskd-http.o -MD -MP -MF "$(DEPDIR)/hitaskd-http.Tpo" -c -o hitaskd-http.o `test -f 'utils/http.c' || echo '$(srcdir)/'`utils/http.c; \
+@am__fastdepCC_TRUE@	then mv -f "$(DEPDIR)/hitaskd-http.Tpo" "$(DEPDIR)/hitaskd-http.Po"; else rm -f "$(DEPDIR)/hitaskd-http.Tpo"; exit 1; fi
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='utils/http.c' object='hitaskd-http.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitaskd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hitaskd-http.o `test -f 'utils/http.c' || echo '$(srcdir)/'`utils/http.c
+
+hitaskd-http.obj: utils/http.c
+@am__fastdepCC_TRUE@	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitaskd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hitaskd-http.obj -MD -MP -MF "$(DEPDIR)/hitaskd-http.Tpo" -c -o hitaskd-http.obj `if test -f 'utils/http.c'; then $(CYGPATH_W) 'utils/http.c'; else $(CYGPATH_W) '$(srcdir)/utils/http.c'; fi`; \
+@am__fastdepCC_TRUE@	then mv -f "$(DEPDIR)/hitaskd-http.Tpo" "$(DEPDIR)/hitaskd-http.Po"; else rm -f "$(DEPDIR)/hitaskd-http.Tpo"; exit 1; fi
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='utils/http.c' object='hitaskd-http.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitaskd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o hitaskd-http.obj `if test -f 'utils/http.c'; then $(CYGPATH_W) 'utils/http.c'; else $(CYGPATH_W) '$(srcdir)/utils/http.c'; fi`
 
 hitaskd-kvmap.o: utils/kvmap.c
 @am__fastdepCC_TRUE@	if $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hitaskd_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT hitaskd-kvmap.o -MD -MP -MF "$(DEPDIR)/hitaskd-kvmap.Tpo" -c -o hitaskd-kvmap.o `test -f 'utils/kvmap.c' || echo '$(srcdir)/'`utils/kvmap.c; \

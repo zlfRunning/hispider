@@ -755,14 +755,6 @@ int hibase_add_tnode(HIBASE *hibase, int parentid, char *name)
             tnode_map[parentid].nchilds++;
             tnode_map[parentid].status = TNODE_STATUS_OK;
             hibase->tnodeio.left--;
-            /*
-            hibase->tnode_childs_max = parent.nchilds;
-            if(pwrite(hibase->tnodeio.fd, &tnode, sizeof(TNODE), 
-                        (off_t)sizeof(TNODE) * (off_t) tnodeid) > 0)
-            {
-                pwrite(hibase->tnodeio.fd, &parent, sizeof(TNODE), 
-                        (off_t)sizeof(TNODE) * (off_t) parentid);
-            }*/
         }
         MUTEX_UNLOCK(hibase->mutex);
     }
@@ -1206,8 +1198,8 @@ int hibase_view_templates(HIBASE *hibase, int tnodeid, char *block)
     }
     return n;
 }
-/* url => urlnodes */
 
+/* url => urlnodes */
 int hibase_add_uri(HIBASE *hibase, int urlid, int urlnodeid)
 {
     URI uri = {0};

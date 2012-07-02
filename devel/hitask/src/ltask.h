@@ -97,7 +97,7 @@
 #define HTTP_BAD_REQUEST        "HTTP/1.0 400 Bad Request\r\n\r\n"
 #define HTTP_NOT_FOUND          "HTTP/1.0 404 Not Found\r\n\r\n" 
 #define HTTP_NOT_MODIFIED       "HTTP/1.0 304 Not Modified\r\n\r\n"
-#define HTTP_NO_CONTENT         "HTTP/1.0 206 No Content\r\n\r\n"
+#define HTTP_NO_CONTENT         "HTTP/1.0 204 No Content\r\n\r\n"
 //#define HTTP_BAD_REQUEST    "HTTP/1.0 404 Not Found\r\n\r\n"
 /* host/domain */
 typedef struct _LHOST
@@ -269,12 +269,14 @@ typedef struct _LTASK
     int (*set_dns_status)(struct _LTASK *, int dnsid, char *dns_ip, int status);
     int (*pop_dns)(struct _LTASK *, char *dns_ip);
     int (*view_dnslist)(struct _LTASK *, char *block);
+
     int (*pop_host)(struct _LTASK *, char *host);
     int (*set_host_ip)(struct _LTASK *, char *host, int *ips, int nip);
     int (*get_host_ip)(struct _LTASK *, char *host);
     void(*list_host_ip)(struct _LTASK *, FILE *fp);
     int (*set_host_status)(struct _LTASK *, int hostid, char *host, short status);
     int (*set_host_level)(struct _LTASK *, int hostid, char *host, short level);
+
     int (*add_cookie)(struct _LTASK *, int hostid, char *cookies);
     int (*update_cookie)(struct _LTASK *, int hostid, char *cookies);
     int (*del_cookie)(struct _LTASK *, int hostid, char *cookies);

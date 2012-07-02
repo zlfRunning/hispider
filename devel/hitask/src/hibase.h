@@ -55,7 +55,7 @@ typedef struct _IFIELD
     short   status;
     short   type;
     int     flag;
-    int     uid;
+    int     id;
     char    name[FIELD_NAME_MAX];
 }IFIELD;
 /* table */

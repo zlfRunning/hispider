@@ -1038,7 +1038,6 @@ err:
     }
     return ret;
 }
-/* */
 
 /* pop url */
 int ltask_pop_url(LTASK *task, int task_type, int url_id, char *url, int *itime, 

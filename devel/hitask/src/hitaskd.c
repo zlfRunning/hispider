@@ -1974,19 +1974,11 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
                                 start = res[2*j];
                                 over = res[2*j+1];
                                 length = over - start;
-                                //fprintf(stdout, "[%.*s]", (over-start), content+start);
-                                //continue;
-                                //fprintf(stdout, "%s::%d %.*s\n", __FILE__,__LINE__,
-                                //length, content+start);
-                                //handling data
-                                DEBUG_LOGGER(histore_logger, "Matched url:%s flag:%d res count:%d nfields:%d flag:%d", url, templates[i].flags, count, templates[i].nfields, templates[i].map[x].flag);
                                 nodeid = templates[i].map[x].nodeid;
                                 if((templates[i].map[x].flag & REG_IS_URL) && nodeid > 0 
                                         && length > 0 && length < HTTP_URL_MAX 
                                         && x < templates[i].nfields)
                                 {
-                                    //fprintf(stdout, "%s::%d OK\n", __FILE__, __LINE__);
-                                    //add to urlnode
                                     p = content + start;
                                     e = content + over;
                                     pp = newurl;
@@ -2041,8 +2033,6 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
                                     else
                                     {
                                         ERROR_LOGGER(hitaskd_logger, "matche url:%s failed", url);
-                                        //ERROR_LOGGER(hitaskd_logger, "matche %s url:%s failed",
-                                        //        templates[i].pattern, url);
                                     }
                                 }
                                 else
@@ -2055,8 +2045,6 @@ void histore_data_matche(int urlnodeid, ITEMPLATE *templates, int ntemplates, TN
                                         eblock += length;
                                         records[id].end = eblock - block;
                                     }
-                                    //DEBUG_LOGGER(histore_logger, "%s::%d [%d][%d] %d-%d length:%d\n",
-                                    //        __FILE__, __LINE__, i, j, start, over, length);
                                 }
                             }
                             //fprintf(stdout, "\n");
